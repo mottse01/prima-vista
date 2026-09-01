@@ -9,6 +9,7 @@ import { generateExercise, planMusicalForm } from '../src/core/generator.js';
 import { analyseEvents, createGrader } from '../src/core/grader.js';
 import { COMMON_CADENCES, COMMON_PROGRESSIONS } from '../src/core/harmony.js';
 import { reviewMusicality } from '../src/core/musicality.js';
+import { styleSetupPatch } from '../src/core/compositionStyles.js';
 import { toMusicXml } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { timeSig } from '../src/core/rhythm.js';
@@ -49,6 +50,62 @@ test('generated studies use a clear phrase form and repeat their rhythmic idea',
   assert.equal(planMusicalForm(16).label, 'A–A′–B–A″');
   assert.equal(planMusicalForm(16).name, 'Rounded binary');
   assert.equal(planMusicalForm(24).name, 'Extended ternary');
+});
+
+test('selectable styles use coherent, distinct composition grammars', () => {
+  const setups = {
+    classical: { measures: 8, timeSignature: '4/4', lhStyle: 'alberti' },
+    folk: { measures: 8, timeSignature: '4/4', lhStyle: 'roots' },
+    pop: { measures: 16, timeSignature: '4/4', lhStyle: 'broken' },
+    blues: { measures: 12, timeSignature: '4/4', lhStyle: 'broken', allowSevenths: true },
+    waltz: { measures: 8, timeSignature: '3/4', lhStyle: 'waltz' },
+  };
+  const formNames = new Set();
+
+  for (const [style, setup] of Object.entries(setups)) {
+    const score = generateExercise({
+      ...paramsForLevel(8, emptyProfile(), { seed: 123456 }),
+      compositionStyle: style,
+      ...setup,
+    });
+    assert.equal(score.style.id, style);
+    assert.equal(score.form.styleId, style);
+    assert.ok(score.harmony.styles.includes(style));
+    assert.equal(score.compositionReview.metrics.styleCoherence, 1);
+    assert.equal(score.compositionReview.passed, true);
+    formNames.add(score.form.name);
+  }
+
+  assert.equal(formNames.size, Object.keys(setups).length);
+  assert.deepEqual(styleSetupPatch('blues', { hands: 'both' }), {
+    compositionStyle: 'blues', timeSignature: '4/4', measures: 12,
+    allowSevenths: true, lhStyle: 'broken',
+  });
+  assert.deepEqual(styleSetupPatch('waltz', { hands: 'both' }), {
+    compositionStyle: 'waltz', timeSignature: '3/4', chordsPerMeasure: 1, lhStyle: 'waltz',
+  });
+});
+
+test('blues style realises a twelve-bar I–IV–V plan with dominant sevenths', () => {
+  const score = generateExercise({
+    ...paramsForLevel(8, emptyProfile(), { seed: 271828 }),
+    compositionStyle: 'blues',
+    keyMode: 'major',
+    keyFifths: 0,
+    measures: 12,
+    timeSignature: '4/4',
+    hands: 'both',
+    lhStyle: 'blocked',
+    lhLow: 14,
+    lhHigh: 28,
+  });
+
+  assert.equal(score.form.name, 'Twelve-bar blues');
+  assert.deepEqual(score.harmony.degrees, [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4]);
+  assert.deepEqual(score.harmony.cadences.slice(0, 2).map((item) => item.id), ['subdominantTurn', 'half']);
+  assert.ok(score.chords.filter((chord) => [0, 3, 4].includes(chord.degree)).every((chord) => chord.seventh));
+  const openingPitches = score.staves.lh.filter((note) => note.onset === 0).flatMap((note) => note.pitches);
+  assert.ok(openingPitches.some((pitch) => pitch.letter === 6 && pitch.alter === -1)); // B-flat in C7
 });
 
 test('every study follows a named progression with a varied common cadence plan', () => {

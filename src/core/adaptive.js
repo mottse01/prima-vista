@@ -276,6 +276,7 @@ export function paramsForLevel(level, profile, {
   }
 
   p.seed = seed;
+  if (!p.compositionStyle) p.compositionStyle = 'auto';
   p.focusIntervals = focusIntervals;
   return { ...p, ...overrides, seed: overrides.seed ?? seed, level, targeted: [...targeted] };
 }

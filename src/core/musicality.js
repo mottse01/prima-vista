@@ -159,6 +159,10 @@ export function reviewMusicality(score) {
   const motifs = reviewMotifs(score, notes);
   const melody = reviewMelody(score, notes);
   const voiceLeading = reviewVoiceLeading(score);
+  const styleCoherence = score.style?.id
+    && score.form?.styleId === score.style.id
+    && score.harmony?.styles?.includes(score.style.id)
+    ? 1 : 0;
 
   const formScore = formCoverage;
   const harmonyScore = cadenceAccuracy * 0.5 + progressionConsistency * 0.35 + cadenceVariety * 0.15;
@@ -167,8 +171,8 @@ export function reviewMusicality(score) {
   const repetitionScore = clamp(1 - Math.max(0, melody.repeated - 0.24) / 0.35);
   const melodyScore = strongHarmony * 0.28 + melody.leapResolution * 0.28
     + motionScore * 0.2 + repetitionScore * 0.14 + melody.contour * 0.1;
-  const overall = formScore * 0.12 + harmonyScore * 0.25 + motifScore * 0.22
-    + melodyScore * 0.34 + voiceLeading * 0.07;
+  const overall = formScore * 0.1 + harmonyScore * 0.23 + motifScore * 0.21
+    + melodyScore * 0.32 + voiceLeading * 0.07 + styleCoherence * 0.07;
 
   const issues = [];
   if (formCoverage < 1) issues.push('phrase structure lacks cadential punctuation');
@@ -177,6 +181,7 @@ export function reviewMusicality(score) {
   if (strongHarmony < 0.62) issues.push('too many accented melody notes conflict with the harmony');
   if (melody.leapResolution < 0.6) issues.push('too many melodic leaps are left unresolved');
   if (motifs.recognition < 0.5) issues.push('the repeated idea is not recognisable enough');
+  if (styleCoherence < 1) issues.push('the form and harmonic vocabulary do not match the selected style');
 
   const scoreValue = Math.round(overall * 100);
   return {
@@ -192,6 +197,7 @@ export function reviewMusicality(score) {
       smallMotion: rounded(melody.smallMotion),
       leapResolution: rounded(melody.leapResolution),
       voiceLeading: rounded(voiceLeading),
+      styleCoherence: rounded(styleCoherence),
     },
     issues,
   };

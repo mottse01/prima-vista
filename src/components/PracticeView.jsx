@@ -389,6 +389,9 @@ export default function PracticeView({
           <div className="sr-scoreidentity">
             <div className="sr-scorekicker">
               <span>Original structured study</span>
+              {score.style?.label && (
+                <span className="sr-stylebadge" title={score.style.description}>{score.style.label}</span>
+              )}
               {score.form?.label && (
                 <span className="sr-formbadge">{score.form.name || 'Form'} · {score.form.label}</span>
               )}

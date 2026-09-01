@@ -15,6 +15,7 @@ const ENUMS = {
   hands: new Set(['both', 'rh', 'lh']),
   timeSignature: new Set(['4/4', '3/4', '2/4', '5/4', '2/2', '3/8', '6/8', '9/8', '12/8']),
   lhStyle: new Set(['roots', 'blocked', 'alberti', 'broken', 'waltz', 'sustained', 'melodic']),
+  compositionStyle: new Set(['auto', 'classical', 'folk', 'pop', 'blues', 'waltz']),
 };
 const BOUNDS = {
   keyFifths: [-7, 7], measures: [1, 32], tempo: [30, 200],

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { KEY_NAMES, LETTERS } from '../core/theory.js';
 import { TIME_SIGNATURES } from '../core/rhythm.js';
 import { codeToSeed, randomSeed, seedToCode } from '../core/rng.js';
+import { STYLE_OPTIONS, styleSetupPatch } from '../core/compositionStyles.js';
 
 // The custom builder. Sight Reading Factory's real strength is how finely a
 // teacher can specify an exercise; this matches that and adds the things it
@@ -51,6 +52,31 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
       </p>
 
       <div className="sr-setup-grid">
+        <Group title="Composition style" className="sr-group--style">
+          <div className="sr-stylegrid" role="radiogroup" aria-label="Composition style">
+            {STYLE_OPTIONS.map((style) => {
+              const selected = (params.compositionStyle || 'auto') === style.id;
+              return (
+                <button
+                  key={style.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  className={`sr-stylechoice${selected ? ' is-on' : ''}`}
+                  onClick={() => set(styleSetupPatch(style.id, params))}
+                >
+                  <strong>{style.label}</strong>
+                  <span>{style.description}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="sr-hint">
+            Style changes the form, harmonic vocabulary, cadences, and melodic behavior. Blues
+            also selects 12-bar 4/4; Waltz selects 3/4. You can adjust any control afterward.
+          </p>
+        </Group>
+
         <Group title="Key">
           <div className="sr-segmented">
             {['major', 'minor'].map((m) => (
@@ -231,9 +257,9 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
   );
 }
 
-function Group({ title, children }) {
+function Group({ title, children, className = '' }) {
   return (
-    <section className="sr-group">
+    <section className={`sr-group${className ? ` ${className}` : ''}`}>
       <h3>{title}</h3>
       {children}
     </section>

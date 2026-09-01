@@ -11,6 +11,7 @@ import { getCell, metricWeight, resolveCells, timeSig } from './rhythm.js';
 import { planProgression, spellVoicing, voiceChord } from './harmony.js';
 import { reviewMusicality } from './musicality.js';
 import { makeRng } from './rng.js';
+import { formForStyle, resolveCompositionStyle } from './compositionStyles.js';
 
 // ---------------------------------------------------------------------------
 // Rhythm
@@ -68,23 +69,9 @@ function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks, requiredTag = nu
  * variation, not literal duplication, which is how short pedagogical studies
  * stay recognisable without becoming memorisation drills.
  */
-export function planMusicalForm(measures) {
+export function planMusicalForm(measures, styleId = 'classical') {
   const phraseCount = Math.max(1, Math.ceil(measures / 4));
-  let name;
-  let sections;
-  if (phraseCount === 1) { name = 'Four-bar phrase'; sections = ['A']; }
-  else if (phraseCount === 2) { name = 'Parallel period'; sections = ['A', 'A′']; }
-  else if (phraseCount === 3) { name = 'Ternary miniature'; sections = ['A', 'B', 'A′']; }
-  else if (phraseCount === 4) { name = 'Rounded binary'; sections = ['A', 'A′', 'B', 'A″']; }
-  else if (phraseCount === 5) { name = 'Arch form'; sections = ['A', 'B', 'C', 'B′', 'A′']; }
-  else if (phraseCount === 6) { name = 'Extended ternary'; sections = ['A', 'A′', 'B', 'B′', 'A', 'A″']; }
-  else {
-    name = 'AABA song form';
-    sections = ['A', 'A′', 'A', 'A″', 'B', 'B′', 'A', 'A‴'];
-  }
-
-  while (sections.length < phraseCount) sections.splice(sections.length - 1, 0, 'B′');
-  sections = sections.slice(0, phraseCount);
+  const { name, sections } = formForStyle(styleId, phraseCount);
 
   const plan = [];
   for (let m = 0; m < measures; m++) {
@@ -103,7 +90,7 @@ export function planMusicalForm(measures) {
       motifKey: `${base}${motifBar}`,
       role: phrase === 0 && barInPhrase < 2
         ? 'statement'
-        : base === 'B' && !plan.some((p) => p.motifKey === `${base}${motifBar}`)
+        : base !== 'A' && !plan.some((p) => p.motifKey === `${base}${motifBar}`)
           ? 'contrast'
           : variant >= 2 || (phrase === sections.length - 1 && base === 'A')
             ? 'return'
@@ -113,7 +100,7 @@ export function planMusicalForm(measures) {
     });
   }
 
-  return { name, label: sections.join('–'), sections, plan, phraseLength: 4 };
+  return { name, label: sections.join('–'), sections, plan, phraseLength: 4, styleId };
 }
 
 function realiseCadenceAttack(events, arrivalOnset) {
@@ -245,8 +232,16 @@ function assignPitches(rng, opts) {
   const {
     key, ts, chords, chordsPerMeasure, rhythm, measures,
     lowDia, highDia, maxLeap, stepwiseBias, nonChordRate, chromaticRate,
-    focusIntervals = [], cadences = [],
+    focusIntervals = [], cadences = [], compositionStyle = null,
   } = opts;
+
+  const styledStepwiseBias = clamp(
+    stepwiseBias + (compositionStyle?.stepwiseAdjustment || 0), 0.25, 0.96,
+  );
+  const styledNonChordRate = clamp(
+    nonChordRate * (compositionStyle?.nonChordMultiplier || 1), 0, 0.75,
+  );
+  const motifStrength = compositionStyle?.motifStrength || 16;
 
   const notes = [];
   let prev = null;
@@ -280,8 +275,8 @@ function assignPitches(rng, opts) {
     // Decide whether this slot must be a chord tone.
     let requireChordTone;
     if (isLast || isCadenceArrival || weight === 2) requireChordTone = true;
-    else if (weight === 1) requireChordTone = rng.chance(1 - nonChordRate * 0.5);
-    else requireChordTone = rng.chance(1 - nonChordRate);
+    else if (weight === 1) requireChordTone = rng.chance(1 - styledNonChordRate * 0.5);
+    else requireChordTone = rng.chance(1 - styledNonChordRate);
     if (lastLeap >= 3) requireChordTone = false; // a leap wants a stepwise answer
 
     let candidates = [];
@@ -350,15 +345,15 @@ function assignPitches(rng, opts) {
         }
         let w;
         if (dist === 0) w = 0.15;
-        else if (dist === 1) w = stepwiseBias * 6;
-        else if (dist === 2) w = (1 - stepwiseBias) * 5;
-        else w = (1 - stepwiseBias) * 3 / dist;
+        else if (dist === 1) w = styledStepwiseBias * 6;
+        else if (dist === 2) w = (1 - styledStepwiseBias) * 5;
+        else w = (1 - styledStepwiseBias) * 3 / dist;
         // Pull toward the phrase arch.
         w *= Math.exp(-Math.abs(d - target) / 5);
         // Echo the stated motif clearly, while allowing the current harmony to
         // bend it by a nearby scale step. A focused adaptive interval wins.
         if (motifTarget != null && !focusApplied) {
-          w *= 0.55 + 16 * Math.exp(-Math.abs(d - motifTarget) * 1.25);
+          w *= 0.55 + motifStrength * Math.exp(-Math.abs(d - motifTarget) * 1.25);
         }
         return Math.max(w, 0.005);
       });
@@ -372,7 +367,16 @@ function assignPitches(rng, opts) {
     // accidental, which is how accidentals actually appear in real music.
     let p;
     const stepwiseRun = prev && Math.abs(chosen - prev.dia) === 1 && !isCadenceArrival && weight === 0;
-    if (chromaticRate > 0 && stepwiseRun && !isChordTone(key, chord, chosen) && rng.chance(chromaticRate)) {
+    const blueDegree = scaleDegree(key, chosen);
+    const blueInflection = compositionStyle?.id === 'blues'
+      && !isCadenceArrival
+      && weight === 0
+      && [2, 4, 6].includes(blueDegree)
+      && rng.chance(compositionStyle.blueNoteRate || 0);
+    if (blueInflection) {
+      const base = spellInKey(key, chosen);
+      p = fromDia(chosen, clamp(base.alter - 1, -2, 2));
+    } else if (chromaticRate > 0 && stepwiseRun && !isChordTone(key, chord, chosen) && rng.chance(chromaticRate)) {
       const dir = Math.sign(chosen - prev.dia);
       const base = spellInKey(key, chosen);
       p = fromDia(chosen, clamp(base.alter + dir, -2, 2));
@@ -582,6 +586,7 @@ function addFingerings(notes) {
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_PARAMS = {
+  compositionStyle: 'auto',
   keyMode: 'major',
   keyFifths: 0,
   timeSignature: '4/4',
@@ -618,7 +623,13 @@ function composeCandidate(userParams = {}, attempt = 0) {
   const key = { fifths: params.keyFifths, mode: params.keyMode };
   const ts = timeSig(params.timeSignature);
   const measures = params.measures;
-  const form = planMusicalForm(measures);
+  const style = resolveCompositionStyle(rng, params.compositionStyle, {
+    timeSignature: params.timeSignature,
+    measures,
+    lhStyle: params.lhStyle,
+    keyMode: params.keyMode,
+  });
+  const form = planMusicalForm(measures, style.id);
   // A harmonic rhythm only works if each chord slot is a whole number of beats.
   const slot = ts.ticks / params.chordsPerMeasure;
   const chordsPerMeasure = Number.isInteger(slot) && slot % ts.beat === 0
@@ -643,6 +654,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
     mode: key.mode,
     form,
     melodyDegrees,
+    compositionStyle: style.id,
   });
   const { chords } = harmonyPlan;
 
@@ -661,6 +673,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
       nonChordRate: params.nonChordRate, chromaticRate: params.chromaticRate,
       focusIntervals: params.focusIntervals,
       cadences: harmonyPlan.progression.cadences,
+      compositionStyle: style,
     });
   }
 
@@ -675,6 +688,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
         maxLeap: Math.min(params.maxLeap, 4), stepwiseBias: Math.min(0.85, params.stepwiseBias + 0.1),
         nonChordRate: params.nonChordRate * 0.7, chromaticRate: 0,
         cadences: harmonyPlan.progression.cadences,
+        compositionStyle: style,
       });
     } else if (params.hands === 'lh') {
       // Left hand alone gets the melody, not an accompaniment pattern.
@@ -688,6 +702,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
         nonChordRate: params.nonChordRate, chromaticRate: params.chromaticRate,
         focusIntervals: params.focusIntervals,
         cadences: harmonyPlan.progression.cadences,
+        compositionStyle: style,
       });
     } else {
       staves.lh = buildLeftHand(rng, {
@@ -708,7 +723,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
   const slurs = params.slurs && staves.rh.length ? buildSlurs(rng, staves.rh, ts, measures) : [];
 
   const keyName = KEY_NAMES[key.mode][String(key.fifths)];
-  const title = `Motivic Study in ${key.mode === 'minor' ? keyName.toUpperCase() : keyName} ${key.mode}, ${ORDINALS[seed % ORDINALS.length]}`;
+  const title = `${style.title} in ${key.mode === 'minor' ? keyName.toUpperCase() : keyName} ${key.mode}, ${ORDINALS[seed % ORDINALS.length]}`;
 
   return {
     seed,
@@ -718,8 +733,19 @@ function composeCandidate(userParams = {}, attempt = 0) {
     measures,
     chords,
     chordsPerMeasure,
+    style: {
+      id: style.id,
+      label: style.label,
+      description: style.description,
+    },
     harmony: harmonyPlan.progression,
-    form: { name: form.name, label: form.label, sections: form.sections, phraseLength: form.phraseLength },
+    form: {
+      name: form.name,
+      label: form.label,
+      sections: form.sections,
+      phraseLength: form.phraseLength,
+      styleId: form.styleId,
+    },
     staves,
     slurs,
     title,

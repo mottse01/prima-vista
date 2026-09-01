@@ -9,11 +9,12 @@ import { chordTones, ROMAN, spellChordTone } from './theory.js';
 // Degree indices: 0 = I, 1 = ii, 2 = iii, 3 = IV, 4 = V, 5 = vi, 6 = vii.
 const FUNCTION_OF = ['T', 'PD', 'T', 'PD', 'D', 'T', 'D'];
 
-const progression = (id, name, style, degrees) => Object.freeze({
+const progression = (id, name, style, degrees, styles) => Object.freeze({
   id,
   name,
   style,
   degrees: Object.freeze(degrees),
+  styles: Object.freeze(styles),
 });
 
 const cadence = (id, name, short, options) => Object.freeze({ id, name, short, ...options });
@@ -41,39 +42,76 @@ export const COMMON_CADENCES = Object.freeze({
   modal: cadence('modal', 'Modal close', 'MC', {
     approaches: [6], arrival: 0, melodyDegree: 0, modes: ['minor'],
   }),
+  subdominantTurn: cadence('subdominantTurn', 'Blues subdominant turn', '→IV', {
+    approaches: [0], arrival: 3, melodyDegree: 3,
+  }),
+  bluesTurnaround: cadence('bluesTurnaround', 'Blues turnaround', 'TURN', {
+    approaches: [0], arrival: 4, melodyDegree: 4,
+  }),
 });
 
 /** Familiar loops used as the harmonic spine of every generated study. */
 export const COMMON_PROGRESSIONS = Object.freeze({
   major: Object.freeze([
-    progression('pop-loop', 'Pop loop', 'Song', [0, 4, 5, 3]),               // I–V–vi–IV
-    progression('fifties', '’50s progression', 'Song', [0, 5, 3, 4]),       // I–vi–IV–V
-    progression('turnaround', 'Tonal turnaround', 'Classical', [0, 5, 1, 4]),
-    progression('canon', 'Canon sequence', 'Classical', [0, 4, 5, 2, 3, 0, 3, 4]),
+    progression('pop-loop', 'Pop loop', 'Song', [0, 4, 5, 3], ['pop']),               // I–V–vi–IV
+    progression('fifties', '’50s progression', 'Song', [0, 5, 3, 4], ['pop']),       // I–vi–IV–V
+    progression('turnaround', 'Tonal turnaround', 'Classical', [0, 5, 1, 4], ['classical', 'waltz']),
+    progression('canon', 'Canon sequence', 'Classical', [0, 4, 5, 2, 3, 0, 3, 4], ['classical']),
+    progression('hymn', 'Hymn progression', 'Folk', [0, 3, 1, 4], ['folk', 'classical']),
+    progression('primary-period', 'Primary-chord period', 'Folk', [0, 3, 0, 4], ['folk', 'waltz']),
+    progression('waltz-circle', 'Waltz circle', 'Waltz', [0, 5, 1, 4], ['waltz']),
+    progression('major-blues', 'Twelve-bar blues', 'Blues', [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4], ['blues']),
   ]),
   minor: Object.freeze([
-    progression('andalusian', 'Andalusian sequence', 'Folk', [0, 6, 5, 4]),
-    progression('minor-pop', 'Minor pop loop', 'Song', [0, 5, 2, 6]),
-    progression('minor-turnaround', 'Minor turnaround', 'Classical', [0, 5, 1, 4]),
-    progression('minor-circle', 'Minor circle sequence', 'Classical', [0, 3, 6, 2]),
+    progression('andalusian', 'Andalusian sequence', 'Folk', [0, 6, 5, 4], ['folk', 'pop']),
+    progression('minor-pop', 'Minor pop loop', 'Song', [0, 5, 2, 6], ['pop']),
+    progression('minor-turnaround', 'Minor turnaround', 'Classical', [0, 5, 1, 4], ['classical', 'waltz']),
+    progression('minor-circle', 'Minor circle sequence', 'Classical', [0, 3, 6, 2], ['classical']),
+    progression('minor-folk', 'Minor folk progression', 'Folk', [0, 3, 6, 4], ['folk', 'waltz']),
+    progression('minor-blues', 'Twelve-bar minor blues', 'Blues', [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4], ['blues']),
   ]),
 });
 
 const CADENCE_POOLS = {
-  internal: [
-    ['half', 5], ['deceptive', 2.5], ['imperfect', 2.5], ['plagal', 1], ['phrygian', 2],
-  ],
-  final: [
-    ['authentic', 4], ['imperfect', 2], ['plagal', 3], ['modal', 2],
-  ],
-  short: [
-    ['authentic', 3], ['imperfect', 2], ['plagal', 2.5], ['half', 2],
-    ['deceptive', 1], ['phrygian', 1.5], ['modal', 1],
-  ],
+  classical: {
+    internal: [['half', 5], ['deceptive', 2], ['imperfect', 3], ['phrygian', 2]],
+    final: [['authentic', 5], ['imperfect', 2.5], ['plagal', 1.5], ['modal', 1.5]],
+    short: [['authentic', 4], ['imperfect', 3], ['half', 2], ['deceptive', 1.5], ['phrygian', 1.5]],
+  },
+  folk: {
+    internal: [['half', 4], ['plagal', 3], ['deceptive', 1.5], ['phrygian', 2]],
+    final: [['plagal', 5], ['authentic', 3], ['imperfect', 2], ['modal', 3]],
+    short: [['plagal', 4], ['authentic', 3], ['half', 2], ['modal', 2], ['phrygian', 1.5]],
+  },
+  pop: {
+    internal: [['deceptive', 4], ['half', 3], ['plagal', 2], ['imperfect', 2]],
+    final: [['plagal', 4], ['imperfect', 3], ['authentic', 2], ['modal', 1.5]],
+    short: [['deceptive', 3], ['plagal', 3], ['imperfect', 2.5], ['authentic', 2], ['half', 2]],
+  },
+  waltz: {
+    internal: [['half', 5], ['imperfect', 3], ['deceptive', 1.5], ['phrygian', 1.5]],
+    final: [['authentic', 4], ['imperfect', 3], ['plagal', 2], ['modal', 1.5]],
+    short: [['authentic', 3], ['imperfect', 3], ['half', 2], ['plagal', 2]],
+  },
+  blues: {
+    internal: [['subdominantTurn', 3], ['half', 3]],
+    final: [['bluesTurnaround', 4], ['plagal', 2.5], ['authentic', 2.5]],
+    short: [['bluesTurnaround', 3], ['plagal', 2], ['authentic', 2], ['half', 1.5]],
+  },
 };
 
-function chooseCadence(rng, { final, onlyPhrase, mode, previous, melodyDegrees }) {
-  const pool = CADENCE_POOLS[onlyPhrase ? 'short' : final ? 'final' : 'internal'];
+function chooseCadence(rng, {
+  final, onlyPhrase, mode, previous, melodyDegrees, compositionStyle, cadenceIndex,
+}) {
+  // A twelve-bar blues has structural turns at bars 4 and 8, then either a
+  // closed ending or a V turnaround. These are ordered, not random labels.
+  if (compositionStyle === 'blues' && !onlyPhrase && !final) {
+    return cadenceIndex % 3 === 0
+      ? COMMON_CADENCES.subdominantTurn
+      : COMMON_CADENCES.half;
+  }
+  const profile = CADENCE_POOLS[compositionStyle] || CADENCE_POOLS.classical;
+  const pool = profile[onlyPhrase ? 'short' : final ? 'final' : 'internal'];
   const modeChoices = pool
     .map(([id, weight]) => [COMMON_CADENCES[id], weight])
     .filter(([item]) => !item.modes || item.modes.includes(mode));
@@ -102,10 +140,13 @@ export function planProgression(rng, {
   mode = 'major',
   form = null,
   melodyDegrees = null,
+  compositionStyle = 'classical',
 }) {
   const slots = measures * chordsPerMeasure;
   const resolvedMode = COMMON_PROGRESSIONS[mode] ? mode : 'major';
-  const template = rng.pick(COMMON_PROGRESSIONS[resolvedMode]);
+  const matching = COMMON_PROGRESSIONS[resolvedMode]
+    .filter((item) => item.styles.includes(compositionStyle));
+  const template = rng.pick(matching.length ? matching : COMMON_PROGRESSIONS[resolvedMode]);
   const degrees = Array.from({ length: slots }, (_, i) => template.degrees[i % template.degrees.length]);
 
   const phraseEndMeasures = form?.plan
@@ -116,7 +157,8 @@ export function planProgression(rng, {
   const cadences = [];
   let previousCadence = null;
 
-  for (const measure of uniqueEnds) {
+  for (let cadenceIndex = 0; cadenceIndex < uniqueEnds.length; cadenceIndex++) {
+    const measure = uniqueEnds[cadenceIndex];
     const endSlot = Math.min(slots - 1, (measure + 1) * chordsPerMeasure - 1);
     const startSlot = Math.max(0, endSlot - 1);
     const final = endSlot === slots - 1;
@@ -126,6 +168,8 @@ export function planProgression(rng, {
       mode: resolvedMode,
       previous: previousCadence,
       melodyDegrees,
+      compositionStyle,
+      cadenceIndex,
     });
     const approach = rng.pick(chosen.approaches);
     const appliedSlots = startSlot === endSlot ? [endSlot] : [startSlot, endSlot];
@@ -159,7 +203,8 @@ export function planProgression(rng, {
     const cadenceMark = cadenceSlots.get(i);
     // Sevenths belong on the dominant above all, and on ii as a pre-dominant.
     const seventhChance = degree === 4 ? 0.5 : degree === 1 ? 0.3 : 0;
-    const seventh = allowSevenths && rng.chance(seventhChance);
+    const bluesPrimary = compositionStyle === 'blues' && [0, 3, 4].includes(degree);
+    const seventh = bluesPrimary || (allowSevenths && rng.chance(seventhChance));
     let inversion = cadenceMark?.inversion || 0;
     if (allowInversions && !cadenceMark && rng.chance(0.3)) inversion = rng.chance(0.7) ? 1 : 2;
     return {
@@ -170,6 +215,9 @@ export function planProgression(rng, {
       index: i,
       source: cadenceMark ? 'cadence' : 'progression',
       cadence: cadenceMark ? { id: cadenceMark.id, position: cadenceMark.position } : null,
+      // Major blues I7 and IV7 borrow a flattened chordal seventh. V7 is
+      // already diatonic; minor-blues sevenths need no extra alteration.
+      bluesDominant: bluesPrimary && resolvedMode === 'major' && [0, 3].includes(degree),
     };
   });
 
@@ -181,6 +229,7 @@ export function planProgression(rng, {
       id: template.id,
       name: template.name,
       style: template.style,
+      styles: [...template.styles],
       degrees: [...template.degrees],
       roman: template.degrees.map((degree) => ROMAN[resolvedMode][degree]).join('–'),
       cadence: finalCadence?.name || null,
