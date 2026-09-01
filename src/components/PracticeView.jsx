@@ -287,27 +287,11 @@ export default function PracticeView({
       {showCoach && (
         <section className="sr-coach" aria-labelledby="first-read-title">
           <div className="sr-coach-copy">
-            <span className="sr-eyebrow">Your first read</span>
-            <h2 id="first-read-title">Scan it. Count in. Keep going.</h2>
-            <p>
-              Connect a MIDI keyboard for full grading, or use the keys below. Prima Vista follows
-              every note without stopping the music, then writes the next exercise around what needs work.
-            </p>
+            <span className="sr-eyebrow">First read</span>
+            <h2 id="first-read-title">Scan. Count in. Keep moving.</h2>
           </div>
-          <ol className="sr-coach-steps">
-            <li><span>1</span>Check the key and metre</li>
-            <li><span>2</span>Press start and use the count-in</li>
-            <li><span>3</span>Recover instead of backtracking</li>
-          </ol>
+          <p>Check the key and metre, choose a sustainable pulse, and recover forward after a slip.</p>
           <div className="sr-coach-actions">
-            <button type="button" className="sr-btn sr-btn--primary" onClick={start} disabled={busy}>
-              {audioBusy ? 'Turning on sound…' : 'Start first read'}
-            </button>
-            {!['connected', 'ready'].includes(midi.status) && (
-              <button type="button" className="sr-btn sr-btn--ghost" onClick={connectMidiWithSound} disabled={midi.status === 'connecting'}>
-                {midi.status === 'connecting' ? 'Connecting…' : 'Connect MIDI'}
-              </button>
-            )}
             <button type="button" className="sr-coach-dismiss" onClick={onDismissCoach}>Dismiss tips</button>
           </div>
         </section>
@@ -320,19 +304,19 @@ export default function PracticeView({
           </span>
           <span>
             {settings.curtain !== 'off'
-              ? 'Tracked separately from your level'
+              ? 'Tracked separately'
               : qualifies
-                ? 'This take can advance your level'
-                : 'Useful practice; not eligible for promotion'}
+                ? 'Qualifies for your path'
+                : 'Practice only'}
           </span>
         </div>
         <div className="sr-readbrief-item">
-          <span className="sr-readbrief-label">{targetedIds.length ? 'Adaptive focus' : 'Level focus'}</span>
+          <span className="sr-readbrief-label">Focus</span>
           <strong>{focusLabels.length ? focusLabels.join(' · ') : 'Build a clean baseline'}</strong>
         </div>
         {level && (
           <div className="sr-readbrief-item sr-readbrief-goal">
-            <span className="sr-readbrief-label">Advance</span>
+            <span className="sr-readbrief-label">Path</span>
             <strong>{strongReads}/2 fresh reads at 88+</strong>
           </div>
         )}
@@ -351,8 +335,8 @@ export default function PracticeView({
             <span className="sr-seed-label">Variation seed</span>
             <div className="sr-seed-row">
               <code>{seedToCode(score.seed)}</code>
-              <button type="button" className="sr-copybtn" onClick={copyLink}>
-                {copied ? 'Copied' : 'Copy exact link'}
+              <button type="button" className="sr-copybtn" onClick={copyLink} title="Copy an exact exercise link">
+                {copied ? 'Copied' : 'Share'}
               </button>
             </div>
           </div>
@@ -389,15 +373,8 @@ export default function PracticeView({
             {listening ? 'Stop playback' : freshRead && !previewed ? 'Hear first (practice)' : 'Hear it'}
           </button>
           <button type="button" className="sr-btn" onClick={onRegenerate} disabled={busy}>
-            New exercise
+            New
           </button>
-          <button type="button" className="sr-btn sr-btn--ghost" onClick={() => window.print()} disabled={busy}>Print</button>
-          <button
-            type="button" className="sr-btn sr-btn--ghost"
-            title="Open this exercise in MuseScore, Finale or Sibelius"
-            onClick={() => downloadMusicXml(score, settings.showFingerings)}
-            disabled={busy}
-          >Export</button>
         </div>
 
         <div className="sr-transport-settings">
@@ -449,6 +426,18 @@ export default function PracticeView({
               </label>
             </div>
           </details>
+          <details className="sr-aids sr-more">
+            <summary>More</summary>
+            <div className="sr-aids-popover sr-more-popover">
+              <button type="button" className="sr-btn sr-btn--ghost" onClick={() => window.print()} disabled={busy}>Print score</button>
+              <button
+                type="button" className="sr-btn sr-btn--ghost"
+                title="Open this exercise in MuseScore, Finale or Sibelius"
+                onClick={() => downloadMusicXml(score, settings.showFingerings)}
+                disabled={busy}
+              >Export MusicXML</button>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -468,26 +457,26 @@ export default function PracticeView({
         </div>
 
         <div className="sr-inputbar">
-        <div className={`sr-midi sr-midi--${midi.status}`}>
-          <span className="sr-dot" />
-          {midi.status === 'connected'
-            ? <span>MIDI: {midi.inputs.join(', ') || 'connected'}</span>
-            : midi.status === 'connecting'
-              ? <span>Requesting MIDI access…</span>
-              : midi.status === 'ready'
-                ? <span>MIDI ready — plug in or switch on your keyboard</span>
-            : midi.status === 'error'
-              ? <span>{midi.error}</span>
-              : <span>No MIDI keyboard connected</span>}
-          {!['connected', 'ready'].includes(midi.status) && (
-            <button type="button" className="sr-btn sr-btn--small" onClick={connectMidiWithSound} disabled={midi.status === 'connecting'}>
-              {midi.status === 'connecting' ? 'Connecting…' : 'Connect MIDI'}
-            </button>
-          )}
-        </div>
-        <button type="button" className="sr-btn sr-btn--small sr-btn--ghost" onClick={onToggleKeyboard}>
-          {showKeyboard ? 'Hide keyboard' : 'Show keyboard'}
-        </button>
+          <div className={`sr-midi sr-midi--${midi.status}`}>
+            <span className="sr-dot" />
+            {midi.status === 'connected'
+              ? <span>MIDI: {midi.inputs.join(', ') || 'connected'}</span>
+              : midi.status === 'connecting'
+                ? <span>Requesting MIDI access…</span>
+                : midi.status === 'ready'
+                  ? <span>MIDI ready — plug in or switch on your keyboard</span>
+                  : midi.status === 'error'
+                    ? <span>{midi.error}</span>
+                    : <span>No MIDI keyboard connected</span>}
+            {!['connected', 'ready'].includes(midi.status) && (
+              <button type="button" className="sr-btn sr-btn--small" onClick={connectMidiWithSound} disabled={midi.status === 'connecting'}>
+                {midi.status === 'connecting' ? 'Connecting…' : 'Connect MIDI'}
+              </button>
+            )}
+          </div>
+          <button type="button" className="sr-btn sr-btn--small sr-btn--ghost" onClick={onToggleKeyboard}>
+            {showKeyboard ? 'Hide keyboard' : 'Show keyboard'}
+          </button>
         </div>
       </div>
 

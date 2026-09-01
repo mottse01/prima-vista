@@ -18,11 +18,11 @@ const STATE_COLOURS = {
 };
 
 function pageWidthForViewport() {
-  if (typeof window === 'undefined') return 2100;
-  if (window.innerWidth < 560) return 980;
-  if (window.innerWidth < 900) return 1350;
-  if (window.innerWidth < 1220) return 1750;
-  return 2100;
+  if (typeof window === 'undefined') return 1850;
+  if (window.innerWidth < 560) return 860;
+  if (window.innerWidth < 900) return 1200;
+  if (window.innerWidth < 1220) return 1500;
+  return 1850;
 }
 
 /**

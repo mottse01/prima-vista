@@ -52,7 +52,7 @@ export default function App() {
   const [settings, setSettings] = useState(loadSettings);
   const [presets, setPresets] = useState(loadPresets);
   const [tab, setTab] = useState('practice');
-  const [showKeyboard, setShowKeyboard] = useState(true);
+  const [showKeyboard, setShowKeyboard] = useState(false);
   const [toast, setToast] = useState(null);
   const nextPathLevelRef = useRef(null);
 
@@ -210,7 +210,7 @@ export default function App() {
           ))}
         </nav>
         <div className="sr-headerstat">
-          <span className="sr-level-badge">Path level {profile.level}</span>
+          <span className="sr-level-badge">Level {profile.level}</span>
           {profile.streak.count > 0 && <span className="sr-streak">{profile.streak.count}-day streak</span>}
         </div>
       </header>
