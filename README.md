@@ -75,6 +75,16 @@ src/
 - **We choose the element ids.** `xmlNoteId(hand, onset, midi)` goes into the
   MusicXML and survives into the rendered SVG, so live colouring is a lookup
   rather than a guess, and the grader keys its state by the same id.
+- **The design puts one lit page on a dark stage.** The chrome is near-black
+  and drawn in hairlines; the engraved page is the only bright surface, and
+  while a take is running the header, transport and keyboard fade back further
+  (`body.is-focus`). Two consequences for anyone editing `styles.css`: the
+  score sits on cream, so anything painted onto it — note colouring, the
+  playhead, the curtain — takes its colour from the `--paper-*` and
+  `--score-mark` tokens rather than the interface ones, which are tuned for
+  the dark chrome and would vanish on the page. And the practice controls are
+  deliberately one row: settings that are chosen once live in the Options
+  drawer, not on screen beside the music.
 - **The score overlay is imperative on purpose.** The playhead moves every
   animation frame; reconciling a React tree sixty times a second to slide one
   rectangle would be waste. Positions are measured as fractions of the

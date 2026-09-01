@@ -10,11 +10,14 @@ import { xmlNoteId, xmlRestId } from '../core/musicxml.js';
 // to slide one rectangle would be wasteful; measuring is also only possible
 // once the SVG is in the document.
 
+// Note colouring is painted onto the engraved glyphs, which live on the cream
+// page rather than on the dark chrome — so these are the page's colours, not
+// the interface's.
 const STATE_COLOURS = {
-  correct: 'var(--good)',
-  late: 'var(--warn)',
-  wrong: 'var(--bad)',
-  missed: '#b9bfcc',
+  correct: 'var(--paper-good)',
+  late: 'var(--paper-warn)',
+  wrong: 'var(--paper-bad)',
+  missed: 'var(--paper-missed)',
 };
 
 /**

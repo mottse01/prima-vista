@@ -25,6 +25,7 @@ export default function PracticeView({
   const [held, setHeld] = useState(() => new Set());
   const [listening, setListening] = useState(false);
   const [dueNow, setDueNow] = useState(() => new Set());
+  const [optionsOpen, setOptionsOpen] = useState(false);
 
   const graderRef = useRef(null);
   const startRef = useRef(0);
@@ -115,6 +116,7 @@ export default function PracticeView({
     takeCountRef.current += 1;
     graderRef.current = createGrader(score, { startTime, toleranceScale: settings.toleranceScale });
     modeRef.current = 'take';
+    setOptionsOpen(false);
     setPhaseBoth('countin');
     playbackRef.current = startPlayback({
       score, startTime, metronome: settings.metronome, playScore: false, onEnd: () => {},
@@ -148,6 +150,14 @@ export default function PracticeView({
   }, [score, settings.metronome, startLoop, stopEverything]);
 
   useEffect(() => () => stopEverything(), [stopEverything]);
+
+  // While a take or a playback is running the chrome fades back, so the only
+  // bright thing left on the screen is the music.
+  const sounding = phase === 'playing' || phase === 'countin' || listening;
+  useEffect(() => {
+    document.body.classList.toggle('is-focus', sounding);
+    return () => document.body.classList.remove('is-focus');
+  }, [sounding]);
 
   // Fetch the engraver ahead of time so the first exercise appears promptly.
   useEffect(() => { warmUp(); }, []);
@@ -203,22 +213,21 @@ export default function PracticeView({
     ? Math.max(1, Math.ceil(-tick / (score.ts.beat)) )
     : null;
 
+  const busy = phase === 'playing' || phase === 'countin';
+  const nudgeTempo = (delta) => onSettings({
+    tempoOverride: Math.max(30, Math.min(180, score.tempo + delta)),
+  });
+
   return (
     <div className="sr-practice">
-      <div className="sr-scorecard">
-        <div className="sr-scorehead">
-          <div>
-            <h2 className="sr-scoretitle">{score.title}</h2>
-            <p className="sr-scoremeta">
-              {keyLabel(score.key)} · {score.ts.name} · ♩= {score.tempo} · {score.measures} bars
-              {level ? <> · Level {level.id} <span className="sr-dim">{level.name}</span></> : null}
-            </p>
-          </div>
-          <div className="sr-seed" title="Every exercise has a code. Share it and the same music appears.">
-            <span className="sr-seed-label">Exercise code</span>
-            <code>{seedToCode(score.seed)}</code>
-          </div>
-        </div>
+      <article className="sr-page">
+        <header className="sr-page-head">
+          <h2 className="sr-page-title">{score.title}</h2>
+          <p className="sr-page-meta">
+            {keyLabel(score.key)} · {score.ts.name} · {score.tempo} bpm · {score.measures} bars
+            {level ? <> · Level {level.id} <span className="sr-dim">{level.name}</span></> : null}
+          </p>
+        </header>
 
         <div className={`sr-scorearea${phase === 'countin' ? ' is-countin' : ''}`}>
           <Score
@@ -232,89 +241,130 @@ export default function PracticeView({
             <div className="sr-countin" aria-live="polite">{countdown}</div>
           )}
         </div>
-      </div>
+
+        <footer className="sr-page-foot">
+          <span
+            className="sr-page-code"
+            title="Every exercise has a code. Share it and the same music appears."
+          >
+            Exercise code <code>{seedToCode(score.seed)}</code>
+          </span>
+        </footer>
+      </article>
 
       <div className="sr-transport">
         <div className="sr-transport-main">
-          {phase === 'playing' || phase === 'countin' ? (
+          {busy ? (
             <button type="button" className="sr-btn sr-btn--stop" onClick={stop}>Stop</button>
           ) : (
             <button type="button" className="sr-btn sr-btn--primary" onClick={start}>
               {result ? 'Play again' : 'Start take'}
             </button>
           )}
-          <button type="button" className="sr-btn" onClick={listening ? stopEverything : listen} disabled={phase === 'playing'}>
-            {listening ? 'Stop playback' : 'Hear it'}
-          </button>
-          <button type="button" className="sr-btn" onClick={onRegenerate} disabled={phase === 'playing'}>
-            New exercise
-          </button>
-          <button type="button" className="sr-btn sr-btn--ghost" onClick={() => window.print()}>Print</button>
           <button
             type="button" className="sr-btn sr-btn--ghost"
-            title="Open this exercise in MuseScore, Finale or Sibelius"
-            onClick={() => downloadMusicXml(score, settings.showFingerings)}
-          >Export</button>
+            onClick={listening ? stopEverything : listen} disabled={phase === 'playing'}
+          >{listening ? 'Stop playback' : 'Hear it'}</button>
+          <button type="button" className="sr-btn sr-btn--ghost" onClick={onRegenerate} disabled={busy}>
+            New exercise
+          </button>
         </div>
 
-        <div className="sr-transport-settings">
-          <label className="sr-field sr-field--slider">
-            <span>Tempo <b>{score.tempo}</b></span>
-            <input
-              type="range" min="30" max="180" step="2" value={score.tempo}
-              onChange={(e) => onSettings({ tempoOverride: Number(e.target.value) })}
-              disabled={phase === 'playing'}
-            />
-          </label>
-          <label className="sr-toggle">
-            <input type="checkbox" checked={settings.metronome} onChange={(e) => onSettings({ metronome: e.target.checked })} />
-            <span>Metronome</span>
-          </label>
-          <label className="sr-toggle">
-            <input type="checkbox" checked={settings.colourNotes} onChange={(e) => onSettings({ colourNotes: e.target.checked })} />
-            <span>Colour notes</span>
-          </label>
-          <label className="sr-toggle">
-            <input type="checkbox" checked={Boolean(settings.guideKeys)} onChange={(e) => onSettings({ guideKeys: e.target.checked })} />
-            <span>Guide keys</span>
-          </label>
-          <label className="sr-field sr-field--select" title={curtainMode(settings.curtain).blurb}>
-            <span>Look-ahead curtain</span>
-            <select
-              value={settings.curtain}
-              onChange={(e) => onSettings({ curtain: e.target.value })}
-              disabled={phase === 'playing'}
-            >
-              {CURTAIN_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </label>
+        <div className="sr-transport-aux">
+          <div className="sr-tempo" role="group" aria-label={`Tempo ${score.tempo} beats per minute`}>
+            <span className="sr-tempo-glyph" aria-hidden="true">♩</span>
+            <button type="button" className="sr-step" onClick={() => nudgeTempo(-2)} disabled={busy} aria-label="Slower">−</button>
+            <b>{score.tempo}</b>
+            <button type="button" className="sr-step" onClick={() => nudgeTempo(2)} disabled={busy} aria-label="Faster">+</button>
+          </div>
+          <button
+            type="button"
+            className={`sr-btn sr-btn--options${optionsOpen ? ' is-on' : ''}`}
+            aria-expanded={optionsOpen}
+            onClick={() => setOptionsOpen((v) => !v)}
+          >Options<span className="sr-caret" aria-hidden="true">{optionsOpen ? '▲' : '▼'}</span></button>
         </div>
       </div>
 
-      <div className="sr-inputbar">
+      {optionsOpen && (
+        <div className="sr-options">
+          <div className="sr-options-group">
+            <h4 className="sr-options-title">While you play</h4>
+            <label className="sr-toggle">
+              <input type="checkbox" checked={settings.metronome} onChange={(e) => onSettings({ metronome: e.target.checked })} />
+              <span>Metronome</span>
+            </label>
+            <label className="sr-toggle">
+              <input type="checkbox" checked={settings.colourNotes} onChange={(e) => onSettings({ colourNotes: e.target.checked })} />
+              <span>Colour notes as you play</span>
+            </label>
+            <label className="sr-toggle">
+              <input type="checkbox" checked={Boolean(settings.guideKeys)} onChange={(e) => onSettings({ guideKeys: e.target.checked })} />
+              <span>Light the next keys</span>
+            </label>
+          </div>
+
+          <div className="sr-options-group">
+            <h4 className="sr-options-title">Reading</h4>
+            <label className="sr-field sr-field--select">
+              <span>Look-ahead curtain</span>
+              <select
+                value={settings.curtain}
+                onChange={(e) => onSettings({ curtain: e.target.value })}
+                disabled={busy}
+              >
+                {CURTAIN_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </label>
+            <p className="sr-hint">{curtainMode(settings.curtain).blurb}</p>
+          </div>
+
+          <div className="sr-options-group">
+            <h4 className="sr-options-title">This exercise</h4>
+            <label className="sr-field sr-field--slider">
+              <span>Tempo <b>{score.tempo} bpm</b></span>
+              <input
+                type="range" min="30" max="180" step="2" value={score.tempo}
+                onChange={(e) => onSettings({ tempoOverride: Number(e.target.value) })}
+                disabled={busy}
+              />
+            </label>
+            <label className="sr-toggle">
+              <input type="checkbox" checked={Boolean(settings.showFingerings)} onChange={(e) => onSettings({ showFingerings: e.target.checked })} />
+              <span>Fingering hints</span>
+            </label>
+          </div>
+
+          <div className="sr-options-group">
+            <h4 className="sr-options-title">Take it with you</h4>
+            <div className="sr-row">
+              <button type="button" className="sr-btn sr-btn--small" onClick={() => window.print()}>Print</button>
+              <button
+                type="button" className="sr-btn sr-btn--small"
+                title="Open this exercise in MuseScore, Finale or Sibelius"
+                onClick={() => downloadMusicXml(score, settings.showFingerings)}
+              >Export MusicXML</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="sr-statusbar">
         <div className={`sr-midi sr-midi--${midi.status}`}>
           <span className="sr-dot" />
           {midi.status === 'connected'
-            ? <span>MIDI: {midi.inputs.join(', ') || 'connected'}</span>
+            ? <span>MIDI · {midi.inputs.join(', ') || 'connected'}</span>
             : midi.status === 'error'
               ? <span>{midi.error}</span>
-              : <span>No MIDI keyboard connected</span>}
+              : <span>No MIDI keyboard</span>}
           {midi.status !== 'connected' && (
-            <button type="button" className="sr-btn sr-btn--small" onClick={onConnectMidi}>Connect MIDI</button>
+            <button type="button" className="sr-linkbtn" onClick={onConnectMidi}>Connect</button>
           )}
         </div>
-        <button type="button" className="sr-btn sr-btn--small sr-btn--ghost" onClick={onToggleKeyboard}>
+        <button type="button" className="sr-linkbtn" onClick={onToggleKeyboard}>
           {showKeyboard ? 'Hide keyboard' : 'Show keyboard'}
         </button>
       </div>
-
-      {showKeyboard && (
-        <Keyboard
-          low={range[0]} high={range[1]} held={held} expected={dueNow}
-          onNoteOn={handleNoteOn} onNoteOff={handleNoteOff}
-          octaveBase={Math.max(48, Math.min(72, range[0] + 12))}
-        />
-      )}
 
       {result && (
         <ResultPanel
@@ -323,6 +373,14 @@ export default function PracticeView({
           onNext={onRegenerate}
           repeat={result.takeIndex > 1}
           curtain={curtainMode(settings.curtain)}
+        />
+      )}
+
+      {showKeyboard && (
+        <Keyboard
+          low={range[0]} high={range[1]} held={held} expected={dueNow}
+          onNoteOn={handleNoteOn} onNoteOff={handleNoteOff}
+          octaveBase={Math.max(48, Math.min(72, range[0] + 12))}
         />
       )}
     </div>

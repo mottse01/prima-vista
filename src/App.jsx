@@ -138,10 +138,8 @@ export default function App() {
       <header className="sr-header">
         <div className="sr-brand">
           <span className="sr-logo" aria-hidden="true">𝄞</span>
-          <div>
-            <h1>Prima Vista</h1>
-            <p>Sight-reading that reads you back</p>
-          </div>
+          <h1>Prima Vista</h1>
+          <p>Sight-reading that reads you back</p>
         </div>
         <nav className="sr-tabs" aria-label="Sections">
           {TABS.map((t) => (
