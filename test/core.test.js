@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { applyResult, emptyProfile, paramsForLevel } from '../src/core/adaptive.js';
-import { renderReferenceWav, startReferencePlayback } from '../src/core/audio.js';
+import {
+  renderReferenceWav, startPracticePlayback, startReferencePlayback,
+} from '../src/core/audio.js';
 import { generateExercise, planMusicalForm } from '../src/core/generator.js';
 import { analyseEvents, createGrader } from '../src/core/grader.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
@@ -64,6 +66,11 @@ test('reference playback renders a non-empty browser-safe WAV', () => {
   assert.equal(ascii(8, 12), 'WAVE');
   assert.ok(wav.length > 44);
   assert.ok(wav.slice(44).some((byte) => byte !== 0));
+
+  const countIn = renderReferenceWav(score, {
+    sampleRate: 8000, playScore: false, metronome: false, countInBeats: 2,
+  });
+  assert.ok(countIn.slice(44).some((byte) => byte !== 0));
 });
 
 test('reference playback starts through an HTML media element', async () => {
@@ -93,6 +100,13 @@ test('reference playback starts through an HTML media element', async () => {
     assert.equal(plays, 1);
     playback.stop();
     assert.equal(revoked, 1);
+
+    const practice = startPracticePlayback({ score, metronome: true, countInBeats: 4 });
+    assert.equal(await practice.started, true);
+    assert.ok(practice.exerciseStart > practice.leadIn);
+    assert.equal(plays, 2);
+    practice.stop();
+    assert.equal(revoked, 2);
   } finally {
     globalThis.Audio = originalAudio;
     globalThis.URL.createObjectURL = originalCreate;

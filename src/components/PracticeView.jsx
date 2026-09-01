@@ -6,7 +6,8 @@ import { createGrader, SKILLS } from '../core/grader.js';
 import { TPQ, keyLabel } from '../core/theory.js';
 import {
   audioState, now, playPianoNote, primeAudioGesture, scheduleCountIn, setMasterVolume,
-  startPlayback, startReferencePlayback, startSoundCheck, subscribeAudioState, unlockAudio,
+  startPlayback, startPracticePlayback, startReferencePlayback, startSoundCheck,
+  subscribeAudioState, unlockAudio,
 } from '../core/audio.js';
 import { seedToCode } from '../core/rng.js';
 import { warmUp } from '../core/verovio.js';
@@ -73,7 +74,7 @@ export default function PracticeView({
     setPhaseBoth('done');
     onResult({
       summary,
-      elapsedSec: Math.max(0, now() - takeStartRef.current),
+      elapsedSec: Math.max(0, clockRef.current() - takeStartRef.current),
       takeIndex: takeCountRef.current,
       curtain: settings.curtain,
       assisted: assistedRef.current,
@@ -132,26 +133,53 @@ export default function PracticeView({
 
   const start = useCallback(async () => {
     stopEverything();
-    if (!(await prepareSound())) return;
     setListening(false);
     setResult(null);
     setNoteStates({});
     setDueNow(new Set());
-    clockRef.current = now;
-    const startTime = scheduleCountIn(score, settings.countInBeats);
-    startRef.current = startTime;
-    takeStartRef.current = startTime;
     takeCountRef.current += 1;
     assistedRef.current = Boolean(previewed || settings.guideKeys);
     freshAtStartRef.current = Boolean(freshRead);
-    graderRef.current = createGrader(score, { startTime, toleranceScale: settings.toleranceScale });
-    modeRef.current = 'take';
-    setPhaseBoth('countin');
+
+    const armTake = (startTime) => {
+      startRef.current = startTime;
+      takeStartRef.current = startTime;
+      graderRef.current = createGrader(score, { startTime, toleranceScale: settings.toleranceScale });
+      modeRef.current = 'take';
+      setPhaseBoth(settings.countInBeats > 0 ? 'countin' : 'playing');
+      startLoop();
+    };
+
+    // The practice clock also uses media playback on iOS: count-in and
+    // metronome are audible, but the notated answer remains withheld.
+    const media = startPracticePlayback({
+      score,
+      metronome: settings.metronome,
+      countInBeats: settings.countInBeats,
+      onEnd: finish,
+    });
+    if (media) {
+      playbackRef.current = media;
+      clockRef.current = media.currentTime;
+      armTake(media.exerciseStart);
+      if (await media.started) return;
+      stopEverything();
+    }
+
+    if (!(await prepareSound())) {
+      takeCountRef.current = Math.max(0, takeCountRef.current - 1);
+      graderRef.current = null;
+      setPhaseBoth('idle');
+      setTick(-1);
+      return;
+    }
+    clockRef.current = now;
+    const startTime = scheduleCountIn(score, settings.countInBeats);
+    armTake(startTime);
     playbackRef.current = startPlayback({
       score, startTime, metronome: settings.metronome, playScore: false, onEnd: () => {},
     });
-    startLoop();
-  }, [freshRead, prepareSound, previewed, score, settings.countInBeats, settings.guideKeys, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
+  }, [finish, freshRead, prepareSound, previewed, score, settings.countInBeats, settings.guideKeys, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
 
   const stop = useCallback(() => {
     if (phaseRef.current === 'countin') {
@@ -196,7 +224,7 @@ export default function PracticeView({
     if (media) {
       playbackRef.current = media;
       clockRef.current = media.currentTime;
-      startRef.current = media.leadIn;
+      startRef.current = media.exerciseStart;
       startLoop();
       if (await media.started) return;
       stopEverything();
@@ -230,7 +258,7 @@ export default function PracticeView({
     }
     const grader = graderRef.current;
     if (!grader || (phaseRef.current !== 'playing' && phaseRef.current !== 'countin')) return;
-    grader.noteOn(midiNote, now());
+    grader.noteOn(midiNote, clockRef.current());
     setNoteStates(grader.states());
   }, [settings.keySound]);
 

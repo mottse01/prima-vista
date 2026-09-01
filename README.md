@@ -90,10 +90,10 @@ src/
   and melodic idea, answers it, introduces contrast on longer exercises, then
   returns to the opening material. Four-bar harmonic punctuation alternates
   half and authentic cadences, so the form can be heard as well as analysed.
-- **Reference audio has two transports.** Live keys, the count-in and grading
-  stay on low-latency WebAudio. “Hear the score” renders the exercise to a local
-  WAV and plays it as browser media, which is more reliable in iOS webviews and
-  embedded Sites; WebAudio remains the fallback.
+- **Audio has a robust dual path.** Live key sounds stay on low-latency
+  WebAudio. “Hear the score” and the practice count-in/metronome render locally
+  to WAV media, which is more reliable in iOS webviews and embedded Sites;
+  WebAudio remains the transport fallback.
 - **Recovery counts pitch errors, not lateness.** A wrong or dropped note opens
   an episode; two clean attacks in a row close it. Notes that are merely late
   deliberately do not count, because a player who is steadily behind the beat

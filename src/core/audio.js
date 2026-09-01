@@ -265,11 +265,15 @@ const WAV_SAMPLE_RATE = 22050;
 export function renderReferenceWav(score, {
   metronome = false,
   leadIn = 0.09,
+  countInBeats = 0,
+  playScore = true,
   sampleRate = WAV_SAMPLE_RATE,
 } = {}) {
   const secPerTick = 60 / score.tempo / TPQ;
-  const tail = 0.48;
-  const totalSeconds = leadIn + score.totalTicks * secPerTick + tail;
+  const secPerBeat = score.ts.beat * secPerTick;
+  const exerciseStart = leadIn + countInBeats * secPerBeat;
+  const tail = Math.max(0.48, TPQ * secPerTick + 0.14);
+  const totalSeconds = exerciseStart + score.totalTicks * secPerTick + tail;
   const mix = new Float32Array(Math.max(1, Math.ceil(totalSeconds * sampleRate)));
 
   const addPiano = (start, midi, duration, gain) => {
@@ -303,23 +307,28 @@ export function renderReferenceWav(score, {
     }
   };
 
-  for (const hand of ['rh', 'lh']) {
-    for (const note of score.staves[hand] || []) {
-      if (note.rest) continue;
-      for (const pitch of note.pitches) {
-        addPiano(
-          leadIn + note.onset * secPerTick,
-          pitch.midi,
-          note.duration * secPerTick,
-          hand === 'lh' ? 0.38 : 0.5,
-        );
+  if (playScore) {
+    for (const hand of ['rh', 'lh']) {
+      for (const note of score.staves[hand] || []) {
+        if (note.rest) continue;
+        for (const pitch of note.pitches) {
+          addPiano(
+            exerciseStart + note.onset * secPerTick,
+            pitch.midi,
+            note.duration * secPerTick,
+            hand === 'lh' ? 0.38 : 0.5,
+          );
+        }
       }
     }
   }
 
+  for (let beat = 0; beat < countInBeats; beat++) {
+    addClick(leadIn + beat * secPerBeat, beat === 0);
+  }
   if (metronome) {
     for (let tick = 0; tick <= score.totalTicks; tick += score.ts.beat) {
-      addClick(leadIn + tick * secPerTick, tick % score.ts.ticks === 0);
+      addClick(exerciseStart + tick * secPerTick, tick % score.ts.ticks === 0);
     }
   }
 
@@ -359,7 +368,13 @@ function writeAscii(view, offset, value) {
  * The handle is returned immediately so Audio.play() remains in the original
  * gesture. Callers can await `started` without losing control of the player.
  */
-export function startReferencePlayback({ score, metronome = false, onEnd } = {}) {
+export function startReferencePlayback({
+  score,
+  metronome = false,
+  countInBeats = 0,
+  playScore = true,
+  onEnd,
+} = {}) {
   if (
     !score
     || typeof Audio === 'undefined'
@@ -369,12 +384,15 @@ export function startReferencePlayback({ score, metronome = false, onEnd } = {})
   ) return null;
 
   const leadIn = 0.09;
+  const secPerTick = 60 / score.tempo / TPQ;
+  const exerciseStart = leadIn + countInBeats * score.ts.beat * secPerTick;
+  const renderKey = `${metronome}:${countInBeats}:${playScore}`;
   let bytes;
-  if (renderedReference?.score === score && renderedReference.metronome === metronome) {
+  if (renderedReference?.score === score && renderedReference.renderKey === renderKey) {
     bytes = renderedReference.bytes;
   } else {
-    bytes = renderReferenceWav(score, { metronome, leadIn });
-    renderedReference = { score, metronome, bytes };
+    bytes = renderReferenceWav(score, { metronome, leadIn, countInBeats, playScore });
+    renderedReference = { score, renderKey, bytes };
   }
   const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
   const element = new Audio(url);
@@ -421,6 +439,7 @@ export function startReferencePlayback({ score, metronome = false, onEnd } = {})
   return {
     started,
     leadIn,
+    exerciseStart,
     currentTime: () => element.currentTime || 0,
     stop() {
       stopped = true;
@@ -428,6 +447,17 @@ export function startReferencePlayback({ score, metronome = false, onEnd } = {})
       release(false);
     },
   };
+}
+
+/** Media-clock count-in and metronome for a take, without revealing notes. */
+export function startPracticePlayback({ score, metronome, countInBeats, onEnd }) {
+  return startReferencePlayback({
+    score,
+    metronome,
+    countInBeats,
+    playScore: false,
+    onEnd,
+  });
 }
 
 /** A short media-element cue for the user-facing sound check. */
