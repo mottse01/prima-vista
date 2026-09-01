@@ -390,6 +390,12 @@ export default function PracticeView({
             <div className="sr-scorekicker">
               <span>Original adaptive study</span>
               {score.form?.label && <span className="sr-formbadge">Form {score.form.label}</span>}
+              {score.harmony?.roman && (
+                <span
+                  className="sr-harmonybadge"
+                  title={`${score.harmony.name}; closes ${score.harmony.cadence}`}
+                >{score.harmony.name} · {score.harmony.roman}</span>
+              )}
             </div>
             <h2 className="sr-scoretitle">{score.title}</h2>
             <p className="sr-scoremeta">

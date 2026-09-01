@@ -91,7 +91,9 @@ export const ALL_RHYTHM_TAGS = [
 // ---------------------------------------------------------------------------
 
 export const TIME_SIGNATURES = {
-  '4/4': { num: 4, den: 4, compound: false, beat: Q, beats: 4, beamGroup: 2 * Q, strong: [0, 2 * Q] },
+  // In common time, short values beam by quarter-note beat. This keeps the
+  // pulse legible and prevents long, ambiguous runs across beats two and three.
+  '4/4': { num: 4, den: 4, compound: false, beat: Q, beats: 4, beamGroup: Q, strong: [0, 2 * Q] },
   '3/4': { num: 3, den: 4, compound: false, beat: Q, beats: 3, beamGroup: Q, strong: [0] },
   '2/4': { num: 2, den: 4, compound: false, beat: Q, beats: 2, beamGroup: Q, strong: [0] },
   '5/4': { num: 5, den: 4, compound: false, beat: Q, beats: 5, beamGroup: Q, strong: [0, 3 * Q] },

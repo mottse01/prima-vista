@@ -1,70 +1,60 @@
-// Functional harmony engine.
+// Progression-based harmony engine.
 //
-// Sight Reading Factory's most-cited weakness for piano is that its chord
-// progressions "don't make sense". This module fixes that at the root: chords
-// are chosen by tonic / pre-dominant / dominant function with real cadence
-// planning, then voiced with actual voice leading rather than parallel blocks.
+// Every exercise starts from a recognised tonal progression, repeats that
+// harmonic pattern, and closes with an authentic cadence. Chord voicings still
+// use nearest-motion voice leading rather than parallel blocks.
 
-import { chordTones, spellChordTone } from './theory.js';
+import { chordTones, ROMAN, spellChordTone } from './theory.js';
 
 // Degree indices: 0 = I, 1 = ii, 2 = iii, 3 = IV, 4 = V, 5 = vi, 6 = vii.
 const FUNCTION_OF = ['T', 'PD', 'T', 'PD', 'D', 'T', 'D'];
 
-// Weighted successor tables. Tuned so progressions sound like tonal music
-// rather than a random walk: pre-dominants lead to dominants, dominants
-// resolve, and the tonic is free to go anywhere.
-const TRANSITIONS = {
-  0: [[3, 3], [4, 3], [5, 2], [1, 2], [2, 1]],
-  1: [[4, 5], [6, 1], [3, 1]],
-  2: [[3, 3], [5, 2], [1, 1]],
-  3: [[4, 4], [0, 2], [1, 2], [6, 1]],
-  4: [[0, 6], [5, 1]],
-  5: [[3, 3], [1, 3], [4, 1], [2, 1]],
-  6: [[0, 6], [5, 1]],
-};
+const progression = (id, name, degrees) => Object.freeze({
+  id,
+  name,
+  degrees: Object.freeze(degrees),
+});
+
+/** Familiar loops used as the harmonic spine of every generated study. */
+export const COMMON_PROGRESSIONS = Object.freeze({
+  major: Object.freeze([
+    progression('pop-loop', 'Pop loop', [0, 4, 5, 3]),               // I–V–vi–IV
+    progression('fifties', '’50s progression', [0, 5, 3, 4]),       // I–vi–IV–V
+    progression('turnaround', 'Tonal turnaround', [0, 5, 1, 4]),    // I–vi–ii–V
+    progression('canon', 'Canon sequence', [0, 4, 5, 2, 3, 0, 3, 4]),
+  ]),
+  minor: Object.freeze([
+    progression('andalusian', 'Andalusian cadence', [0, 6, 5, 4]),  // i–VII–VI–V
+    progression('minor-pop', 'Minor pop loop', [0, 5, 2, 6]),       // i–VI–III–VII
+    progression('minor-turnaround', 'Minor turnaround', [0, 5, 1, 4]),
+    progression('minor-circle', 'Minor circle sequence', [0, 3, 6, 2]),
+  ]),
+});
 
 /**
- * Plan a chord progression across `measures` bars.
- *
- * Cadences are placed first and the interior is filled backwards-compatibly:
- * the final bar is tonic, the bar before it dominant, and (for phrases of 8
- * bars or more) the midpoint gets a half cadence so the shape is audible.
+ * Choose and repeat one common progression across `measures` bars, then add a
+ * V–I close. The chosen pattern is returned as metadata so the score can name
+ * its harmonic plan for the player.
  */
-export function planProgression(rng, { measures, chordsPerMeasure = 1, allowSevenths = false, allowInversions = false }) {
+export function planProgression(rng, {
+  measures,
+  chordsPerMeasure = 1,
+  allowSevenths = false,
+  allowInversions = false,
+  mode = 'major',
+}) {
   const slots = measures * chordsPerMeasure;
-  const degrees = new Array(slots).fill(null);
+  const resolvedMode = COMMON_PROGRESSIONS[mode] ? mode : 'major';
+  const template = rng.pick(COMMON_PROGRESSIONS[resolvedMode]);
+  const degrees = Array.from({ length: slots }, (_, i) => template.degrees[i % template.degrees.length]);
 
-  degrees[0] = 0;
-
-  // Four-bar harmonic punctuation mirrors the melodic form: the first phrase
-  // asks a question on V, the next answers on I, and longer forms alternate
-  // those cadence types before the final authentic close.
-  const phraseSlots = 4 * chordsPerMeasure;
-  for (let end = phraseSlots - 1, phrase = 1; end < slots - 1; end += phraseSlots, phrase++) {
-    const halfCadence = phrase % 2 === 1;
-    degrees[end] = halfCadence ? 4 : 0;
-    if (end > 0) degrees[end - 1] = halfCadence ? (rng.chance(0.55) ? 1 : 3) : 4;
-    if (end + 1 < slots - 1) degrees[end + 1] = halfCadence ? 0 : (rng.chance(0.35) ? 5 : 0);
+  if (slots === 1) degrees[0] = 0;
+  if (slots > 1) {
+    degrees[slots - 2] = 4;
+    degrees[slots - 1] = 0;
   }
 
-  degrees[slots - 1] = 0; // final authentic cadence
-  if (slots > 1) degrees[slots - 2] = rng.chance(0.92) ? 4 : 6;
-
-  for (let i = 1; i < slots; i++) {
-    if (degrees[i] !== null) continue;
-    const prev = degrees[i - 1];
-    let options = TRANSITIONS[prev];
-    // If the next slot is already fixed, only keep successors that can reach it.
-    const nextFixed = degrees[i + 1];
-    if (nextFixed !== null && nextFixed !== undefined) {
-      const filtered = options.filter(([d]) =>
-        d === nextFixed || TRANSITIONS[d].some(([e]) => e === nextFixed));
-      if (filtered.length) options = filtered;
-    }
-    degrees[i] = rng.weighted(options.map((o) => o[0]), options.map((o) => o[1]));
-  }
-
-  return degrees.map((degree, i) => {
+  const chords = degrees.map((degree, i) => {
     const isCadential = i >= slots - 2;
     // Sevenths belong on the dominant above all, and on ii as a pre-dominant.
     const seventhChance = degree === 4 ? 0.5 : degree === 1 ? 0.3 : 0;
@@ -79,6 +69,17 @@ export function planProgression(rng, { measures, chordsPerMeasure = 1, allowSeve
       index: i,
     };
   });
+
+  return {
+    chords,
+    progression: {
+      id: template.id,
+      name: template.name,
+      degrees: [...template.degrees],
+      roman: template.degrees.map((degree) => ROMAN[resolvedMode][degree]).join('–'),
+      cadence: `${ROMAN[resolvedMode][4]}–${ROMAN[resolvedMode][0]}`,
+    },
+  };
 }
 
 /**

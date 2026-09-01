@@ -98,31 +98,79 @@ function writtenNotes(note, compound) {
   });
 }
 
+function sameBeamGroup(a, b, ts, unit) {
+  const aMeasure = Math.floor(a.onset / ts.ticks);
+  const bMeasure = Math.floor(b.onset / ts.ticks);
+  if (aMeasure !== bMeasure) return false;
+  const aWithin = a.onset - aMeasure * ts.ticks;
+  const bWithin = b.onset - bMeasure * ts.ticks;
+  return Math.floor(aWithin / unit) === Math.floor(bWithin / unit);
+}
+
+function setBeamRun(run, level, { hooks = false, unit = TPQ } = {}) {
+  if (run.length > 1) {
+    run.forEach((note, i) => {
+      note.beamStates[level - 1] = i === 0 ? 'begin' : i === run.length - 1 ? 'end' : 'continue';
+    });
+  } else if (hooks && run.length === 1) {
+    // A lone secondary beam belongs to the subdivision on the side it faces.
+    // This gives dotted-eighth/sixteenth figures their conventional hook.
+    const within = ((run[0].onset % unit) + unit) % unit;
+    run[0].beamStates[level - 1] = within < unit / 2 ? 'forward hook' : 'backward hook';
+  }
+}
+
 /**
- * Beam runs of short notes inside a beam group, so Verovio draws beams rather
- * than a row of flags. Rests and quarter-or-longer notes break a run.
+ * Resolve every beam level, not just the primary beam. Primary beams expose
+ * the meter; secondary beams expose two-note subdivisions. Rests, gaps,
+ * beat-group boundaries, and barlines all break a beam run.
  */
 function assignBeams(notes, ts) {
-  for (const n of notes) n.beam = null;
+  for (const note of notes) note.beamStates = [];
+  const primaryRuns = [];
+  const primaryUnit = ts.beamGroup || ts.beat || TPQ;
   let run = [];
-  const flush = () => {
+
+  const flushPrimary = () => {
     if (run.length > 1) {
-      run.forEach((n, i) => {
-        n.beam = i === 0 ? 'begin' : i === run.length - 1 ? 'end' : 'continue';
-      });
+      setBeamRun(run, 1);
+      primaryRuns.push(run);
     }
     run = [];
   };
-  for (const n of notes) {
-    if (n.rest || n.beams === 0) { flush(); continue; }
+
+  for (const note of notes) {
+    if (note.rest || note.beams === 0) { flushPrimary(); continue; }
     const prev = run[run.length - 1];
-    const sameGroup = !prev
-      || Math.floor((prev.onset % ts.ticks) / ts.beamGroup) === Math.floor((n.onset % ts.ticks) / ts.beamGroup);
-    const contiguous = !prev || prev.onset + prev.duration === n.onset;
-    if (prev && (!sameGroup || !contiguous)) flush();
-    run.push(n);
+    const contiguous = !prev || prev.onset + prev.duration === note.onset;
+    if (prev && (!contiguous || !sameBeamGroup(prev, note, ts, primaryUnit))) flushPrimary();
+    run.push(note);
   }
-  flush();
+  flushPrimary();
+
+  for (const primary of primaryRuns) {
+    const maxLevel = Math.max(...primary.map((note) => note.beams));
+    for (let level = 2; level <= maxLevel; level++) {
+      // Two sixteenths make an eighth-note subdivision; two 32nds make a
+      // sixteenth-note subdivision. Breaking the extra beam at those points
+      // produces the familiar visual couplets while the first beam shows the beat.
+      const unit = TPQ / (2 ** (level - 1));
+      let secondary = [];
+      const flushSecondary = () => {
+        setBeamRun(secondary, level, { hooks: true, unit });
+        secondary = [];
+      };
+
+      for (const note of primary) {
+        if (note.beams < level) { flushSecondary(); continue; }
+        const prev = secondary[secondary.length - 1];
+        const contiguous = !prev || prev.onset + prev.duration === note.onset;
+        if (prev && (!contiguous || !sameBeamGroup(prev, note, ts, unit))) flushSecondary();
+        secondary.push(note);
+      }
+      flushSecondary();
+    }
+  }
 }
 
 function pitchXml(p) {
@@ -163,7 +211,11 @@ function noteXml(w, { staff, voice, hand, accidentals, slurStart, slurStop, fing
     const acc = accidentals[i] ? `<accidental>${accidentals[i]}</accidental>` : '';
     // <tie> is the sounding tie; <tied> inside <notations> is the drawn slur.
     const ties = (w.tieTo ? '<tie type="start"/>' : '') + (w.tieFrom ? '<tie type="stop"/>' : '');
-    const beam = i === 0 && w.beam ? `<beam number="1">${w.beam}</beam>` : '';
+    const beams = i === 0
+      ? (w.beamStates || []).map((state, beamIndex) => (
+        state ? `<beam number="${beamIndex + 1}">${state}</beam>` : ''
+      )).join('')
+      : '';
     const notations = i === 0
       ? notationsXml(w, { slurStart, slurStop, fingering })
       : (w.tieTo || w.tieFrom
@@ -171,7 +223,7 @@ function noteXml(w, { staff, voice, hand, accidentals, slurStart, slurStop, fing
         : '');
     return `<note${id}>${chord}${pitchXml(p)}${ties}<duration>${w.duration}</duration>`
       + `<voice>${voice}</voice><type>${type}</type>${dots}${acc}${tuplet}`
-      + `<staff>${staff}</staff>${beam}${notations}</note>`;
+      + `<staff>${staff}</staff>${beams}${notations}</note>`;
   }).join('');
 }
 

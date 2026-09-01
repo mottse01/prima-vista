@@ -560,13 +560,14 @@ export function generateExercise(userParams = {}) {
     ? resolveCells(null, ts).concat(params.cells).filter((id, i, a) => a.indexOf(id) === i)
     : resolveCells(params.rhythmTags, ts);
 
-  const chords = planProgression(rng, {
+  const harmonyPlan = planProgression(rng, {
     measures,
     chordsPerMeasure,
     allowSevenths: params.allowSevenths,
     allowInversions: params.allowInversions,
     mode: key.mode,
   });
+  const { chords } = harmonyPlan;
 
   const staves = { rh: [], lh: [] };
   const wantsRh = params.hands === 'both' || params.hands === 'rh';
@@ -633,6 +634,7 @@ export function generateExercise(userParams = {}) {
     measures,
     chords,
     chordsPerMeasure,
+    harmony: harmonyPlan.progression,
     form: { label: form.label, sections: form.sections },
     staves,
     slurs,

@@ -7,7 +7,10 @@ import {
 } from '../src/core/audio.js';
 import { generateExercise, planMusicalForm } from '../src/core/generator.js';
 import { analyseEvents, createGrader } from '../src/core/grader.js';
+import { COMMON_PROGRESSIONS } from '../src/core/harmony.js';
+import { toMusicXml } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
+import { timeSig } from '../src/core/rhythm.js';
 import { fromDia } from '../src/core/theory.js';
 import {
   decodeExerciseParams, encodeExerciseParams, exerciseFingerprint, exactExerciseUrl,
@@ -44,17 +47,76 @@ test('generated studies use a clear phrase form and repeat their rhythmic idea',
   assert.equal(planMusicalForm(16).label, 'A–A′–B–A″');
 });
 
-test('four-bar phrases receive alternating half and authentic cadences', () => {
-  const score = generateExercise({
-    ...paramsForLevel(8, emptyProfile(), { seed: 271828 }),
-    measures: 16,
-    chordsPerMeasure: 1,
-  });
+test('every study repeats a named common progression and closes V–I', () => {
+  for (const mode of ['major', 'minor']) {
+    for (const seed of [271828, 577215, 141421]) {
+      const score = generateExercise({
+        ...paramsForLevel(8, emptyProfile(), { seed }),
+        keyMode: mode,
+        measures: 16,
+        chordsPerMeasure: 1,
+      });
+      const template = COMMON_PROGRESSIONS[mode].find((item) => item.id === score.harmony.id);
 
-  assert.equal(score.chords[3].degree, 4);
-  assert.equal(score.chords[7].degree, 0);
-  assert.equal(score.chords[11].degree, 4);
-  assert.equal(score.chords[15].degree, 0);
+      assert.ok(template);
+      assert.equal(score.harmony.name, template.name);
+      assert.deepEqual(score.harmony.degrees, [...template.degrees]);
+      for (let i = 0; i < score.chords.length - 2; i++) {
+        assert.equal(score.chords[i].degree, template.degrees[i % template.degrees.length]);
+      }
+      assert.deepEqual(score.chords.slice(-2).map((chord) => chord.degree), [4, 0]);
+    }
+  }
+});
+
+function xmlForDurations(durations) {
+  let onset = 0;
+  const notes = durations.map((duration) => {
+    const note = {
+      onset,
+      duration,
+      rest: false,
+      pitches: [fromDia(28)],
+      tags: [],
+    };
+    onset += duration;
+    return note;
+  });
+  return toMusicXml({
+    title: 'Beam test',
+    key: { fifths: 0, mode: 'major' },
+    ts: timeSig('4/4'),
+    tempo: 72,
+    measures: 1,
+    staves: { rh: notes, lh: [] },
+    slurs: [],
+  });
+}
+
+const occurrences = (text, fragment) => text.split(fragment).length - 1;
+
+test('sixteenths engrave as beamed couplets inside a beat', () => {
+  const xml = xmlForDurations([12, 12, 12, 12]);
+
+  assert.equal(occurrences(xml, '<beam number="1">begin</beam>'), 1);
+  assert.equal(occurrences(xml, '<beam number="1">end</beam>'), 1);
+  assert.equal(occurrences(xml, '<beam number="2">begin</beam>'), 2);
+  assert.equal(occurrences(xml, '<beam number="2">end</beam>'), 2);
+});
+
+test('dotted-eighth/sixteenth figures use conventional secondary-beam hooks', () => {
+  const dottedFirst = xmlForDurations([36, 12]);
+  const dottedLast = xmlForDurations([12, 36]);
+
+  assert.ok(dottedFirst.includes('<beam number="2">backward hook</beam>'));
+  assert.ok(dottedLast.includes('<beam number="2">forward hook</beam>'));
+});
+
+test('primary beams stop at quarter-note beats in common time', () => {
+  const xml = xmlForDurations([12, 12, 12, 12, 12, 12, 12, 12]);
+
+  assert.equal(occurrences(xml, '<beam number="1">begin</beam>'), 2);
+  assert.equal(occurrences(xml, '<beam number="1">end</beam>'), 2);
 });
 
 test('reference playback renders a non-empty browser-safe WAV', () => {
