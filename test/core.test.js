@@ -7,11 +7,12 @@ import {
 } from '../src/core/audio.js';
 import { generateExercise, planMusicalForm } from '../src/core/generator.js';
 import { analyseEvents, createGrader } from '../src/core/grader.js';
-import { COMMON_PROGRESSIONS } from '../src/core/harmony.js';
+import { COMMON_CADENCES, COMMON_PROGRESSIONS } from '../src/core/harmony.js';
+import { reviewMusicality } from '../src/core/musicality.js';
 import { toMusicXml } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { timeSig } from '../src/core/rhythm.js';
-import { fromDia } from '../src/core/theory.js';
+import { fromDia, tonicLetter } from '../src/core/theory.js';
 import {
   decodeExerciseParams, encodeExerciseParams, exerciseFingerprint, exactExerciseUrl,
 } from '../src/core/share.js';
@@ -42,18 +43,23 @@ test('generated studies use a clear phrase form and repeat their rhythmic idea',
     .map((note) => [note.onset % score.ts.ticks, note.duration, note.rest, note.cellId]);
 
   assert.equal(score.form.label, 'A–A′');
+  assert.equal(score.form.name, 'Parallel period');
   assert.deepEqual(signature(0), signature(2));
   assert.deepEqual(signature(0), signature(4));
   assert.equal(planMusicalForm(16).label, 'A–A′–B–A″');
+  assert.equal(planMusicalForm(16).name, 'Rounded binary');
+  assert.equal(planMusicalForm(24).name, 'Extended ternary');
 });
 
-test('every study repeats a named common progression and closes V–I', () => {
+test('every study follows a named progression with a varied common cadence plan', () => {
+  const finalCadences = new Set();
+  const finalPairs = new Set();
   for (const mode of ['major', 'minor']) {
-    for (const seed of [271828, 577215, 141421]) {
+    for (let seed = 1; seed <= 24; seed++) {
       const score = generateExercise({
-        ...paramsForLevel(8, emptyProfile(), { seed }),
+        ...paramsForLevel(8, emptyProfile(), { seed: seed * 7919 }),
         keyMode: mode,
-        measures: 16,
+        measures: 8,
         chordsPerMeasure: 1,
       });
       const template = COMMON_PROGRESSIONS[mode].find((item) => item.id === score.harmony.id);
@@ -61,12 +67,39 @@ test('every study repeats a named common progression and closes V–I', () => {
       assert.ok(template);
       assert.equal(score.harmony.name, template.name);
       assert.deepEqual(score.harmony.degrees, [...template.degrees]);
-      for (let i = 0; i < score.chords.length - 2; i++) {
-        assert.equal(score.chords[i].degree, template.degrees[i % template.degrees.length]);
+      for (const chord of score.chords.filter((item) => item.source === 'progression')) {
+        assert.equal(chord.degree, template.degrees[chord.index % template.degrees.length]);
       }
-      assert.deepEqual(score.chords.slice(-2).map((chord) => chord.degree), [4, 0]);
+      for (const cadence of score.harmony.cadences) {
+        assert.equal(COMMON_CADENCES[cadence.id].name, cadence.name);
+        assert.deepEqual(cadence.slots.map((slot) => score.chords[slot].degree), cadence.degrees);
+        const arrival = score.staves.rh.find((note) => note.cadence === cadence.id
+          && Math.floor(note.onset / score.ts.ticks) === cadence.measure);
+        const degree = (((arrival.pitches[0].dia - tonicLetter(score.key)) % 7) + 7) % 7;
+        assert.equal(degree, cadence.melodyDegree);
+      }
+      const final = score.harmony.cadences.at(-1);
+      finalCadences.add(final.id);
+      finalPairs.add(final.degrees.join(','));
+      assert.equal(score.compositionReview.passed, true);
+      assert.equal(score.compositionReview.candidates, 4);
     }
   }
+
+  assert.ok(finalCadences.size >= 3);
+  assert.ok([...finalPairs].some((pair) => pair !== '4,0'));
+});
+
+test('the composition critic rejects a broken harmonic plan', () => {
+  const score = generateExercise(paramsForLevel(8, emptyProfile(), { seed: 867530 }));
+  const broken = structuredClone(score);
+  const bodyChord = broken.chords.find((chord) => chord.source === 'progression');
+  bodyChord.degree = (bodyChord.degree + 1) % 7;
+  const review = reviewMusicality(broken);
+
+  assert.equal(score.compositionReview.passed, true);
+  assert.equal(review.passed, false);
+  assert.ok(review.issues.includes('the harmonic pattern loses its stated progression'));
 });
 
 function xmlForDurations(durations) {

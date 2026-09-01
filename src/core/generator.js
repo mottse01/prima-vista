@@ -9,6 +9,7 @@ import {
 } from './theory.js';
 import { getCell, metricWeight, resolveCells, timeSig } from './rhythm.js';
 import { planProgression, spellVoicing, voiceChord } from './harmony.js';
+import { reviewMusicality } from './musicality.js';
 import { makeRng } from './rng.js';
 
 // ---------------------------------------------------------------------------
@@ -69,13 +70,18 @@ function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks, requiredTag = nu
  */
 export function planMusicalForm(measures) {
   const phraseCount = Math.max(1, Math.ceil(measures / 4));
+  let name;
   let sections;
-  if (phraseCount === 1) sections = ['A'];
-  else if (phraseCount === 2) sections = ['A', 'A′'];
-  else if (phraseCount === 3) sections = ['A', 'B', 'A′'];
-  else if (phraseCount === 4) sections = ['A', 'A′', 'B', 'A″'];
-  else if (phraseCount === 5) sections = ['A', 'A′', 'B', 'B′', 'A″'];
-  else sections = ['A', 'A′', 'B', 'B′', 'A', 'A″'];
+  if (phraseCount === 1) { name = 'Four-bar phrase'; sections = ['A']; }
+  else if (phraseCount === 2) { name = 'Parallel period'; sections = ['A', 'A′']; }
+  else if (phraseCount === 3) { name = 'Ternary miniature'; sections = ['A', 'B', 'A′']; }
+  else if (phraseCount === 4) { name = 'Rounded binary'; sections = ['A', 'A′', 'B', 'A″']; }
+  else if (phraseCount === 5) { name = 'Arch form'; sections = ['A', 'B', 'C', 'B′', 'A′']; }
+  else if (phraseCount === 6) { name = 'Extended ternary'; sections = ['A', 'A′', 'B', 'B′', 'A', 'A″']; }
+  else {
+    name = 'AABA song form';
+    sections = ['A', 'A′', 'A', 'A″', 'B', 'B′', 'A', 'A‴'];
+  }
 
   while (sections.length < phraseCount) sections.splice(sections.length - 1, 0, 'B′');
   sections = sections.slice(0, phraseCount);
@@ -84,10 +90,12 @@ export function planMusicalForm(measures) {
   for (let m = 0; m < measures; m++) {
     const phrase = Math.min(sections.length - 1, Math.floor(m / 4));
     const section = sections[phrase];
-    const base = section.startsWith('B') ? 'B' : 'A';
+    const base = section.charAt(0);
     const barInPhrase = m % 4;
     const motifBar = barInPhrase % 2;
-    const variant = section.includes('″') ? 2 : section.includes('′') ? 1 : 0;
+    const variant = (section.match(/[′″‴]/g) || []).reduce((count, mark) => (
+      count + (mark === '′' ? 1 : mark === '″' ? 2 : 3)
+    ), 0);
     plan.push({
       measure: m,
       phrase,
@@ -105,11 +113,49 @@ export function planMusicalForm(measures) {
     });
   }
 
-  return { label: sections.join('–'), sections, plan };
+  return { name, label: sections.join('–'), sections, plan, phraseLength: 4 };
 }
 
-/** Rhythm for the whole line, with motivic echoes and a held final bar. */
-function buildRhythm(rng, ts, cellIds, measures, restRate, focusTags = [], form = planMusicalForm(measures)) {
+function realiseCadenceAttack(events, arrivalOnset) {
+  const realised = [];
+  for (const event of events) {
+    const end = event.onset + event.duration;
+    if (event.onset < arrivalOnset && arrivalOnset < end) {
+      realised.push({ ...event, duration: arrivalOnset - event.onset });
+      realised.push({
+        ...event,
+        onset: arrivalOnset,
+        duration: end - arrivalOnset,
+        rest: false,
+        tags: [...event.tags, 'cadence-arrival'],
+        motifIndex: Number(event.motifIndex || 0) + 0.5,
+        cadenceArrival: true,
+      });
+    } else if (event.onset === arrivalOnset) {
+      realised.push({
+        ...event,
+        rest: false,
+        tags: [...event.tags, 'cadence-arrival'],
+        cadenceArrival: true,
+      });
+    } else {
+      realised.push(event);
+    }
+  }
+  return realised;
+}
+
+/** Rhythm for the whole line, with motivic echoes and cadential arrivals. */
+function buildRhythm(
+  rng,
+  ts,
+  cellIds,
+  measures,
+  restRate,
+  focusTags = [],
+  form = planMusicalForm(measures),
+  chordsPerMeasure = 1,
+) {
   const out = [];
   const required = [...new Set(focusTags)].slice(0, Math.max(0, measures - 1));
   const prototypes = new Map();
@@ -119,18 +165,22 @@ function buildRhythm(rng, ts, cellIds, measures, restRate, focusTags = [], form 
     const offsetTicks = m * ts.ticks;
     const spec = form.plan[m];
     if (m === measures - 1) {
-      out.push({
-        onset: offsetTicks,
-        duration: ts.ticks,
-        rest: false,
-        tags: ['final', 'cadence'],
-        cellId: 'final',
-        motifKey: null,
-        motifIndex: 0,
-        motifRole: 'cadence',
-        motifShift: 0,
-        section: spec?.section || 'A',
-      });
+      const slotTicks = ts.ticks / chordsPerMeasure;
+      for (let slot = 0; slot < chordsPerMeasure; slot++) {
+        out.push({
+          onset: offsetTicks + slot * slotTicks,
+          duration: slotTicks,
+          rest: false,
+          tags: ['final', 'cadence', slot === chordsPerMeasure - 1 ? 'cadence-arrival' : 'cadence-approach'],
+          cellId: 'final',
+          motifKey: null,
+          motifIndex: slot,
+          motifRole: 'cadence',
+          motifShift: 0,
+          cadenceArrival: slot === chordsPerMeasure - 1,
+          section: spec?.section || 'A',
+        });
+      }
       continue;
     }
 
@@ -146,7 +196,7 @@ function buildRhythm(rng, ts, cellIds, measures, restRate, focusTags = [], form 
       prototypes.set(spec.motifKey, relative);
     }
 
-    out.push(...relative.map((event) => ({
+    let measureEvents = relative.map((event) => ({
       ...event,
       onset: event.onset + offsetTicks,
       motifKey: spec.motifKey,
@@ -154,7 +204,12 @@ function buildRhythm(rng, ts, cellIds, measures, restRate, focusTags = [], form 
       motifShift: spec.shift,
       section: spec.section,
       tags: spec.cadence ? [...event.tags, 'phrase-end'] : event.tags,
-    })));
+    }));
+    if (spec.cadence) {
+      const arrivalOnset = offsetTicks + ts.ticks - ts.ticks / chordsPerMeasure;
+      measureEvents = realiseCadenceAttack(measureEvents, arrivalOnset);
+    }
+    out.push(...measureEvents);
   }
   return out;
 }
@@ -190,7 +245,7 @@ function assignPitches(rng, opts) {
   const {
     key, ts, chords, chordsPerMeasure, rhythm, measures,
     lowDia, highDia, maxLeap, stepwiseBias, nonChordRate, chromaticRate,
-    focusIntervals = [],
+    focusIntervals = [], cadences = [],
   } = opts;
 
   const notes = [];
@@ -201,13 +256,21 @@ function assignPitches(rng, opts) {
   const motifPitches = new Map();
 
   const sounded = rhythm.filter((e) => !e.rest);
+  const cadenceByMeasure = new Map(cadences.map((item) => [item.measure, item]));
+  const lastSoundedByMeasure = new Map();
+  sounded.forEach((event, i) => lastSoundedByMeasure.set(Math.floor(event.onset / ts.ticks), i));
 
   for (let i = 0; i < sounded.length; i++) {
     const ev = sounded[i];
     const measure = Math.floor(ev.onset / ts.ticks);
     const within = ev.onset - measure * ts.ticks;
     const weight = metricWeight(ts, within);
-    const chord = chordAt(chords, ts, chordsPerMeasure, ev.onset);
+    const cadence = cadenceByMeasure.get(measure);
+    const isCadenceArrival = Boolean(ev.cadenceArrival)
+      || Boolean(cadence && lastSoundedByMeasure.get(measure) === i);
+    const chord = isCadenceArrival && cadence
+      ? chords[cadence.slots[cadence.slots.length - 1]]
+      : chordAt(chords, ts, chordsPerMeasure, ev.onset);
     const isLast = i === sounded.length - 1;
     const target = archTarget(measure, measures, lowDia, highDia);
     const motifId = ev.motifKey ? `${ev.motifKey}:${ev.motifIndex}` : null;
@@ -216,7 +279,7 @@ function assignPitches(rng, opts) {
 
     // Decide whether this slot must be a chord tone.
     let requireChordTone;
-    if (isLast || weight === 2) requireChordTone = true;
+    if (isLast || isCadenceArrival || weight === 2) requireChordTone = true;
     else if (weight === 1) requireChordTone = rng.chance(1 - nonChordRate * 0.5);
     else requireChordTone = rng.chance(1 - nonChordRate);
     if (lastLeap >= 3) requireChordTone = false; // a leap wants a stepwise answer
@@ -231,10 +294,11 @@ function assignPitches(rng, opts) {
     }
 
     let chosen;
-    if (isLast) {
-      // Land on the tonic, in the octave closest to where the line has been.
-      const tonics = candidates.filter((d) => isTonic(key, d));
-      const pool = tonics.length ? tonics : candidates;
+    if (isCadenceArrival) {
+      // The melodic arrival defines the cadence: tonic for PAC/plagal, the
+      // third for IAC, dominant for half cadences, and vi/VI for deceptive ones.
+      const targets = candidates.filter((d) => scaleDegree(key, d) === cadence.melodyDegree);
+      const pool = targets.length ? targets : candidates;
       chosen = nearest(pool, prev ? prev.dia : target);
     } else if (!prev) {
       const pool = candidates.filter((d) => Math.abs(d - target) <= 3);
@@ -307,7 +371,7 @@ function assignPitches(rng, opts) {
     // Spell it. Chromatic inflection turns a stepwise passing tone into an
     // accidental, which is how accidentals actually appear in real music.
     let p;
-    const stepwiseRun = prev && Math.abs(chosen - prev.dia) === 1 && !isLast && weight === 0;
+    const stepwiseRun = prev && Math.abs(chosen - prev.dia) === 1 && !isCadenceArrival && weight === 0;
     if (chromaticRate > 0 && stepwiseRun && !isChordTone(key, chord, chosen) && rng.chance(chromaticRate)) {
       const dir = Math.sign(chosen - prev.dia);
       const base = spellInKey(key, chosen);
@@ -327,6 +391,7 @@ function assignPitches(rng, opts) {
       motifKey: ev.motifKey || null,
       motifRole: ev.motifRole || null,
       section: ev.section || null,
+      cadence: isCadenceArrival ? cadence.id : null,
     });
     if (motifId && !motifPitches.has(motifId)) motifPitches.set(motifId, chosen);
     prev = p;
@@ -340,8 +405,8 @@ function assignPitches(rng, opts) {
   return [...notes, ...rests].sort((a, b) => a.onset - b.onset);
 }
 
-function isTonic(key, dia) {
-  return ((dia % 7) + 7) % 7 === tonicLetter(key);
+function scaleDegree(key, dia) {
+  return (((dia - tonicLetter(key)) % 7) + 7) % 7;
 }
 
 function nearest(pool, ref) {
@@ -446,7 +511,9 @@ function buildLeftHand(rng, opts) {
 
 /** An independent left-hand melodic line, for two-voice contrapuntal levels. */
 function buildLeftHandMelody(rng, opts) {
-  const rhythm = buildRhythm(rng, opts.ts, opts.cellIds, opts.measures, opts.restRate, [], opts.form);
+  const rhythm = buildRhythm(
+    rng, opts.ts, opts.cellIds, opts.measures, opts.restRate, [], opts.form, opts.chordsPerMeasure,
+  );
   return assignPitches(rng, { ...opts, rhythm });
 }
 
@@ -543,10 +610,11 @@ export const DEFAULT_PARAMS = {
 
 const ORDINALS = ['No. 1', 'No. 2', 'No. 3', 'No. 4', 'No. 5', 'No. 6', 'No. 7', 'No. 8', 'No. 9', 'No. 10'];
 
-export function generateExercise(userParams = {}) {
+function composeCandidate(userParams = {}, attempt = 0) {
   const params = { ...DEFAULT_PARAMS, ...userParams };
   const seed = params.seed >>> 0;
-  const rng = makeRng(seed);
+  const candidateSeed = attempt === 0 ? seed : (seed + Math.imul(attempt, 0x9e3779b9)) >>> 0;
+  const rng = makeRng(candidateSeed);
   const key = { fifths: params.keyFifths, mode: params.keyMode };
   const ts = timeSig(params.timeSignature);
   const measures = params.measures;
@@ -560,12 +628,21 @@ export function generateExercise(userParams = {}) {
     ? resolveCells(null, ts).concat(params.cells).filter((id, i, a) => a.indexOf(id) === i)
     : resolveCells(params.rhythmTags, ts);
 
+  const leadLow = params.hands === 'lh' ? params.lhLow : params.rhLow;
+  const leadHigh = params.hands === 'lh' ? params.lhHigh : params.rhHigh;
+  const melodyDegrees = [...new Set(Array.from(
+    { length: Math.max(0, leadHigh - leadLow + 1) },
+    (_, i) => scaleDegree(key, leadLow + i),
+  ))];
+
   const harmonyPlan = planProgression(rng, {
     measures,
     chordsPerMeasure,
     allowSevenths: params.allowSevenths,
     allowInversions: params.allowInversions,
     mode: key.mode,
+    form,
+    melodyDegrees,
   });
   const { chords } = harmonyPlan;
 
@@ -574,13 +651,16 @@ export function generateExercise(userParams = {}) {
   const wantsLh = params.hands === 'both' || params.hands === 'lh';
 
   if (wantsRh) {
-    const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form);
+    const rhythm = buildRhythm(
+      rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form, chordsPerMeasure,
+    );
     staves.rh = assignPitches(rng, {
       key, ts, chords, chordsPerMeasure, rhythm, measures,
       lowDia: params.rhLow, highDia: params.rhHigh,
       maxLeap: params.maxLeap, stepwiseBias: params.stepwiseBias,
       nonChordRate: params.nonChordRate, chromaticRate: params.chromaticRate,
       focusIntervals: params.focusIntervals,
+      cadences: harmonyPlan.progression.cadences,
     });
   }
 
@@ -594,16 +674,20 @@ export function generateExercise(userParams = {}) {
         lowDia: params.lhLow, highDia: params.lhHigh,
         maxLeap: Math.min(params.maxLeap, 4), stepwiseBias: Math.min(0.85, params.stepwiseBias + 0.1),
         nonChordRate: params.nonChordRate * 0.7, chromaticRate: 0,
+        cadences: harmonyPlan.progression.cadences,
       });
     } else if (params.hands === 'lh') {
       // Left hand alone gets the melody, not an accompaniment pattern.
-      const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form);
+      const rhythm = buildRhythm(
+        rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form, chordsPerMeasure,
+      );
       staves.lh = assignPitches(rng, {
         key, ts, chords, chordsPerMeasure, rhythm, measures,
         lowDia: params.lhLow, highDia: params.lhHigh,
         maxLeap: params.maxLeap, stepwiseBias: params.stepwiseBias,
         nonChordRate: params.nonChordRate, chromaticRate: params.chromaticRate,
         focusIntervals: params.focusIntervals,
+        cadences: harmonyPlan.progression.cadences,
       });
     } else {
       staves.lh = buildLeftHand(rng, {
@@ -635,13 +719,46 @@ export function generateExercise(userParams = {}) {
     chords,
     chordsPerMeasure,
     harmony: harmonyPlan.progression,
-    form: { label: form.label, sections: form.sections },
+    form: { name: form.name, label: form.label, sections: form.sections, phraseLength: form.phraseLength },
     staves,
     slurs,
     title,
     params,
     totalTicks: measures * ts.ticks,
   };
+}
+
+const COMPOSITION_CANDIDATES = 4;
+
+/**
+ * Compose several deterministic candidates, run the same musicality rubric on
+ * each, and retain the strongest one. The public seed remains stable, so exact
+ * links still regenerate the same accepted exercise.
+ */
+export function generateExercise(userParams = {}) {
+  let best = null;
+  let bestReview = null;
+  let selectedAttempt = 0;
+
+  for (let attempt = 0; attempt < COMPOSITION_CANDIDATES; attempt++) {
+    const candidate = composeCandidate(userParams, attempt);
+    const review = reviewMusicality(candidate);
+    const stronger = !best
+      || (review.passed && !bestReview.passed)
+      || (review.passed === bestReview.passed && review.score > bestReview.score);
+    if (stronger) {
+      best = candidate;
+      bestReview = review;
+      selectedAttempt = attempt;
+    }
+  }
+
+  best.compositionReview = {
+    ...bestReview,
+    candidates: COMPOSITION_CANDIDATES,
+    selectedAttempt,
+  };
+  return best;
 }
 
 /** Flat, time-ordered list of expected note events — the grader's reference. */

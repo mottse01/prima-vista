@@ -388,13 +388,27 @@ export default function PracticeView({
         <div className="sr-scorehead">
           <div className="sr-scoreidentity">
             <div className="sr-scorekicker">
-              <span>Original adaptive study</span>
-              {score.form?.label && <span className="sr-formbadge">Form {score.form.label}</span>}
+              <span>Original structured study</span>
+              {score.form?.label && (
+                <span className="sr-formbadge">{score.form.name || 'Form'} · {score.form.label}</span>
+              )}
               {score.harmony?.roman && (
                 <span
                   className="sr-harmonybadge"
                   title={`${score.harmony.name}; closes ${score.harmony.cadence}`}
                 >{score.harmony.name} · {score.harmony.roman}</span>
+              )}
+              {score.harmony?.cadencePlan && (
+                <span
+                  className="sr-cadencebadge"
+                  title={score.harmony.cadences.map((item) => `${item.short}: ${item.name} (${item.roman})`).join(' → ')}
+                >Cadences {score.harmony.cadencePlan}</span>
+              )}
+              {score.compositionReview && (
+                <span
+                  className={`sr-reviewbadge${score.compositionReview.passed ? ' is-passed' : ''}`}
+                  title={`Composition review ${score.compositionReview.score}/100; best of ${score.compositionReview.candidates} candidates`}
+                >Composition checked</span>
               )}
             </div>
             <h2 className="sr-scoretitle">{score.title}</h2>
