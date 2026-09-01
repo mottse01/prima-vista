@@ -14,7 +14,7 @@ const ROWS = [
     feature: 'Can you memorise your way through it?',
     srf: 'No — always new',
     tree: 'Eventually yes; the library is finite',
-    us: 'No — every exercise is new, and reproducible from a code',
+    us: 'No — every exercise is new, with exact reproducible links',
     us_win: true,
   },
   {
@@ -41,7 +41,7 @@ const ROWS = [
     feature: 'Does a replay count as sight-reading?',
     srf: 'No scoring at all, so the question does not arise',
     tree: 'Repeat practice on a piece is the point',
-    us: 'No — replays are flagged and cannot advance your level',
+    us: 'No — replays and assisted takes are flagged and cannot advance your level',
   },
   {
     feature: 'Does it tell you which skill is failing?',
@@ -68,7 +68,7 @@ const ROWS = [
     feature: 'Sharing an exercise with a class',
     srf: 'Yes, via teacher/student accounts',
     tree: 'Assign pieces from the library',
-    us: 'A six-character code. No accounts on either end',
+    us: 'An exact link carrying the seed and setup. No accounts on either end',
   },
   {
     feature: 'Notation quality',
@@ -108,14 +108,14 @@ const ROWS = [
     feature: 'Classroom tooling (rosters, assessment records)',
     srf: 'Yes, including live ensemble casting',
     tree: 'Teacher features available',
-    us: 'Not yet. Codes and printing only',
+    us: 'Not yet. Share links and printing only',
     us_loss: true,
   },
   {
     feature: 'Cost',
     srf: 'Subscription',
     tree: 'Subscription after a trial',
-    us: 'Free, offline-capable, data stays in your browser',
+    us: 'No subscription; practice data stays in your browser',
     us_win: true,
   },
 ];

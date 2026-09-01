@@ -87,7 +87,7 @@ it that you have never seen.
 | Range control that does not work | Explicit per-hand range sliders in staff steps, so ledger lines can be dialled in deliberately |
 | Nothing forces the eye ahead of the hands | A look-ahead curtain: an opaque card follows the playhead and hides the music as you reach it, adjustable from "no looking back" to "a full bar ahead". It has its own progression, separate from the skill map, because it measures reading fluency rather than note knowledge |
 | A replay flatters the measurement | Only a first read of new music can advance a level; replays are detected across reloads and shared links, and count at half weight |
-| Assignments need accounts | Every exercise is a seed. A six-character code (also in the URL) reproduces the exact same music for anyone, with no account on either end |
+| Assignments need accounts | Exact links carry both the short seed and full generator setup, reproducing the same music for anyone with no account on either end |
 | Notation that looks hand-rolled | Engraving by Verovio, the engine behind scholarly and commercial editions, rendered with Bravura. Exercises also export as MusicXML, so any of them opens in MuseScore, Finale or Sibelius |
 | Paywalls | Runs entirely in the browser; progress lives in `localStorage` and exports to JSON |
 
@@ -102,7 +102,7 @@ app says so:
 - **No real repertoire.** Piano Tree's graded library of actual pieces teaches
   things generated studies cannot.
 - **No classroom management.** There are no rosters, no assessment records, no
-  teacher dashboard — only exercise codes and printing.
+  teacher dashboard — only exact exercise links and printing.
 
 ## Sources
 

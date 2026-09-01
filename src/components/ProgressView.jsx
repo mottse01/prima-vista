@@ -18,8 +18,9 @@ export default function ProgressView({ profile, onDrill, onReset, onReload }) {
 
   const pitchTally = useMemo(() => aggregatePitches(profile), [profile]);
   const recovery = useMemo(() => aggregateRecovery(profile), [profile]);
-  // Replays and curtain takes are not sight-reads; charting them flatters the trend.
-  const history = profile.history.filter((h) => !h.repeat && !h.curtain).slice(-40);
+  // Replays, assisted practice, and curtain takes are not clean first reads;
+  // charting them together would flatter or distort the sight-reading trend.
+  const history = profile.history.filter((h) => !h.repeat && !h.assisted && !h.curtain).slice(-40);
 
   return (
     <div className="sr-progress">
@@ -161,7 +162,12 @@ export default function ProgressView({ profile, onDrill, onReset, onReload }) {
               e.target.value = '';
             }}
           />
-          <button type="button" className="sr-btn sr-btn--small sr-btn--ghost" onClick={onReset}>Reset everything</button>
+          <button
+            type="button" className="sr-btn sr-btn--small sr-btn--ghost"
+            onClick={() => {
+              if (window.confirm('Reset your Prima Vista progress? Saved setups and preferences will stay.')) onReset();
+            }}
+          >Reset progress</button>
         </div>
       </section>
     </div>
@@ -186,7 +192,7 @@ function aggregatePitches(profile) {
  * sight-read, and a curtain take is expected to derail you more often.
  */
 function aggregateRecovery(profile) {
-  const takes = profile.history.filter((h) => !h.repeat && !h.curtain && h.meta?.recovery);
+  const takes = profile.history.filter((h) => !h.repeat && !h.assisted && !h.curtain && h.meta?.recovery);
   const means = takes.map((h) => h.meta.recovery.meanNotes).filter((n) => n != null);
   return {
     takes: takes.length,

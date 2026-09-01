@@ -28,8 +28,15 @@ function write(key, value) {
 
 export function loadProfile() {
   const stored = read(KEY, null);
-  if (!stored || stored.version !== 1) return emptyProfile();
-  return { ...emptyProfile(), ...stored, skills: { ...emptyProfile().skills, ...stored.skills } };
+  if (!stored || ![1, 2].includes(stored.version)) return emptyProfile();
+  const blank = emptyProfile();
+  return {
+    ...blank,
+    ...stored,
+    version: 2,
+    skills: { ...blank.skills, ...stored.skills },
+    seenExercises: stored.seenExercises || [],
+  };
 }
 
 export const saveProfile = (p) => write(KEY, p);
@@ -48,6 +55,9 @@ export const DEFAULT_SETTINGS = {
   scale: 9,
   // Look-ahead curtain: see CURTAIN_MODES in PracticeView.
   curtain: 'off',
+  guideKeys: false,
+  keySound: true,
+  coachDismissed: false,
 };
 
 export function loadSettings() {

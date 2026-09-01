@@ -5,7 +5,7 @@ import { codeToSeed, randomSeed, seedToCode } from '../core/rng.js';
 
 // The custom builder. Sight Reading Factory's real strength is how finely a
 // teacher can specify an exercise; this matches that and adds the things it
-// cannot do — a shareable exercise code, and a live left-hand texture choice.
+// cannot do — an exact share link, and a live left-hand texture choice.
 
 const FIFTHS = [-7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
 
@@ -33,6 +33,7 @@ const diaName = (dia) => `${LETTERS[((dia % 7) + 7) % 7]}${Math.floor(dia / 7)}`
 export default function SetupPanel({ params, onChange, onGenerate, presets, onSavePreset, onLoadPreset, onDeletePreset }) {
   const [presetName, setPresetName] = useState('');
   const [seedInput, setSeedInput] = useState('');
+  const [seedError, setSeedError] = useState('');
 
   const set = (patch) => onChange({ ...params, ...patch });
   const toggleIn = (list, value) => (list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
@@ -121,19 +122,19 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
           </div>
           <label className="sr-field">
             <span>Left-hand pattern</span>
-            <select value={params.lhStyle} onChange={(e) => set({ lhStyle: e.target.value })}>
+            <select value={params.lhStyle} onChange={(e) => set({ lhStyle: e.target.value })} disabled={params.hands === 'rh'}>
               {LH_STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </label>
           <label className="sr-field">
             <span>Chords per bar</span>
-            <select value={params.chordsPerMeasure} onChange={(e) => set({ chordsPerMeasure: Number(e.target.value) })}>
+            <select value={params.chordsPerMeasure} onChange={(e) => set({ chordsPerMeasure: Number(e.target.value) })} disabled={params.hands === 'rh'}>
               <option value={1}>1 — one chord per bar</option>
               <option value={2}>2 — faster harmonic rhythm</option>
             </select>
           </label>
-          <Check label="Seventh chords" checked={params.allowSevenths} onChange={(v) => set({ allowSevenths: v })} />
-          <Check label="Inversions (moving bass line)" checked={params.allowInversions} onChange={(v) => set({ allowInversions: v })} />
+          <Check label="Seventh chords" checked={params.allowSevenths} disabled={params.hands === 'rh'} onChange={(v) => set({ allowSevenths: v })} />
+          <Check label="Inversions (moving bass line)" checked={params.allowInversions} disabled={params.hands === 'rh'} onChange={(v) => set({ allowInversions: v })} />
         </Group>
 
         <Group title="Range">
@@ -175,24 +176,26 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
           <Check label="Fingering hints" checked={params.fingerings} onChange={(v) => set({ fingerings: v })} />
         </Group>
 
-        <Group title="Exercise code">
+        <Group title="Variation seed">
           <p className="sr-hint">
-            Every exercise is reproducible from its code. Give a class the same code and everyone
-            reads the same music — no accounts, no assignments to set up.
+            A seed recreates a variation with these settings. To give someone the exact music and
+            setup, generate it and use “Copy exact link” on the practice screen.
           </p>
           <div className="sr-row">
             <input
               className="sr-input" placeholder={seedToCode(params.seed || 0)} value={seedInput}
-              onChange={(e) => setSeedInput(e.target.value)} aria-label="Exercise code"
+              onChange={(e) => { setSeedInput(e.target.value); setSeedError(''); }} aria-label="Variation seed"
             />
             <button
               type="button" className="sr-btn sr-btn--small"
               onClick={() => {
                 const s = codeToSeed(seedInput);
                 if (s != null) onGenerate({ ...params, seed: s });
+                else setSeedError('Enter a valid alphanumeric seed (usually 6 characters).');
               }}
-            >Load code</button>
+            >Load seed</button>
           </div>
+          {seedError && <p className="sr-field-error" role="alert">{seedError}</p>}
         </Group>
 
         <Group title="Presets">
@@ -247,10 +250,10 @@ function Slider({ label, value, min, max, step, onChange, suffix = '', format })
   );
 }
 
-function Check({ label, checked, onChange }) {
+function Check({ label, checked, disabled = false, onChange }) {
   return (
     <label className="sr-toggle">
-      <input type="checkbox" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" checked={Boolean(checked)} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>
   );

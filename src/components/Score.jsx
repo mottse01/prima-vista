@@ -17,6 +17,14 @@ const STATE_COLOURS = {
   missed: '#b9bfcc',
 };
 
+function pageWidthForViewport() {
+  if (typeof window === 'undefined') return 2100;
+  if (window.innerWidth < 560) return 980;
+  if (window.innerWidth < 900) return 1350;
+  if (window.innerWidth < 1220) return 1750;
+  return 2100;
+}
+
 /**
  * Measure where every onset landed, as fractions of the rendered box, so the
  * overlay stays correct when the score is resized.
@@ -101,6 +109,7 @@ export default function Score({
   const overlayRef = useRef(null);
   const geomRef = useRef(null);
   const paintedRef = useRef(new Set());
+  const [pageWidth, setPageWidth] = useState(pageWidthForViewport);
   // The engraved result is tagged with the score it came from, so a stale
   // render is simply ignored rather than having to be cleared synchronously.
   const [result, setResult] = useState({ score: null, svg: null, error: null });
@@ -110,14 +119,23 @@ export default function Score({
   // Engrave. Verovio is async and lazily loaded, so this settles a moment
   // after the exercise changes.
   useEffect(() => {
+    const resize = () => setPageWidth((current) => {
+      const next = pageWidthForViewport();
+      return next === current ? current : next;
+    });
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
-    renderScoreSvg(score, { showFingerings })
+    renderScoreSvg(score, { showFingerings, pageWidth })
       .then((markup) => { if (!cancelled) setResult({ score, svg: markup, error: null }); })
       .catch((err) => {
         if (!cancelled) setResult({ score, svg: null, error: err.message || String(err) });
       });
     return () => { cancelled = true; };
-  }, [score, showFingerings]);
+  }, [pageWidth, score, showFingerings]);
 
   const remeasure = useCallback(() => {
     if (!hostRef.current || !svg) return;

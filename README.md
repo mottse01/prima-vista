@@ -48,7 +48,8 @@ src/
     levels.js      the 20-level graded path
     audio.js       WebAudio metronome, count-in, reference playback
     midi.js        Web MIDI input
-    rng.js         seeded PRNG + the six-character exercise codes
+    rng.js         seeded PRNG + six-character variation seeds
+    share.js       exact URL recipes + exercise fingerprints
     storage.js     localStorage profile, presets, settings, export/import
   components/
     Score.jsx         engraved score plus the playhead, curtain and note colouring
@@ -63,9 +64,10 @@ src/
 
 ## Notes for maintainers
 
-- **Everything is deterministic from a seed.** `generateExercise({ seed, ... })`
-  always produces identical music. That is what makes exercise codes work, and
-  it makes bugs reproducible — paste the code from the score header.
+- **Everything is deterministic from a seed and its parameters.**
+  `generateExercise({ seed, ... })` always produces identical music for the same
+  recipe. Exact share links carry both; the short seed is a convenient way to
+  replay a variation inside the same setup.
 - **Ticks, not seconds.** `TPQ = 48` per quarter note, chosen because it divides
   by both 3 (triplets) and 16 (sixteenths). Seconds are derived at playback.
 - **Engraving is Verovio's job, not ours.** The score model exports to
@@ -87,11 +89,12 @@ src/
   an episode; two clean attacks in a row close it. Notes that are merely late
   deliberately do not count, because a player who is steadily behind the beat
   has a tempo problem (already reported as timing bias), not a derailment.
-- **Three kinds of take are scored differently.** A first read of new music is
+- **Four kinds of take are scored differently.** A first read of new music is
   the real sight-reading measurement and the only one that can advance a
   level. A replay is contaminated by familiarity, so it moves the skill map at
-  half weight and never promotes — `seenSeeds` on the profile catches replays
+  half weight and never promotes — `seenExercises` on the profile catches replays
   that arrive via a reload or a shared link, not just via the "try again"
-  button. A curtain take is measuring reading fluency, not note knowledge, so
-  it is kept out of the skill map entirely and tracked under
+  button. An assisted take (reference playback or guide keys) follows the same
+  half-weight rule. A curtain take measures reading fluency, not note knowledge,
+  so it is kept out of the skill map entirely and tracked under
   `profile.lookAhead` instead.

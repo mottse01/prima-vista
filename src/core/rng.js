@@ -34,10 +34,18 @@ export function seedToCode(seed) {
 }
 
 export function codeToSeed(code) {
-  const n = parseInt(String(code).trim(), 36);
-  return Number.isFinite(n) ? n >>> 0 : null;
+  const clean = String(code).trim();
+  // New codes are six characters. Accept the seven-character codes older
+  // builds could create, but never accept a partially valid string such as
+  // "ABC123!" (parseInt would silently do that).
+  if (!/^[0-9a-z]{1,7}$/i.test(clean)) return null;
+  const n = Number.parseInt(clean, 36);
+  return Number.isSafeInteger(n) && n <= 0xffffffff ? n >>> 0 : null;
 }
 
 export function randomSeed() {
-  return (Math.random() * 0xffffffff) >>> 0;
+  // 36^6 gives more than two billion exercises while keeping every newly
+  // generated code at the promised six characters. Historical 32-bit seeds
+  // still decode above for backwards compatibility.
+  return Math.floor(Math.random() * (36 ** 6));
 }

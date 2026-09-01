@@ -1,5 +1,5 @@
 // WebAudio engine: metronome, count-in, and a light piano-ish voice used for
-// the reference playback ("hear it once, then read it").
+// reference playback (useful for practice, but no longer a qualifying first read).
 
 let ctx = null;
 let bus = null;
@@ -168,8 +168,8 @@ export function startPlayback({ score, startTime, metronome, playScore, onEnd })
 /** Count-in clicks before the exercise starts. Returns the exercise start time. */
 export function scheduleCountIn(score, beats) {
   const ac = audioContext();
-  if (!ac) return 0;
   const secPerBeat = (score.ts.beat / 48) * (60 / score.tempo);
+  if (!ac) return performance.now() / 1000 + beats * secPerBeat;
   const start = ac.currentTime + 0.18;
   for (let i = 0; i < beats; i++) playClick(start + i * secPerBeat, i === 0);
   return start + beats * secPerBeat;

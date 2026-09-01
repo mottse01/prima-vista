@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Score from './Score.jsx';
 import Keyboard from './Keyboard.jsx';
 import TimingStrip from './TimingStrip.jsx';
-import { createGrader } from '../core/grader.js';
+import { createGrader, SKILLS } from '../core/grader.js';
 import { TPQ, keyLabel } from '../core/theory.js';
 import { audioContext, now, playPianoNote, scheduleCountIn, startPlayback } from '../core/audio.js';
 import { seedToCode } from '../core/rng.js';
@@ -17,6 +17,7 @@ import { CURTAIN_MODES, curtainMode, curtainOffsetTicks } from '../core/curtain.
 export default function PracticeView({
   score, settings, onSettings, onResult, onRegenerate, level,
   midi, onConnectMidi, showKeyboard, onToggleKeyboard,
+  freshRead, showCoach, onDismissCoach, onPreview, onNotify,
 }) {
   const [phase, setPhase] = useState('idle'); // idle | countin | playing | done
   const [noteStates, setNoteStates] = useState({});
@@ -24,6 +25,8 @@ export default function PracticeView({
   const [result, setResult] = useState(null);
   const [held, setHeld] = useState(() => new Set());
   const [listening, setListening] = useState(false);
+  const [previewed, setPreviewed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [dueNow, setDueNow] = useState(() => new Set());
 
   const graderRef = useRef(null);
@@ -36,6 +39,8 @@ export default function PracticeView({
   const playbackRef = useRef(null);
   const takeStartRef = useRef(0);
   const takeCountRef = useRef(0);
+  const assistedRef = useRef(false);
+  const freshAtStartRef = useRef(false);
 
   const secPerTick = 60 / score.tempo / TPQ;
 
@@ -53,13 +58,19 @@ export default function PracticeView({
     if (!grader) { setPhaseBoth('idle'); return; }
     const summary = grader.finish();
     setNoteStates(grader.states());
-    setResult({ ...summary, takeIndex: takeCountRef.current });
+    setResult({
+      ...summary,
+      takeIndex: takeCountRef.current,
+      assisted: assistedRef.current,
+      wasFresh: freshAtStartRef.current,
+    });
     setPhaseBoth('done');
     onResult({
       summary,
-      elapsedSec: now() - takeStartRef.current,
+      elapsedSec: Math.max(0, now() - takeStartRef.current),
       takeIndex: takeCountRef.current,
       curtain: settings.curtain,
+      assisted: assistedRef.current,
     });
   }, [onResult, settings.curtain, stopEverything]);
 
@@ -106,13 +117,16 @@ export default function PracticeView({
   const start = useCallback(() => {
     audioContext();
     stopEverything();
+    setListening(false);
     setResult(null);
     setNoteStates({});
     setDueNow(new Set());
     const startTime = scheduleCountIn(score, settings.countInBeats);
     startRef.current = startTime;
-    takeStartRef.current = now();
+    takeStartRef.current = startTime;
     takeCountRef.current += 1;
+    assistedRef.current = Boolean(previewed || settings.guideKeys);
+    freshAtStartRef.current = Boolean(freshRead);
     graderRef.current = createGrader(score, { startTime, toleranceScale: settings.toleranceScale });
     modeRef.current = 'take';
     setPhaseBoth('countin');
@@ -120,11 +134,15 @@ export default function PracticeView({
       score, startTime, metronome: settings.metronome, playScore: false, onEnd: () => {},
     });
     startLoop();
-  }, [score, settings.countInBeats, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
+  }, [freshRead, previewed, score, settings.countInBeats, settings.guideKeys, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
 
   const stop = useCallback(() => {
     if (phaseRef.current === 'countin') {
       stopEverything();
+      // A cancelled count-in is not a take and must not make the next first
+      // read look like a replay.
+      takeCountRef.current = Math.max(0, takeCountRef.current - 1);
+      graderRef.current = null;
       setPhaseBoth('idle');
       setTick(-1);
       return;
@@ -132,9 +150,17 @@ export default function PracticeView({
     finish();
   }, [finish, stopEverything]);
 
+  const stopReference = useCallback(() => {
+    stopEverything();
+    setListening(false);
+    setTick(-1);
+  }, [stopEverything]);
+
   const listen = useCallback(() => {
     audioContext();
     stopEverything();
+    setPreviewed(true);
+    onPreview?.();
     setListening(true);
     setPhaseBoth('idle');
     const startTime = now() + 0.2;
@@ -145,7 +171,7 @@ export default function PracticeView({
       onEnd: () => { setListening(false); cancelAnimationFrame(rafRef.current); setTick(-1); },
     });
     startLoop();
-  }, [score, settings.metronome, startLoop, stopEverything]);
+  }, [onPreview, score, settings.metronome, startLoop, stopEverything]);
 
   useEffect(() => () => stopEverything(), [stopEverything]);
 
@@ -199,12 +225,83 @@ export default function PracticeView({
   }, [score]);
 
 
-  const countdown = phase === 'countin'
+  const countdown = phase === 'countin' && settings.countInBeats > 0
     ? Math.max(1, Math.ceil(-tick / (score.ts.beat)) )
     : null;
 
+  const busy = phase === 'playing' || phase === 'countin' || listening;
+  const qualifies = freshRead && !previewed && !settings.guideKeys && settings.curtain === 'off';
+  const targetedIds = score.params.targeted || [];
+  const focusIds = targetedIds.length ? targetedIds : (level?.focus || []);
+  const focusLabels = focusIds
+    .map((id) => SKILLS.find((skill) => skill.id === id)?.label)
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const copyLink = async () => {
+    const ok = await copyText(window.location.href);
+    if (!ok) {
+      onNotify?.('Could not copy the link in this browser', 'down');
+      return;
+    }
+    setCopied(true);
+    onNotify?.('Exact exercise link copied');
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
   return (
     <div className="sr-practice">
+      {showCoach && (
+        <section className="sr-coach" aria-labelledby="first-read-title">
+          <div className="sr-coach-copy">
+            <span className="sr-eyebrow">Your first read</span>
+            <h2 id="first-read-title">Scan it. Count in. Keep going.</h2>
+            <p>
+              Connect a MIDI keyboard for full grading, or use the keys below. Prima Vista follows
+              every note without stopping the music, then writes the next exercise around what needs work.
+            </p>
+          </div>
+          <ol className="sr-coach-steps">
+            <li><span>1</span>Check the key and metre</li>
+            <li><span>2</span>Press start and use the count-in</li>
+            <li><span>3</span>Recover instead of backtracking</li>
+          </ol>
+          <div className="sr-coach-actions">
+            {!['connected', 'ready'].includes(midi.status) && (
+              <button type="button" className="sr-btn sr-btn--primary" onClick={onConnectMidi} disabled={midi.status === 'connecting'}>
+                {midi.status === 'connecting' ? 'Connecting…' : 'Connect MIDI'}
+              </button>
+            )}
+            <button type="button" className="sr-btn sr-btn--ghost" onClick={onDismissCoach}>Got it</button>
+          </div>
+        </section>
+      )}
+
+      <section className="sr-readbrief" aria-label="Practice plan">
+        <div className="sr-readbrief-item">
+          <span className={`sr-statuspill${qualifies ? ' is-fresh' : ' is-practice'}`}>
+            {settings.curtain !== 'off' ? 'Look-ahead drill' : qualifies ? 'Fresh read' : 'Practice take'}
+          </span>
+          <span>
+            {settings.curtain !== 'off'
+              ? 'Tracked separately from your level'
+              : qualifies
+                ? 'This take can advance your level'
+                : 'Useful practice; not eligible for promotion'}
+          </span>
+        </div>
+        <div className="sr-readbrief-item">
+          <span className="sr-readbrief-label">{targetedIds.length ? 'Adaptive focus' : 'Level focus'}</span>
+          <strong>{focusLabels.length ? focusLabels.join(' · ') : 'Build a clean baseline'}</strong>
+        </div>
+        {level && (
+          <div className="sr-readbrief-item sr-readbrief-goal">
+            <span className="sr-readbrief-label">Advance</span>
+            <strong>88+ on two fresh reads</strong>
+          </div>
+        )}
+      </section>
+
       <div className="sr-scorecard">
         <div className="sr-scorehead">
           <div>
@@ -214,9 +311,14 @@ export default function PracticeView({
               {level ? <> · Level {level.id} <span className="sr-dim">{level.name}</span></> : null}
             </p>
           </div>
-          <div className="sr-seed" title="Every exercise has a code. Share it and the same music appears.">
-            <span className="sr-seed-label">Exercise code</span>
-            <code>{seedToCode(score.seed)}</code>
+          <div className="sr-seed" title="The short seed replays this variation with the same setup. The copied link includes the full setup.">
+            <span className="sr-seed-label">Variation seed</span>
+            <div className="sr-seed-row">
+              <code>{seedToCode(score.seed)}</code>
+              <button type="button" className="sr-copybtn" onClick={copyLink}>
+                {copied ? 'Copied' : 'Copy exact link'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -228,7 +330,7 @@ export default function PracticeView({
             tick={playheadTick}
             curtainTick={curtainTick}
           />
-          {phase === 'countin' && (
+          {countdown != null && (
             <div className="sr-countin" aria-live="polite">{countdown}</div>
           )}
         </div>
@@ -239,21 +341,26 @@ export default function PracticeView({
           {phase === 'playing' || phase === 'countin' ? (
             <button type="button" className="sr-btn sr-btn--stop" onClick={stop}>Stop</button>
           ) : (
-            <button type="button" className="sr-btn sr-btn--primary" onClick={start}>
-              {result ? 'Play again' : 'Start take'}
+            <button type="button" className="sr-btn sr-btn--primary" onClick={start} disabled={listening}>
+              {result ? 'Play again' : qualifies ? 'Start first read' : 'Start practice'}
             </button>
           )}
-          <button type="button" className="sr-btn" onClick={listening ? stopEverything : listen} disabled={phase === 'playing'}>
-            {listening ? 'Stop playback' : 'Hear it'}
+          <button
+            type="button" className="sr-btn" onClick={listening ? stopReference : listen}
+            disabled={phase === 'playing' || phase === 'countin'}
+            title={freshRead && !previewed ? 'Hearing the exercise first makes the next take practice-only.' : undefined}
+          >
+            {listening ? 'Stop playback' : freshRead && !previewed ? 'Hear first (practice)' : 'Hear it'}
           </button>
-          <button type="button" className="sr-btn" onClick={onRegenerate} disabled={phase === 'playing'}>
+          <button type="button" className="sr-btn" onClick={onRegenerate} disabled={busy}>
             New exercise
           </button>
-          <button type="button" className="sr-btn sr-btn--ghost" onClick={() => window.print()}>Print</button>
+          <button type="button" className="sr-btn sr-btn--ghost" onClick={() => window.print()} disabled={busy}>Print</button>
           <button
             type="button" className="sr-btn sr-btn--ghost"
             title="Open this exercise in MuseScore, Finale or Sibelius"
             onClick={() => downloadMusicXml(score, settings.showFingerings)}
+            disabled={busy}
           >Export</button>
         </div>
 
@@ -263,31 +370,49 @@ export default function PracticeView({
             <input
               type="range" min="30" max="180" step="2" value={score.tempo}
               onChange={(e) => onSettings({ tempoOverride: Number(e.target.value) })}
-              disabled={phase === 'playing'}
+              disabled={busy}
             />
           </label>
           <label className="sr-toggle">
-            <input type="checkbox" checked={settings.metronome} onChange={(e) => onSettings({ metronome: e.target.checked })} />
+            <input type="checkbox" checked={settings.metronome} disabled={busy} onChange={(e) => onSettings({ metronome: e.target.checked })} />
             <span>Metronome</span>
           </label>
-          <label className="sr-toggle">
-            <input type="checkbox" checked={settings.colourNotes} onChange={(e) => onSettings({ colourNotes: e.target.checked })} />
-            <span>Colour notes</span>
-          </label>
-          <label className="sr-toggle">
-            <input type="checkbox" checked={Boolean(settings.guideKeys)} onChange={(e) => onSettings({ guideKeys: e.target.checked })} />
-            <span>Guide keys</span>
-          </label>
-          <label className="sr-field sr-field--select" title={curtainMode(settings.curtain).blurb}>
-            <span>Look-ahead curtain</span>
-            <select
-              value={settings.curtain}
-              onChange={(e) => onSettings({ curtain: e.target.value })}
-              disabled={phase === 'playing'}
-            >
-              {CURTAIN_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </label>
+          <details className="sr-aids">
+            <summary>Aids & feedback</summary>
+            <div className="sr-aids-popover">
+              <label className="sr-toggle">
+                <input type="checkbox" checked={settings.colourNotes} disabled={busy} onChange={(e) => onSettings({ colourNotes: e.target.checked })} />
+                <span>Colour notes after you play</span>
+              </label>
+              <label className="sr-toggle" title="Guide keys make the take practice-only.">
+                <input type="checkbox" checked={Boolean(settings.guideKeys)} disabled={busy} onChange={(e) => onSettings({ guideKeys: e.target.checked })} />
+                <span>Guide on-screen keys <em>assist</em></span>
+              </label>
+              <label className="sr-toggle">
+                <input type="checkbox" checked={Boolean(settings.showFingerings)} disabled={busy} onChange={(e) => onSettings({ showFingerings: e.target.checked })} />
+                <span>Show available fingerings</span>
+              </label>
+              <label className="sr-toggle">
+                <input type="checkbox" checked={settings.keySound !== false} disabled={busy} onChange={(e) => onSettings({ keySound: e.target.checked })} />
+                <span>Sound on-screen keys</span>
+              </label>
+              <label className="sr-field sr-field--select">
+                <span>Count-in</span>
+                <select value={settings.countInBeats} onChange={(e) => onSettings({ countInBeats: Number(e.target.value) })} disabled={busy}>
+                  <option value={0}>None</option>
+                  <option value={1}>1 beat</option>
+                  <option value={2}>2 beats</option>
+                  <option value={4}>4 beats</option>
+                </select>
+              </label>
+              <label className="sr-field sr-field--select" title={curtainMode(settings.curtain).blurb}>
+                <span>Look-ahead curtain</span>
+                <select value={settings.curtain} onChange={(e) => onSettings({ curtain: e.target.value })} disabled={busy}>
+                  {CURTAIN_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+              </label>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -296,11 +421,17 @@ export default function PracticeView({
           <span className="sr-dot" />
           {midi.status === 'connected'
             ? <span>MIDI: {midi.inputs.join(', ') || 'connected'}</span>
+            : midi.status === 'connecting'
+              ? <span>Requesting MIDI access…</span>
+              : midi.status === 'ready'
+                ? <span>MIDI ready — plug in or switch on your keyboard</span>
             : midi.status === 'error'
               ? <span>{midi.error}</span>
               : <span>No MIDI keyboard connected</span>}
-          {midi.status !== 'connected' && (
-            <button type="button" className="sr-btn sr-btn--small" onClick={onConnectMidi}>Connect MIDI</button>
+          {!['connected', 'ready'].includes(midi.status) && (
+            <button type="button" className="sr-btn sr-btn--small" onClick={onConnectMidi} disabled={midi.status === 'connecting'}>
+              {midi.status === 'connecting' ? 'Connecting…' : 'Connect MIDI'}
+            </button>
           )}
         </div>
         <button type="button" className="sr-btn sr-btn--small sr-btn--ghost" onClick={onToggleKeyboard}>
@@ -313,6 +444,7 @@ export default function PracticeView({
           low={range[0]} high={range[1]} held={held} expected={dueNow}
           onNoteOn={handleNoteOn} onNoteOff={handleNoteOff}
           octaveBase={Math.max(48, Math.min(72, range[0] + 12))}
+          className={phase === 'playing' || phase === 'countin' ? 'is-playing' : ''}
         />
       )}
 
@@ -321,7 +453,8 @@ export default function PracticeView({
           result={result}
           onAgain={start}
           onNext={onRegenerate}
-          repeat={result.takeIndex > 1}
+          repeat={result.takeIndex > 1 || !result.wasFresh}
+          assisted={result.assisted}
           curtain={curtainMode(settings.curtain)}
         />
       )}
@@ -329,15 +462,22 @@ export default function PracticeView({
   );
 }
 
-function ResultPanel({ result, onAgain, onNext, repeat, curtain }) {
+function ResultPanel({ result, onAgain, onNext, repeat, assisted, curtain }) {
   const pct = (x) => `${Math.round(x * 100)}%`;
   const timing = result.meanSignedTiming;
   const rec = result.recovery;
+  const coach = coachingFor(result);
+  const tone = result.score >= 88 ? 'good' : result.score >= 65 ? 'steady' : 'rebuild';
   return (
     <section className="sr-result" aria-live="polite">
       <div className="sr-result-score">
-        <div className="sr-bigscore">{result.score}</div>
+        <div className={`sr-bigscore is-${tone}`}>{result.score}</div>
         <div className="sr-bigscore-label">out of 100</div>
+      </div>
+      <div className="sr-result-coach">
+        <span className="sr-eyebrow">Next best move</span>
+        <strong>{coach.title}</strong>
+        <p>{coach.detail}</p>
       </div>
       <div className="sr-result-grid">
         <Metric label="Right notes" value={pct(result.pitchAccuracy)} detail={`${result.correct} of ${result.total}`} />
@@ -363,15 +503,62 @@ function ResultPanel({ result, onAgain, onNext, repeat, curtain }) {
         <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>Next exercise</button>
         <button type="button" className="sr-btn" onClick={onAgain}>Try this one again</button>
       </div>
-      {(repeat || curtain.beats !== null) && (
+      {(repeat || assisted || curtain.beats !== null) && (
         <p className="sr-result-note">
           {curtain.beats !== null
             ? `Curtain take (${curtain.label}) — tracked under look-ahead, and it does not move your skill map or level.`
-            : 'Replay of music you have already seen, so it counts at half weight and cannot advance your level.'}
+            : assisted
+              ? 'Assisted practice — hearing the exercise first or using guide keys counts at half weight and cannot advance your level.'
+              : 'Replay of music you have already seen, so it counts at half weight and cannot advance your level.'}
         </p>
       )}
     </section>
   );
+}
+
+function coachingFor(result) {
+  if (result.score >= 92 && result.continuity >= 0.95) {
+    return { title: 'Move on while it is still new.', detail: 'The read was accurate and continuous. A new exercise will give you better evidence than polishing this one.' };
+  }
+  if (result.continuity < 0.78) {
+    return { title: 'Protect the pulse after a slip.', detail: 'Do not correct backward. Drop the missed note, find the next beat, and re-enter while the metronome keeps moving.' };
+  }
+  if (result.pitchAccuracy + 0.08 < result.rhythmAccuracy) {
+    return { title: 'Scan the notes before you retry.', detail: 'Pitch recognition is the limiter. Mark the widest leap and any accidentals, then try once more 8–12 bpm slower.' };
+  }
+  if (result.rhythmAccuracy + 0.08 < result.pitchAccuracy) {
+    return { title: 'Keep the notes; simplify the pulse.', detail: 'Pitch is secure, but attacks drifted. Tap the smallest subdivision once, keep the metronome on, and retry slower.' };
+  }
+  if (result.meanSignedTiming != null && result.meanSignedTiming > 0.055) {
+    return { title: 'Read one beat farther ahead.', detail: 'You consistently landed late. Look at the next beat while your hands finish the current one.' };
+  }
+  if (result.meanSignedTiming != null && result.meanSignedTiming < -0.055) {
+    return { title: 'Let the count-in set the ceiling.', detail: 'You consistently rushed. Feel the full space between clicks before starting the next note.' };
+  }
+  return { title: result.score >= 80 ? 'Take the win and read something new.' : 'Retry once, slightly slower.', detail: result.score >= 80
+    ? 'The skills are balanced enough that fresh music is the most useful next test.'
+    : 'Lower the tempo just enough to keep moving; the goal is a continuous read, not a perfect correction.' };
+}
+
+async function copyText(value) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    return copied;
+  } catch {
+    return false;
+  }
 }
 
 /** Hand the exercise off to real notation software. */

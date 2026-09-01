@@ -17,7 +17,8 @@ export default function PathView({ profile, onPick }) {
           <div className="sr-levels">
             {LEVELS.filter((l) => l.stage === stage).map((l) => {
               const state = l.id < profile.level ? 'done' : l.id === profile.level ? 'current' : 'ahead';
-              const takes = profile.history.filter((h) => h.level === l.id);
+              const takes = profile.history.filter((h) =>
+                h.level === l.id && !h.repeat && !h.assisted && !h.curtain);
               const best = takes.length ? Math.max(...takes.map((t) => t.score)) : null;
               return (
                 <button

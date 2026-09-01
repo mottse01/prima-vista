@@ -1,8 +1,8 @@
 // Exercise generator.
 //
 // Produces a fully spelled, phrase-shaped piano exercise from a parameter set
-// and a seed. Deterministic: the same seed and parameters always yield the
-// same music, which is what makes exercises shareable and assignable.
+// and a seed. Deterministic: the same seed *and parameters* always yield the
+// same music, which is what makes exact exercise links shareable and assignable.
 
 import {
   TPQ, clamp, fromDia, isChordTone, spellInKey, spellChordTone, tonicLetter, KEY_NAMES,
@@ -16,7 +16,7 @@ import { makeRng } from './rng.js';
 // ---------------------------------------------------------------------------
 
 /** Fill one measure with rhythm cells drawn from the allowed vocabulary. */
-function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks }) {
+function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks, requiredTag = null }) {
   const meter = ts.compound ? 'compound' : 'simple';
   const cells = cellIds.map(getCell).filter((c) => c && c.meter === meter);
   const fallback = getCell(ts.compound ? 'cdq' : 'q');
@@ -42,7 +42,13 @@ function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks }) {
       return Math.max(w, 0.001);
     });
 
-    const cell = rng.weighted(usable, weights);
+    // Adaptive drills promise to put the diagnosed rhythm into the music, not
+    // merely make it one of many possibilities. Put one legal focus cell at
+    // the opening of an assigned bar; the rest of the line remains varied.
+    const focused = pos === 0 && requiredTag
+      ? usable.filter((c) => c.tags.includes(requiredTag))
+      : [];
+    const cell = focused.length ? rng.pick(focused) : rng.weighted(usable, weights);
     let t = offsetTicks + pos;
     for (const ev of cell.events) {
       events.push({ onset: t, duration: ev.d, rest: ev.rest, tags: cell.tags, cellId: cell.id });
@@ -54,15 +60,20 @@ function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks }) {
 }
 
 /** Rhythm for the whole line, with a held final bar so the exercise lands. */
-function buildRhythm(rng, ts, cellIds, measures, restRate) {
+function buildRhythm(rng, ts, cellIds, measures, restRate, focusTags = []) {
   const out = [];
+  const required = [...new Set(focusTags)].slice(0, Math.max(0, measures - 1));
   for (let m = 0; m < measures; m++) {
     const offsetTicks = m * ts.ticks;
     if (m === measures - 1) {
       out.push({ onset: offsetTicks, duration: ts.ticks, rest: false, tags: ['final'], cellId: 'final' });
       continue;
     }
-    out.push(...fillMeasure(rng, ts, cellIds, { restRate, offsetTicks }));
+    out.push(...fillMeasure(rng, ts, cellIds, {
+      restRate,
+      offsetTicks,
+      requiredTag: required[m] || null,
+    }));
   }
   return out;
 }
@@ -98,12 +109,14 @@ function assignPitches(rng, opts) {
   const {
     key, ts, chords, chordsPerMeasure, rhythm, measures,
     lowDia, highDia, maxLeap, stepwiseBias, nonChordRate, chromaticRate,
+    focusIntervals = [],
   } = opts;
 
   const notes = [];
   let prev = null;
   let lastLeap = 0;
   let lastLeapDir = 0;
+  let focusIndex = 0;
 
   const sounded = rhythm.filter((e) => !e.rest);
 
@@ -142,6 +155,23 @@ function assignPitches(rng, opts) {
       const pool = candidates.filter((d) => Math.abs(d - target) <= 3);
       chosen = (pool.length ? pool : candidates)[rng.int((pool.length ? pool : candidates).length)];
     } else {
+      const focus = focusIntervals[focusIndex];
+      if (focus) {
+        const matches = (d) => {
+          const distance = Math.abs(d - prev.dia);
+          if (focus === 'step') return distance === 1;
+          if (focus === 'skip') return distance === 2;
+          return focus === 'leap' && distance >= 3 && distance <= maxLeap;
+        };
+        let focused = candidates.filter(matches);
+        if (!focused.length) {
+          focused = Array.from({ length: highDia - lowDia + 1 }, (_, j) => lowDia + j).filter(matches);
+        }
+        if (focused.length) {
+          candidates = focused;
+          focusIndex += 1;
+        }
+      }
       const weights = candidates.map((d) => {
         const dist = Math.abs(d - prev.dia);
         if (dist > maxLeap) return 0;
@@ -429,12 +459,13 @@ export function generateExercise(userParams = {}) {
   const wantsLh = params.hands === 'both' || params.hands === 'lh';
 
   if (wantsRh) {
-    const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate);
+    const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate, params.focusRhythmTags);
     staves.rh = assignPitches(rng, {
       key, ts, chords, chordsPerMeasure, rhythm, measures,
       lowDia: params.rhLow, highDia: params.rhHigh,
       maxLeap: params.maxLeap, stepwiseBias: params.stepwiseBias,
       nonChordRate: params.nonChordRate, chromaticRate: params.chromaticRate,
+      focusIntervals: params.focusIntervals,
     });
   }
 
@@ -450,12 +481,13 @@ export function generateExercise(userParams = {}) {
       });
     } else if (params.hands === 'lh') {
       // Left hand alone gets the melody, not an accompaniment pattern.
-      const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate);
+      const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate, params.focusRhythmTags);
       staves.lh = assignPitches(rng, {
         key, ts, chords, chordsPerMeasure, rhythm, measures,
         lowDia: params.lhLow, highDia: params.lhHigh,
         maxLeap: params.maxLeap, stepwiseBias: params.stepwiseBias,
         nonChordRate: params.nonChordRate, chromaticRate: params.chromaticRate,
+        focusIntervals: params.focusIntervals,
       });
     } else {
       staves.lh = buildLeftHand(rng, {

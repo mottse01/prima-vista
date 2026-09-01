@@ -4,7 +4,7 @@
 // the other half of the loop: it matches what you actually played against what
 // was written, and attributes every miss to a *skill*, so practice can be aimed.
 
-import { TPQ, diaToY, keyAlterations, pitchClassName } from './theory.js';
+import { TPQ, diaToY, pitchClassName } from './theory.js';
 import { xmlNoteId } from './musicxml.js';
 import { expectedEvents } from './generator.js';
 
@@ -12,7 +12,7 @@ export const SKILLS = [
   { id: 'notes.treble', label: 'Treble staff notes' },
   { id: 'notes.bass', label: 'Bass staff notes' },
   { id: 'notes.ledger', label: 'Ledger-line notes' },
-  { id: 'notes.accidental', label: 'Accidentals' },
+  { id: 'notes.accidental', label: 'Sharps & flats' },
   { id: 'intervals.step', label: 'Steps' },
   { id: 'intervals.skip', label: 'Skips (3rds)' },
   { id: 'intervals.leap', label: 'Leaps (4ths+)' },
@@ -35,7 +35,6 @@ const RHYTHM_TAG_TO_SKILL = {
 /** Annotate each expected event with the skills it exercises. */
 export function analyseEvents(score) {
   const events = expectedEvents(score);
-  const keyAlt = keyAlterations(score.key.fifths);
   const byHandPrev = { rh: null, lh: null };
   const onsetCounts = new Map();
   for (const e of events) onsetCounts.set(e.onset, (onsetCounts.get(e.onset) || 0) + 1);
@@ -46,7 +45,9 @@ export function analyseEvents(score) {
     const skills = new Set();
     skills.add(e.hand === 'rh' ? 'notes.treble' : 'notes.bass');
     if (y < -0.2 || y > 4.2) skills.add('notes.ledger');
-    if (e.pitch.alter !== keyAlt[e.pitch.letter]) skills.add('notes.accidental');
+    // Reading a sharp or flat from the key signature is still accidental
+    // fluency; written chromatic accidentals are included by the same test.
+    if (e.pitch.alter !== 0) skills.add('notes.accidental');
 
     const prev = byHandPrev[e.hand];
     if (prev) {

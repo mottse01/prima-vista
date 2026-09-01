@@ -5,27 +5,47 @@ import ProgressView from './components/ProgressView.jsx';
 import PathView from './components/PathView.jsx';
 import CompareView from './components/CompareView.jsx';
 import { generateExercise } from './core/generator.js';
-import { applyResult, paramsForLevel } from './core/adaptive.js';
+import { applyResult, markExerciseSeen, paramsForLevel } from './core/adaptive.js';
 import { levelById } from './core/levels.js';
 import { connectMidi } from './core/midi.js';
-import { codeToSeed, randomSeed, seedToCode } from './core/rng.js';
+import { codeToSeed, randomSeed } from './core/rng.js';
+import { decodeExerciseParams, exactExerciseUrl, exerciseFingerprint } from './core/share.js';
 import {
   loadPresets, loadProfile, loadSettings, resetProfile, savePresets, saveProfile, saveSettings,
 } from './core/storage.js';
 
 const TABS = [
-  { id: 'practice', label: 'Practice' },
-  { id: 'path', label: 'The path' },
-  { id: 'custom', label: 'Custom' },
-  { id: 'progress', label: 'Progress' },
-  { id: 'compare', label: 'How it compares' },
+  { id: 'practice', label: 'Practice', short: 'Practice' },
+  { id: 'path', label: 'The path', short: 'Path' },
+  { id: 'custom', label: 'Custom', short: 'Build' },
+  { id: 'progress', label: 'Progress', short: 'Progress' },
+  { id: 'compare', label: 'How it compares', short: 'Compare' },
 ];
 
-/** Read an exercise code out of the URL so a shared link opens the same music. */
-function seedFromUrl() {
-  if (typeof window === 'undefined') return null;
-  const code = new URLSearchParams(window.location.search).get('x');
-  return code ? codeToSeed(code) : null;
+/** Read both the seed and its parameter recipe from an exact shared link. */
+function exerciseFromUrl() {
+  if (typeof window === 'undefined') return { seed: null, params: null };
+  const search = new URLSearchParams(window.location.search);
+  const code = search.get('x');
+  return {
+    seed: code ? codeToSeed(code) : null,
+    params: decodeExerciseParams(search.get('p')),
+  };
+}
+
+/** Adaptive-only fields should not leak into the custom exercise builder. */
+function customisableParams(source) {
+  const {
+    targeted: _targeted,
+    focusRhythmTags: _focusRhythmTags,
+    focusIntervals: _focusIntervals,
+    meters: _meters,
+    fifths: _fifths,
+    modes: _modes,
+    level: _level,
+    ...params
+  } = source;
+  return params;
 }
 
 export default function App() {
@@ -37,27 +57,31 @@ export default function App() {
   const [toast, setToast] = useState(null);
 
   const [params, setParams] = useState(() => {
-    const urlSeed = seedFromUrl();
+    const shared = exerciseFromUrl();
     const p = loadProfile();
-    return paramsForLevel(p.level, p, { seed: urlSeed ?? randomSeed() });
+    if (shared.seed != null && shared.params) return { ...shared.params, seed: shared.seed };
+    return paramsForLevel(p.level, p, { seed: shared.seed ?? randomSeed() });
   });
 
   const score = useMemo(() => generateExercise(params), [params]);
+  const scoreId = useMemo(() => exerciseFingerprint(score.params, score.seed), [score]);
   const level = params.level ? levelById(params.level) : null;
+  const seenBefore = (profile.seenExercises || []).includes(scoreId)
+    || (profile.seenSeeds || []).includes(score.seed);
 
   useEffect(() => { saveProfile(profile); }, [profile]);
   useEffect(() => { saveSettings(settings); }, [settings]);
   useEffect(() => { savePresets(presets); }, [presets]);
 
-  // Keep the address bar in step, so the current exercise is always shareable.
+  // Keep the address bar in step. Unlike a seed alone, this link includes the
+  // exact generator recipe and therefore opens identical music for everyone.
   useEffect(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('x', seedToCode(score.seed));
-    window.history.replaceState(null, '', url);
-  }, [score.seed]);
+    window.history.replaceState(null, '', exactExerciseUrl(score, window.location.href));
+  }, [score]);
 
   // --- MIDI ---------------------------------------------------------------
   const subsRef = useRef(new Set());
+  const midiConnectionRef = useRef(null);
   const [midiState, setMidiState] = useState({ status: 'idle', inputs: [], error: null });
 
   const subscribe = useCallback((fn) => {
@@ -66,16 +90,21 @@ export default function App() {
   }, []);
 
   const handleConnectMidi = useCallback(async () => {
+    setMidiState({ status: 'connecting', inputs: [], error: null });
     try {
-      await connectMidi(
+      const connection = await connectMidi(
         (e) => { for (const fn of subsRef.current) fn(e); },
-        (inputs) => setMidiState((s) => ({ ...s, status: 'connected', inputs })),
+        (inputs) => setMidiState((s) => ({ ...s, status: inputs.length ? 'connected' : 'ready', inputs })),
       );
-      setMidiState((s) => ({ ...s, status: 'connected' }));
+      midiConnectionRef.current?.close();
+      midiConnectionRef.current = connection;
+      setMidiState((s) => ({ ...s, status: s.inputs.length ? 'connected' : 'ready' }));
     } catch (err) {
       setMidiState({ status: 'error', inputs: [], error: err.message || 'Could not reach MIDI.' });
     }
   }, []);
+
+  useEffect(() => () => midiConnectionRef.current?.close(), []);
 
   const midi = useMemo(() => ({ ...midiState, subscribe }), [midiState, subscribe]);
 
@@ -90,22 +119,30 @@ export default function App() {
     else setParams({ ...params, seed: randomSeed() });
   }, [nextFromLevel, params]);
 
-  const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain }) => {
+  const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain, assisted }) => {
     setProfile((prev) => {
       const { profile: next, promoted, demoted } = applyResult(prev, {
         level: params.level || null,
         summary,
         seed: score.seed,
+        exerciseId: scoreId,
         elapsedSec,
         takeIndex,
         curtain,
+        assisted,
         meta: { pitches: summary.pitches, recovery: summary.recovery },
       });
       if (promoted) setToast({ kind: 'up', text: `Level ${next.level} unlocked — ${levelById(next.level).name}` });
       else if (demoted) setToast({ kind: 'down', text: `Stepping back to level ${next.level} to rebuild.` });
       return next;
     });
-  }, [params.level, score.seed]);
+  }, [params.level, score.seed, scoreId]);
+
+  const handlePreview = useCallback(() => {
+    setProfile((prev) => markExerciseSeen(prev, scoreId));
+  }, [scoreId]);
+
+  const notify = useCallback((text, kind = 'info') => setToast({ kind, text }), []);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -114,11 +151,7 @@ export default function App() {
   }, [toast]);
 
   const drillSkill = useCallback((skillId) => {
-    const forced = {
-      ...profile,
-      skills: { ...profile.skills, [skillId]: { rating: 0.05, attempts: 60 } },
-    };
-    setParams(paramsForLevel(profile.level, forced, { seed: randomSeed() }));
+    setParams(paramsForLevel(profile.level, profile, { seed: randomSeed(), targetSkill: skillId }));
     setTab('practice');
   }, [profile]);
 
@@ -131,7 +164,7 @@ export default function App() {
     setSettings((s) => ({ ...s, ...patch }));
   }, []);
 
-  const customParams = useMemo(() => ({ ...params }), [params]);
+  const customParams = useMemo(() => customisableParams(params), [params]);
 
   return (
     <div className="sr-app">
@@ -150,7 +183,10 @@ export default function App() {
               className={`sr-tab${tab === t.id ? ' is-on' : ''}`}
               onClick={() => setTab(t.id)}
               aria-current={tab === t.id ? 'page' : undefined}
-            >{t.label}</button>
+            >
+              <span className="sr-tab-long">{t.label}</span>
+              <span className="sr-tab-short">{t.short}</span>
+            </button>
           ))}
         </nav>
         <div className="sr-headerstat">
@@ -173,6 +209,11 @@ export default function App() {
             onConnectMidi={handleConnectMidi}
             showKeyboard={showKeyboard}
             onToggleKeyboard={() => setShowKeyboard((v) => !v)}
+            freshRead={!seenBefore}
+            showCoach={profile.totals.takes === 0 && !settings.coachDismissed}
+            onDismissCoach={() => setSettings((s) => ({ ...s, coachDismissed: true }))}
+            onPreview={handlePreview}
+            onNotify={notify}
           />
         )}
 
@@ -183,8 +224,8 @@ export default function App() {
         {tab === 'custom' && (
           <SetupPanel
             params={customParams}
-            onChange={(p) => setParams({ ...p, level: null })}
-            onGenerate={(p) => { setParams({ ...p, level: null }); setTab('practice'); }}
+            onChange={(p) => setParams({ ...customisableParams(p), level: null })}
+            onGenerate={(p) => { setParams({ ...customisableParams(p), level: null }); setTab('practice'); }}
             presets={presets}
             onSavePreset={(name, p) => setPresets((list) => [...list, { id: String(Date.now()), name, params: p }])}
             onLoadPreset={(preset) => { setParams({ ...preset.params, seed: randomSeed(), level: null }); setTab('practice'); }}

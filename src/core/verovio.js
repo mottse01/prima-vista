@@ -62,8 +62,9 @@ const OPTIONS = {
  */
 export async function renderScoreSvg(score, opts = {}) {
   const toolkit = await loadToolkit();
-  toolkit.setOptions(OPTIONS);
-  const xml = toMusicXml(score, opts);
+  const { pageWidth = PAGE_WIDTH, ...musicXmlOptions } = opts;
+  toolkit.setOptions({ ...OPTIONS, pageWidth });
+  const xml = toMusicXml(score, musicXmlOptions);
   if (!toolkit.loadData(xml)) {
     throw new Error(toolkit.getLog() || 'The engraver could not read this exercise.');
   }
