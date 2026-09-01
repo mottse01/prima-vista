@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { applyResult, emptyProfile, paramsForLevel } from '../src/core/adaptive.js';
-import { generateExercise } from '../src/core/generator.js';
+import { renderReferenceWav, startReferencePlayback } from '../src/core/audio.js';
+import { generateExercise, planMusicalForm } from '../src/core/generator.js';
 import { analyseEvents, createGrader } from '../src/core/grader.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { fromDia } from '../src/core/theory.js';
@@ -27,6 +28,76 @@ test('the same seed and parameters generate identical music', () => {
   const second = generateExercise({ ...params });
   assert.deepEqual(first.staves, second.staves);
   assert.deepEqual(first.chords, second.chords);
+});
+
+test('generated studies use a clear phrase form and repeat their rhythmic idea', () => {
+  const score = generateExercise(paramsForLevel(8, emptyProfile(), { seed: 314159 }));
+  const signature = (measure) => score.staves.rh
+    .filter((note) => Math.floor(note.onset / score.ts.ticks) === measure)
+    .map((note) => [note.onset % score.ts.ticks, note.duration, note.rest, note.cellId]);
+
+  assert.equal(score.form.label, 'A–A′');
+  assert.deepEqual(signature(0), signature(2));
+  assert.deepEqual(signature(0), signature(4));
+  assert.equal(planMusicalForm(16).label, 'A–A′–B–A″');
+});
+
+test('four-bar phrases receive alternating half and authentic cadences', () => {
+  const score = generateExercise({
+    ...paramsForLevel(8, emptyProfile(), { seed: 271828 }),
+    measures: 16,
+    chordsPerMeasure: 1,
+  });
+
+  assert.equal(score.chords[3].degree, 4);
+  assert.equal(score.chords[7].degree, 0);
+  assert.equal(score.chords[11].degree, 4);
+  assert.equal(score.chords[15].degree, 0);
+});
+
+test('reference playback renders a non-empty browser-safe WAV', () => {
+  const score = generateExercise(paramsForLevel(1, emptyProfile(), { seed: 161803 }));
+  const wav = renderReferenceWav(score, { sampleRate: 8000 });
+  const ascii = (from, to) => String.fromCharCode(...wav.slice(from, to));
+
+  assert.equal(ascii(0, 4), 'RIFF');
+  assert.equal(ascii(8, 12), 'WAVE');
+  assert.ok(wav.length > 44);
+  assert.ok(wav.slice(44).some((byte) => byte !== 0));
+});
+
+test('reference playback starts through an HTML media element', async () => {
+  const originalAudio = globalThis.Audio;
+  const originalCreate = globalThis.URL.createObjectURL;
+  const originalRevoke = globalThis.URL.revokeObjectURL;
+  let plays = 0;
+  let revoked = 0;
+
+  class FakeAudio {
+    constructor() {
+      this.currentTime = 0;
+      this.volume = 1;
+    }
+    play() { plays += 1; return Promise.resolve(); }
+    pause() {}
+  }
+
+  globalThis.Audio = FakeAudio;
+  globalThis.URL.createObjectURL = () => 'blob:prima-vista-test';
+  globalThis.URL.revokeObjectURL = () => { revoked += 1; };
+  try {
+    const score = generateExercise(paramsForLevel(1, emptyProfile(), { seed: 141421 }));
+    const playback = startReferencePlayback({ score });
+    assert.ok(playback);
+    assert.equal(await playback.started, true);
+    assert.equal(plays, 1);
+    playback.stop();
+    assert.equal(revoked, 1);
+  } finally {
+    globalThis.Audio = originalAudio;
+    globalThis.URL.createObjectURL = originalCreate;
+    globalThis.URL.revokeObjectURL = originalRevoke;
+  }
 });
 
 test('adaptive rhythm focus is actually present in the exercise', () => {
@@ -168,7 +239,7 @@ test('audio is unlocked before notes are scheduled', async () => {
     const audio = await import('../src/core/audio.js?test=unlock');
     assert.equal(await audio.unlockAudio(), true);
     audio.playPianoNote(audio.now(), 60, 0.5);
-    assert.ok(starts.slice(1).every((at) => at >= 2.008));
+    assert.ok(starts.filter((at) => at > 0).every((at) => at >= 2.025));
   } finally {
     delete globalThis.window;
   }

@@ -39,15 +39,15 @@ src/
   core/
     theory.js      spelled pitches, keys, scale degrees, chord membership
     rhythm.js      rhythm-cell vocabulary, time signatures, metric weight
-    harmony.js     functional progressions with cadence planning; voice leading
-    generator.js   melody + accompaniment generation from a parameter envelope
+    harmony.js     phrase-level functional progressions, cadences, voice leading
+    generator.js   motivic form + melody/accompaniment from a parameter envelope
     musicxml.js    score -> MusicXML (also the user-facing export)
     verovio.js     lazy-loaded Verovio toolkit; MusicXML -> engraved SVG
     grader.js      note matching, scoring, per-skill attribution
     adaptive.js    skill ratings, promotion, weakness-targeted parameters
     curtain.js     look-ahead curtain modes and their tick offsets
     levels.js      the 20-level graded path
-    audio.js       WebAudio metronome, count-in, reference playback
+    audio.js       live WebAudio plus locally rendered media reference playback
     midi.js        Web MIDI input
     rng.js         seeded PRNG + six-character variation seeds
     share.js       exact URL recipes + exercise fingerprints
@@ -86,6 +86,14 @@ src/
   imported lazily and lands in its own chunk. The app shell stays small.
 - **Timing uses the audio clock**, not `performance.now()` and not MIDI
   timestamps, so playback, metronome and grading all share one time base.
+- **Generated does not mean random-walk.** Each study states a two-bar rhythmic
+  and melodic idea, answers it, introduces contrast on longer exercises, then
+  returns to the opening material. Four-bar harmonic punctuation alternates
+  half and authentic cadences, so the form can be heard as well as analysed.
+- **Reference audio has two transports.** Live keys, the count-in and grading
+  stay on low-latency WebAudio. “Hear the score” renders the exercise to a local
+  WAV and plays it as browser media, which is more reliable in iOS webviews and
+  embedded Sites; WebAudio remains the fallback.
 - **Recovery counts pitch errors, not lateness.** A wrong or dropped note opens
   an episode; two clean attacks in a row close it. Notes that are merely late
   deliberately do not count, because a player who is steadily behind the beat

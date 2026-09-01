@@ -5,8 +5,8 @@ import TimingStrip from './TimingStrip.jsx';
 import { createGrader, SKILLS } from '../core/grader.js';
 import { TPQ, keyLabel } from '../core/theory.js';
 import {
-  audioState, now, playPianoNote, scheduleCountIn, setMasterVolume,
-  startPlayback, subscribeAudioState, unlockAudio,
+  audioState, now, playPianoNote, primeAudioGesture, scheduleCountIn, setMasterVolume,
+  startPlayback, startReferencePlayback, startSoundCheck, subscribeAudioState, unlockAudio,
 } from '../core/audio.js';
 import { seedToCode } from '../core/rng.js';
 import { warmUp } from '../core/verovio.js';
@@ -42,6 +42,7 @@ export default function PracticeView({
   const modeRef = useRef('take');
   const guideRef = useRef(false);
   const playbackRef = useRef(null);
+  const clockRef = useRef(now);
   const takeStartRef = useRef(0);
   const takeCountRef = useRef(0);
   const assistedRef = useRef(false);
@@ -95,7 +96,7 @@ export default function PracticeView({
 
   /** One animation frame. Returns false when the loop should stop. */
   const advance = useCallback(() => {
-    const t = (now() - startRef.current) / secPerTick;
+    const t = (clockRef.current() - startRef.current) / secPerTick;
     setTick(t);
     if (guideRef.current && modeRef.current === 'take') refreshGuide(t);
     // Give a beat of grace at the end so a late final note still counts.
@@ -131,11 +132,12 @@ export default function PracticeView({
 
   const start = useCallback(async () => {
     stopEverything();
-    await prepareSound();
+    if (!(await prepareSound())) return;
     setListening(false);
     setResult(null);
     setNoteStates({});
     setDueNow(new Set());
+    clockRef.current = now;
     const startTime = scheduleCountIn(score, settings.countInBeats);
     startRef.current = startTime;
     takeStartRef.current = startTime;
@@ -173,17 +175,44 @@ export default function PracticeView({
 
   const listen = useCallback(async () => {
     stopEverything();
-    if (!(await prepareSound())) return;
     setPreviewed(true);
     onPreview?.();
     setListening(true);
     setPhaseBoth('idle');
+    modeRef.current = 'listen';
+
+    const ended = () => {
+      setListening(false);
+      cancelAnimationFrame(rafRef.current);
+      setTick(-1);
+      playbackRef.current = null;
+    };
+
+    // Use a rendered media track first. It is markedly more reliable than a
+    // graph of scheduled oscillators in iOS webviews and embedded browsers.
+    const media = startReferencePlayback({
+      score, metronome: settings.metronome, onEnd: ended,
+    });
+    if (media) {
+      playbackRef.current = media;
+      clockRef.current = media.currentTime;
+      startRef.current = media.leadIn;
+      startLoop();
+      if (await media.started) return;
+      stopEverything();
+    }
+
+    // WebAudio remains a fallback for browsers without Blob media playback.
+    if (!(await prepareSound())) {
+      setListening(false);
+      setTick(-1);
+      return;
+    }
+    clockRef.current = now;
     const startTime = now() + 0.2;
     startRef.current = startTime;
-    modeRef.current = 'listen';
     playbackRef.current = startPlayback({
-      score, startTime, metronome: settings.metronome, playScore: true,
-      onEnd: () => { setListening(false); cancelAnimationFrame(rafRef.current); setTick(-1); },
+      score, startTime, metronome: settings.metronome, playScore: true, onEnd: ended,
     });
     startLoop();
   }, [onPreview, prepareSound, score, settings.metronome, startLoop, stopEverything]);
@@ -212,6 +241,11 @@ export default function PracticeView({
   }, [onConnectMidi]);
 
   const testSound = useCallback(async () => {
+    const media = startSoundCheck();
+    if (media && await media.started) {
+      onNotify?.('Sound is on');
+      return;
+    }
     if (!(await prepareSound())) return;
     const at = now() + 0.035;
     playPianoNote(at, 60, 0.7, 0.55);
@@ -324,7 +358,11 @@ export default function PracticeView({
 
       <div className="sr-scorecard">
         <div className="sr-scorehead">
-          <div>
+          <div className="sr-scoreidentity">
+            <div className="sr-scorekicker">
+              <span>Original adaptive study</span>
+              {score.form?.label && <span className="sr-formbadge">Form {score.form.label}</span>}
+            </div>
             <h2 className="sr-scoretitle">{score.title}</h2>
             <p className="sr-scoremeta">
               {keyLabel(score.key)} · {score.ts.name} · ♩= {score.tempo} · {score.measures} bars
@@ -332,7 +370,7 @@ export default function PracticeView({
             </p>
           </div>
           <div className="sr-seed" title="The short seed replays this variation with the same setup. The copied link includes the full setup.">
-            <span className="sr-seed-label">Variation seed</span>
+            <span className="sr-seed-label">Exercise ID</span>
             <div className="sr-seed-row">
               <code>{seedToCode(score.seed)}</code>
               <button type="button" className="sr-copybtn" onClick={copyLink} title="Copy an exact exercise link">
@@ -361,19 +399,25 @@ export default function PracticeView({
           {phase === 'playing' || phase === 'countin' ? (
             <button type="button" className="sr-btn sr-btn--stop" onClick={stop}>Stop</button>
           ) : (
-            <button type="button" className="sr-btn sr-btn--primary" onClick={start} disabled={busy}>
+            <button
+              type="button" className="sr-btn sr-btn--primary sr-btn--start"
+              onPointerDown={primeAudioGesture} onClick={start} disabled={busy}
+            >
+              <span className="sr-btn-icon" aria-hidden="true">▶</span>
               {audioBusy ? 'Turning on sound…' : result ? 'Play again' : qualifies ? 'Start first read' : 'Start practice'}
             </button>
           )}
           <button
             type="button" className="sr-btn" onClick={listening ? stopReference : listen}
+            onPointerDown={primeAudioGesture}
             disabled={busy && !listening}
             title={freshRead && !previewed ? 'Hearing the exercise first makes the next take practice-only.' : undefined}
           >
-            {listening ? 'Stop playback' : freshRead && !previewed ? 'Hear first (practice)' : 'Hear it'}
+            <span className="sr-btn-icon sr-btn-icon--sound" aria-hidden="true">♪</span>
+            {listening ? 'Stop playback' : freshRead && !previewed ? 'Hear the score' : 'Hear it'}
           </button>
           <button type="button" className="sr-btn" onClick={onRegenerate} disabled={busy}>
-            New
+            New study
           </button>
         </div>
 
@@ -445,7 +489,10 @@ export default function PracticeView({
         <div className={`sr-sound sr-sound--${soundState}`} aria-live="polite">
           <span className="sr-sound-icon" aria-hidden="true">♪</span>
           <span className="sr-sound-status">{soundLabel(soundState)}</span>
-          <button type="button" className="sr-btn sr-btn--small" onClick={testSound} disabled={busy}>Test sound</button>
+          <button
+            type="button" className="sr-btn sr-btn--small" onPointerDown={primeAudioGesture}
+            onClick={testSound} disabled={busy}
+          >Test sound</button>
           <label className="sr-volume">
             <span>Volume <b>{Math.round((settings.masterVolume ?? 0.82) * 100)}%</b></span>
             <input
@@ -469,7 +516,10 @@ export default function PracticeView({
                     ? <span>{midi.error}</span>
                     : <span>No MIDI keyboard connected</span>}
             {!['connected', 'ready'].includes(midi.status) && (
-              <button type="button" className="sr-btn sr-btn--small" onClick={connectMidiWithSound} disabled={midi.status === 'connecting'}>
+              <button
+                type="button" className="sr-btn sr-btn--small" onPointerDown={primeAudioGesture}
+                onClick={connectMidiWithSound} disabled={midi.status === 'connecting'}
+              >
                 {midi.status === 'connecting' ? 'Connecting…' : 'Connect MIDI'}
               </button>
             )}

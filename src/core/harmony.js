@@ -34,14 +34,21 @@ export function planProgression(rng, { measures, chordsPerMeasure = 1, allowSeve
   const slots = measures * chordsPerMeasure;
   const degrees = new Array(slots).fill(null);
 
-  degrees[slots - 1] = 0; // authentic cadence
-  degrees[slots - 2] = rng.chance(0.85) ? 4 : 6;
-  if (measures >= 8) {
-    const mid = Math.floor(slots / 2) - 1;
-    degrees[mid] = 4; // half cadence at the midpoint
-    if (mid + 1 < slots - 2) degrees[mid + 1] = rng.chance(0.6) ? 0 : 5;
-  }
   degrees[0] = 0;
+
+  // Four-bar harmonic punctuation mirrors the melodic form: the first phrase
+  // asks a question on V, the next answers on I, and longer forms alternate
+  // those cadence types before the final authentic close.
+  const phraseSlots = 4 * chordsPerMeasure;
+  for (let end = phraseSlots - 1, phrase = 1; end < slots - 1; end += phraseSlots, phrase++) {
+    const halfCadence = phrase % 2 === 1;
+    degrees[end] = halfCadence ? 4 : 0;
+    if (end > 0) degrees[end - 1] = halfCadence ? (rng.chance(0.55) ? 1 : 3) : 4;
+    if (end + 1 < slots - 1) degrees[end + 1] = halfCadence ? 0 : (rng.chance(0.35) ? 5 : 0);
+  }
+
+  degrees[slots - 1] = 0; // final authentic cadence
+  if (slots > 1) degrees[slots - 2] = rng.chance(0.92) ? 4 : 6;
 
   for (let i = 1; i < slots; i++) {
     if (degrees[i] !== null) continue;

@@ -46,8 +46,8 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
   return (
     <div className="sr-setup">
       <p className="sr-setup-lead">
-        Set the parameters and the generator writes music to match — a different piece every time,
-        with real harmony behind it. Nothing here is behind a paywall.
+        Set the parameters and the composition engine writes an original motivic study to match —
+        a clear musical idea, purposeful variation, and a real cadence every time.
       </p>
 
       <div className="sr-setup-grid">

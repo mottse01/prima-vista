@@ -59,21 +59,102 @@ function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks, requiredTag = nu
   return events;
 }
 
-/** Rhythm for the whole line, with a held final bar so the exercise lands. */
-function buildRhythm(rng, ts, cellIds, measures, restRate, focusTags = []) {
+/**
+ * Give an exercise an audible form before choosing any notes.
+ *
+ * Each four-bar phrase states a two-bar idea and answers it. Longer exercises
+ * introduce a contrasting B idea before returning to A. The apostrophes mean
+ * variation, not literal duplication, which is how short pedagogical studies
+ * stay recognisable without becoming memorisation drills.
+ */
+export function planMusicalForm(measures) {
+  const phraseCount = Math.max(1, Math.ceil(measures / 4));
+  let sections;
+  if (phraseCount === 1) sections = ['A'];
+  else if (phraseCount === 2) sections = ['A', 'A′'];
+  else if (phraseCount === 3) sections = ['A', 'B', 'A′'];
+  else if (phraseCount === 4) sections = ['A', 'A′', 'B', 'A″'];
+  else if (phraseCount === 5) sections = ['A', 'A′', 'B', 'B′', 'A″'];
+  else sections = ['A', 'A′', 'B', 'B′', 'A', 'A″'];
+
+  while (sections.length < phraseCount) sections.splice(sections.length - 1, 0, 'B′');
+  sections = sections.slice(0, phraseCount);
+
+  const plan = [];
+  for (let m = 0; m < measures; m++) {
+    const phrase = Math.min(sections.length - 1, Math.floor(m / 4));
+    const section = sections[phrase];
+    const base = section.startsWith('B') ? 'B' : 'A';
+    const barInPhrase = m % 4;
+    const motifBar = barInPhrase % 2;
+    const variant = section.includes('″') ? 2 : section.includes('′') ? 1 : 0;
+    plan.push({
+      measure: m,
+      phrase,
+      section,
+      motifKey: `${base}${motifBar}`,
+      role: phrase === 0 && barInPhrase < 2
+        ? 'statement'
+        : base === 'B' && !plan.some((p) => p.motifKey === `${base}${motifBar}`)
+          ? 'contrast'
+          : variant >= 2 || (phrase === sections.length - 1 && base === 'A')
+            ? 'return'
+            : 'echo',
+      shift: variant === 1 ? (base === 'A' ? 1 : -1) : 0,
+      cadence: barInPhrase === 3 || m === measures - 1,
+    });
+  }
+
+  return { label: sections.join('–'), sections, plan };
+}
+
+/** Rhythm for the whole line, with motivic echoes and a held final bar. */
+function buildRhythm(rng, ts, cellIds, measures, restRate, focusTags = [], form = planMusicalForm(measures)) {
   const out = [];
   const required = [...new Set(focusTags)].slice(0, Math.max(0, measures - 1));
+  const prototypes = new Map();
+  let focusIndex = 0;
+
   for (let m = 0; m < measures; m++) {
     const offsetTicks = m * ts.ticks;
+    const spec = form.plan[m];
     if (m === measures - 1) {
-      out.push({ onset: offsetTicks, duration: ts.ticks, rest: false, tags: ['final'], cellId: 'final' });
+      out.push({
+        onset: offsetTicks,
+        duration: ts.ticks,
+        rest: false,
+        tags: ['final', 'cadence'],
+        cellId: 'final',
+        motifKey: null,
+        motifIndex: 0,
+        motifRole: 'cadence',
+        motifShift: 0,
+        section: spec?.section || 'A',
+      });
       continue;
     }
-    out.push(...fillMeasure(rng, ts, cellIds, {
-      restRate,
-      offsetTicks,
-      requiredTag: required[m] || null,
-    }));
+
+    let relative = prototypes.get(spec.motifKey);
+    if (!relative) {
+      const generated = fillMeasure(rng, ts, cellIds, {
+        restRate,
+        offsetTicks: 0,
+        requiredTag: required[focusIndex] || null,
+      });
+      if (required[focusIndex]) focusIndex += 1;
+      relative = generated.map((event, motifIndex) => ({ ...event, motifIndex }));
+      prototypes.set(spec.motifKey, relative);
+    }
+
+    out.push(...relative.map((event) => ({
+      ...event,
+      onset: event.onset + offsetTicks,
+      motifKey: spec.motifKey,
+      motifRole: spec.role,
+      motifShift: spec.shift,
+      section: spec.section,
+      tags: spec.cadence ? [...event.tags, 'phrase-end'] : event.tags,
+    })));
   }
   return out;
 }
@@ -117,6 +198,7 @@ function assignPitches(rng, opts) {
   let lastLeap = 0;
   let lastLeapDir = 0;
   let focusIndex = 0;
+  const motifPitches = new Map();
 
   const sounded = rhythm.filter((e) => !e.rest);
 
@@ -128,6 +210,9 @@ function assignPitches(rng, opts) {
     const chord = chordAt(chords, ts, chordsPerMeasure, ev.onset);
     const isLast = i === sounded.length - 1;
     const target = archTarget(measure, measures, lowDia, highDia);
+    const motifId = ev.motifKey ? `${ev.motifKey}:${ev.motifIndex}` : null;
+    const remembered = motifId ? motifPitches.get(motifId) : null;
+    const motifTarget = remembered == null ? null : remembered + (ev.motifShift || 0);
 
     // Decide whether this slot must be a chord tone.
     let requireChordTone;
@@ -156,6 +241,7 @@ function assignPitches(rng, opts) {
       chosen = (pool.length ? pool : candidates)[rng.int((pool.length ? pool : candidates).length)];
     } else {
       const focus = focusIntervals[focusIndex];
+      let focusApplied = false;
       if (focus) {
         const matches = (d) => {
           const distance = Math.abs(d - prev.dia);
@@ -170,8 +256,25 @@ function assignPitches(rng, opts) {
         if (focused.length) {
           candidates = focused;
           focusIndex += 1;
+          focusApplied = true;
         }
       }
+
+      if (motifTarget != null && !focusApplied) {
+        let legal = candidates.filter((d) => Math.abs(d - prev.dia) <= maxLeap);
+        if (lastLeap >= 3) {
+          const resolving = legal.filter((d) => (
+            Math.abs(d - prev.dia) === 1
+            && Math.sign(d - prev.dia) !== Math.sign(lastLeapDir)
+          ));
+          if (resolving.length) legal = resolving;
+        }
+        if (legal.length) {
+          const closest = Math.min(...legal.map((d) => Math.abs(d - motifTarget)));
+          candidates = legal.filter((d) => Math.abs(d - motifTarget) === closest);
+        }
+      }
+
       const weights = candidates.map((d) => {
         const dist = Math.abs(d - prev.dia);
         if (dist > maxLeap) return 0;
@@ -188,6 +291,11 @@ function assignPitches(rng, opts) {
         else w = (1 - stepwiseBias) * 3 / dist;
         // Pull toward the phrase arch.
         w *= Math.exp(-Math.abs(d - target) / 5);
+        // Echo the stated motif clearly, while allowing the current harmony to
+        // bend it by a nearby scale step. A focused adaptive interval wins.
+        if (motifTarget != null && !focusApplied) {
+          w *= 0.55 + 16 * Math.exp(-Math.abs(d - motifTarget) * 1.25);
+        }
         return Math.max(w, 0.005);
       });
       chosen = rng.weighted(candidates, weights);
@@ -216,13 +324,18 @@ function assignPitches(rng, opts) {
       tags: ev.tags,
       cellId: ev.cellId,
       chordTone: isChordTone(key, chord, chosen),
+      motifKey: ev.motifKey || null,
+      motifRole: ev.motifRole || null,
+      section: ev.section || null,
     });
+    if (motifId && !motifPitches.has(motifId)) motifPitches.set(motifId, chosen);
     prev = p;
   }
 
   // Re-interleave rests so the engraver sees a continuous stream.
   const rests = rhythm.filter((e) => e.rest).map((e) => ({
     onset: e.onset, duration: e.duration, rest: true, pitches: [], tags: e.tags, cellId: e.cellId,
+    motifKey: e.motifKey || null, motifRole: e.motifRole || null, section: e.section || null,
   }));
   return [...notes, ...rests].sort((a, b) => a.onset - b.onset);
 }
@@ -333,7 +446,7 @@ function buildLeftHand(rng, opts) {
 
 /** An independent left-hand melodic line, for two-voice contrapuntal levels. */
 function buildLeftHandMelody(rng, opts) {
-  const rhythm = buildRhythm(rng, opts.ts, opts.cellIds, opts.measures, opts.restRate);
+  const rhythm = buildRhythm(rng, opts.ts, opts.cellIds, opts.measures, opts.restRate, [], opts.form);
   return assignPitches(rng, { ...opts, rhythm });
 }
 
@@ -437,6 +550,7 @@ export function generateExercise(userParams = {}) {
   const key = { fifths: params.keyFifths, mode: params.keyMode };
   const ts = timeSig(params.timeSignature);
   const measures = params.measures;
+  const form = planMusicalForm(measures);
   // A harmonic rhythm only works if each chord slot is a whole number of beats.
   const slot = ts.ticks / params.chordsPerMeasure;
   const chordsPerMeasure = Number.isInteger(slot) && slot % ts.beat === 0
@@ -459,7 +573,7 @@ export function generateExercise(userParams = {}) {
   const wantsLh = params.hands === 'both' || params.hands === 'lh';
 
   if (wantsRh) {
-    const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate, params.focusRhythmTags);
+    const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form);
     staves.rh = assignPitches(rng, {
       key, ts, chords, chordsPerMeasure, rhythm, measures,
       lowDia: params.rhLow, highDia: params.rhHigh,
@@ -473,6 +587,7 @@ export function generateExercise(userParams = {}) {
     if (params.lhStyle === 'melodic') {
       staves.lh = buildLeftHandMelody(rng, {
         key, ts, chords, chordsPerMeasure, measures,
+        form,
         cellIds: params.lhCells || cells,
         restRate: params.restRate,
         lowDia: params.lhLow, highDia: params.lhHigh,
@@ -481,7 +596,7 @@ export function generateExercise(userParams = {}) {
       });
     } else if (params.hands === 'lh') {
       // Left hand alone gets the melody, not an accompaniment pattern.
-      const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate, params.focusRhythmTags);
+      const rhythm = buildRhythm(rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form);
       staves.lh = assignPitches(rng, {
         key, ts, chords, chordsPerMeasure, rhythm, measures,
         lowDia: params.lhLow, highDia: params.lhHigh,
@@ -508,7 +623,7 @@ export function generateExercise(userParams = {}) {
   const slurs = params.slurs && staves.rh.length ? buildSlurs(rng, staves.rh, ts, measures) : [];
 
   const keyName = KEY_NAMES[key.mode][String(key.fifths)];
-  const title = `Study in ${key.mode === 'minor' ? keyName.toUpperCase() : keyName} ${key.mode}, ${ORDINALS[seed % ORDINALS.length]}`;
+  const title = `Motivic Study in ${key.mode === 'minor' ? keyName.toUpperCase() : keyName} ${key.mode}, ${ORDINALS[seed % ORDINALS.length]}`;
 
   return {
     seed,
@@ -518,6 +633,7 @@ export function generateExercise(userParams = {}) {
     measures,
     chords,
     chordsPerMeasure,
+    form: { label: form.label, sections: form.sections },
     staves,
     slurs,
     title,
