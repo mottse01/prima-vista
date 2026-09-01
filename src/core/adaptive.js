@@ -93,7 +93,7 @@ export function applyResult(profile, {
       const alpha = Math.min(ALPHA_MAX, ALPHA_MIN + tally.total * 0.03) * weight;
       next.skills[id] = {
         rating: prev.rating * (1 - alpha) + observed * alpha,
-        attempts: prev.attempts + tally.total,
+        attempts: prev.attempts + tally.total * weight,
       };
     }
   } else {
@@ -198,8 +198,15 @@ export function paramsForLevel(level, profile, {
   const rng = makeRng(seed);
   const p = { ...def.params };
   const weak = targeting && profile ? weakestSkills(profile, 4) : [];
-  const weakIds = new Set(weak.filter((w) => w.rating < 0.78).map((w) => w.id));
-  if (targetSkill) weakIds.add(targetSkill);
+  const weakPool = weak.filter((w) => w.rating < 0.78);
+  // Isolate one diagnostic variable per generated study. Mixing every weak
+  // skill into one excerpt makes the music harder, but makes the practice less
+  // specific. Weighted selection keeps the weakest item most likely while
+  // still interleaving other needs across a session.
+  const selectedWeakness = targetSkill || (weakPool.length
+    ? rng.weighted(weakPool, weakPool.map((w) => Math.pow(1 - w.rating, 2))).id
+    : null);
+  const weakIds = new Set(selectedWeakness ? [selectedWeakness] : []);
   const targeted = new Set();
   const focusRhythmTags = [];
   const focusIntervals = [];
@@ -273,9 +280,11 @@ export function paramsForLevel(level, profile, {
   return { ...p, ...overrides, seed: overrides.seed ?? seed, level, targeted: [...targeted] };
 }
 
-/** Rolling score over the last `n` takes, for the dashboard. */
+/** Rolling score over clean first reads, so rehearsal does not inflate it. */
 export function recentAverage(profile, n = 10) {
-  const recent = profile.history.slice(-n);
+  const recent = profile.history
+    .filter((take) => !take.repeat && !take.assisted && !take.curtain)
+    .slice(-n);
   if (!recent.length) return null;
   return Math.round(recent.reduce((a, h) => a + h.score, 0) / recent.length);
 }

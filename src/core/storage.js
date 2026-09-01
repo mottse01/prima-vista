@@ -57,6 +57,7 @@ export const DEFAULT_SETTINGS = {
   curtain: 'off',
   guideKeys: false,
   keySound: true,
+  masterVolume: 0.82,
   coachDismissed: false,
 };
 

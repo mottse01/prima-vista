@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef } from 'react';
 
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const WHITE_OFFSET = [0, 0.5, 1, 1.5, 2, 3, 3.5, 4, 4.5, 5, 5.5, 6];
+const NOTE_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+const midiName = (midi) => `${NOTE_NAMES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
 
 // Home-row mapping so a laptop can drive it: two octaves from middle C.
 const KEY_MAP = {
@@ -71,6 +73,10 @@ export default function Keyboard({
   const W = 100 / Math.max(1, whiteCount);
   return (
     <div className={`sr-keyboard ${className}`.trim()} style={{ ['--white-count']: whiteCount }}>
+      <div className="sr-keyboard-head">
+        <span>On-screen piano</span>
+        {computerKeys && <span>Computer keys A–' start on {midiName(octaveBase)}</span>}
+      </div>
       <div className="sr-keyboard-inner">
         {keys.filter((k) => !k.black).map((k) => (
           <button
@@ -82,7 +88,7 @@ export default function Keyboard({
             onPointerUp={() => onNoteOff && onNoteOff(k.midi)}
             onPointerCancel={() => onNoteOff && onNoteOff(k.midi)}
             onPointerLeave={() => onNoteOff && onNoteOff(k.midi)}
-            aria-label={`MIDI note ${k.midi}`}
+            aria-label={midiName(k.midi)}
           >
             {k.pc === 0 && <span className="sr-key-label">C{k.octave}</span>}
           </button>
@@ -97,7 +103,7 @@ export default function Keyboard({
             onPointerUp={() => onNoteOff && onNoteOff(k.midi)}
             onPointerCancel={() => onNoteOff && onNoteOff(k.midi)}
             onPointerLeave={() => onNoteOff && onNoteOff(k.midi)}
-            aria-label={`MIDI note ${k.midi}`}
+            aria-label={midiName(k.midi)}
           />
         ))}
       </div>

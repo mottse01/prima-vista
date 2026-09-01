@@ -17,9 +17,8 @@ import {
 const TABS = [
   { id: 'practice', label: 'Practice', short: 'Practice' },
   { id: 'path', label: 'The path', short: 'Path' },
-  { id: 'custom', label: 'Custom', short: 'Build' },
+  { id: 'custom', label: 'Build an exercise', short: 'Build' },
   { id: 'progress', label: 'Progress', short: 'Progress' },
-  { id: 'compare', label: 'How it compares', short: 'Compare' },
 ];
 
 /** Read both the seed and its parameter recipe from an exact shared link. */
@@ -55,6 +54,7 @@ export default function App() {
   const [tab, setTab] = useState('practice');
   const [showKeyboard, setShowKeyboard] = useState(true);
   const [toast, setToast] = useState(null);
+  const nextPathLevelRef = useRef(null);
 
   const [params, setParams] = useState(() => {
     const shared = exerciseFromUrl();
@@ -68,6 +68,19 @@ export default function App() {
   const level = params.level ? levelById(params.level) : null;
   const seenBefore = (profile.seenExercises || []).includes(scoreId)
     || (profile.seenSeeds || []).includes(score.seed);
+  const strongReads = useMemo(() => {
+    if (!params.level) return 0;
+    const eligible = profile.history
+      .filter((take) => take.level === params.level && !take.repeat && !take.assisted && !take.curtain)
+      .slice(-2)
+      .reverse();
+    let count = 0;
+    for (const take of eligible) {
+      if (take.score < 88) break;
+      count += 1;
+    }
+    return Math.min(2, count);
+  }, [params.level, profile.history]);
 
   useEffect(() => { saveProfile(profile); }, [profile]);
   useEffect(() => { saveSettings(settings); }, [settings]);
@@ -110,12 +123,13 @@ export default function App() {
 
   // --- Exercise flow ------------------------------------------------------
   const nextFromLevel = useCallback((levelId = profile.level, opts = {}) => {
+    nextPathLevelRef.current = null;
     setParams(paramsForLevel(levelId, profile, { seed: randomSeed(), ...opts }));
     setTab('practice');
   }, [profile]);
 
   const regenerate = useCallback(() => {
-    if (params.level) nextFromLevel(params.level);
+    if (params.level) nextFromLevel(nextPathLevelRef.current ?? params.level);
     else setParams({ ...params, seed: randomSeed() });
   }, [nextFromLevel, params]);
 
@@ -132,8 +146,13 @@ export default function App() {
         assisted,
         meta: { pitches: summary.pitches, recovery: summary.recovery },
       });
-      if (promoted) setToast({ kind: 'up', text: `Level ${next.level} unlocked — ${levelById(next.level).name}` });
-      else if (demoted) setToast({ kind: 'down', text: `Stepping back to level ${next.level} to rebuild.` });
+      if (promoted) {
+        nextPathLevelRef.current = next.level;
+        setToast({ kind: 'up', text: `Level ${next.level} unlocked — ${levelById(next.level).name}` });
+      } else if (demoted) {
+        nextPathLevelRef.current = next.level;
+        setToast({ kind: 'down', text: `Stepping back to level ${next.level} to rebuild.` });
+      }
       return next;
     });
   }, [params.level, score.seed, scoreId]);
@@ -168,6 +187,7 @@ export default function App() {
 
   return (
     <div className="sr-app">
+      <a className="sr-skip" href="#practice-main">Skip to practice</a>
       <header className="sr-header">
         <div className="sr-brand">
           <span className="sr-logo" aria-hidden="true">𝄞</span>
@@ -190,12 +210,12 @@ export default function App() {
           ))}
         </nav>
         <div className="sr-headerstat">
-          <span className="sr-level-badge">Level {profile.level}</span>
+          <span className="sr-level-badge">Path level {profile.level}</span>
           {profile.streak.count > 0 && <span className="sr-streak">{profile.streak.count}-day streak</span>}
         </div>
       </header>
 
-      <main className="sr-main">
+      <main className="sr-main" id="practice-main">
         {tab === 'practice' && (
           <PracticeView
             key={`${score.seed}:${score.tempo}`}
@@ -210,6 +230,7 @@ export default function App() {
             showKeyboard={showKeyboard}
             onToggleKeyboard={() => setShowKeyboard((v) => !v)}
             freshRead={!seenBefore}
+            strongReads={strongReads}
             showCoach={profile.totals.takes === 0 && !settings.coachDismissed}
             onDismissCoach={() => setSettings((s) => ({ ...s, coachDismissed: true }))}
             onPreview={handlePreview}
@@ -251,8 +272,8 @@ export default function App() {
 
       <footer className="sr-footer">
         <p>
-          Everything runs in your browser. Nothing is uploaded, and there is nothing to subscribe to.
-          Connect a MIDI keyboard for real feedback, or play along on the on-screen keys.
+          Practice data stays in this browser. Connect a MIDI keyboard for full feedback, or use
+          the on-screen and computer keys. <button type="button" className="sr-footer-link" onClick={() => setTab('compare')}>Why Prima Vista?</button>
         </p>
       </footer>
     </div>

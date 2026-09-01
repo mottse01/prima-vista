@@ -6,11 +6,11 @@ behind them, graded in real time against what you actually play.
 ## Why it exists
 
 See [`COMPETITIVE-ANALYSIS.md`](./COMPETITIVE-ANALYSIS.md). Short version:
-Sight Reading Factory generates endless material but never hears you, and its
-piano writing is widely criticised as unmusical. Piano Tree hears every note
-but draws on a finite library and progresses by level rather than by
-diagnosis. This combines both: a generator that knows what you just got wrong
-and writes the next exercise around it.
+Sight Reading Factory is a mature generator with assessment and classroom
+tools. Piano Tree combines a large repertoire library with real-time feedback.
+Prima Vista is deliberately narrower: it protects the integrity of a fresh
+read, diagnoses the specific skill that broke down, and generates the next
+piano study around that evidence.
 
 ## Running it
 
@@ -25,6 +25,7 @@ Then open the URL Vite prints (typically `http://localhost:5173`).
 npm run build    # production build to dist/
 npm run preview  # serve the production build locally
 npm run lint      # eslint
+npm test          # deterministic generation, scoring and audio regressions
 ```
 
 Connect a MIDI keyboard for real grading, or use the on-screen / computer

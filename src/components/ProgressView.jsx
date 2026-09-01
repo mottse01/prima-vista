@@ -26,7 +26,7 @@ export default function ProgressView({ profile, onDrill, onReset, onReload }) {
     <div className="sr-progress">
       <section className="sr-stats">
         <Stat label="Current level" value={profile.level} detail={level.name} />
-        <Stat label="Last 10 takes" value={avg == null ? '—' : avg} detail={avg == null ? 'no takes yet' : 'average score'} />
+        <Stat label="Fresh-read average" value={avg == null ? '—' : avg} detail={avg == null ? 'no qualifying reads yet' : 'last 10 qualifying reads'} />
         <Stat label="Day streak" value={profile.streak.count || 0} detail={profile.streak.count ? 'keep it going' : 'start today'} />
         <Stat label="Notes read" value={profile.totals.notes.toLocaleString()} detail={`${Math.round(profile.totals.minutes)} minutes`} />
         <Stat

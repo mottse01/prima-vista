@@ -97,10 +97,19 @@ export function decodeExerciseParams(payload) {
 /** Stable identity for repeat detection across custom setups and shared links. */
 export function exerciseFingerprint(params, seed) {
   const clean = cleanExerciseParams(params) || {};
-  // Level and diagnostic labels explain the exercise but do not alter a note.
-  // Excluding them prevents identical music from being treated as new simply
-  // because it arrived through a different route.
-  const { level: _level, targeted: _targeted, ...musicalParams } = clean;
+  // These values change the presentation or explain how the exercise was
+  // chosen, but they do not change its pitches or rhythms. Slowing a familiar
+  // excerpt down must never launder it into a new first read.
+  const {
+    level: _level,
+    targeted: _targeted,
+    tempo: _tempo,
+    dynamics: _dynamics,
+    articulations: _articulations,
+    slurs: _slurs,
+    fingerings: _fingerings,
+    ...musicalParams
+  } = clean;
   const text = JSON.stringify(musicalParams);
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
