@@ -22,6 +22,7 @@ export default function PracticeView({
   score, settings, onSettings, onResult, onRegenerate, level,
   midi, onConnectMidi, showKeyboard, onToggleKeyboard,
   freshRead, strongReads = 0, showCoach, onDismissCoach, onPreview, onNotify,
+  session, onSessionStart,
 }) {
   const [phase, setPhase] = useState('idle'); // idle | countin | playing | done
   const [noteStates, setNoteStates] = useState({});
@@ -34,6 +35,8 @@ export default function PracticeView({
   const [dueNow, setDueNow] = useState(() => new Set());
   const [soundState, setSoundState] = useState(audioState);
   const [audioBusy, setAudioBusy] = useState(false);
+  const [calibration, setCalibration] = useState({ phase: 'idle', taps: 0, offset: settings.inputLatencyMs || 0 });
+  const [standMode, setStandMode] = useState(false);
 
   const graderRef = useRef(null);
   const startRef = useRef(0);
@@ -48,6 +51,7 @@ export default function PracticeView({
   const takeCountRef = useRef(0);
   const assistedRef = useRef(false);
   const freshAtStartRef = useRef(false);
+  const calibrationRef = useRef(null);
 
   const secPerTick = 60 / score.tempo / TPQ;
 
@@ -56,6 +60,7 @@ export default function PracticeView({
   const stopEverything = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
     if (playbackRef.current) { playbackRef.current.stop(); playbackRef.current = null; }
+    calibrationRef.current = null;
   }, []);
 
   const finish = useCallback(() => {
@@ -133,6 +138,7 @@ export default function PracticeView({
 
   const start = useCallback(async () => {
     stopEverything();
+    onSessionStart?.();
     setListening(false);
     setResult(null);
     setNoteStates({});
@@ -179,7 +185,7 @@ export default function PracticeView({
     playbackRef.current = startPlayback({
       score, startTime, metronome: settings.metronome, playScore: false, onEnd: () => {},
     });
-  }, [finish, freshRead, prepareSound, previewed, score, settings.countInBeats, settings.guideKeys, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
+  }, [finish, freshRead, onSessionStart, prepareSound, previewed, score, settings.countInBeats, settings.guideKeys, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
 
   const stop = useCallback(() => {
     if (phaseRef.current === 'countin') {
@@ -247,6 +253,21 @@ export default function PracticeView({
 
   useEffect(() => () => stopEverything(), [stopEverything]);
 
+  useEffect(() => () => {
+    document.documentElement.classList.remove('sr-stand-mode');
+  }, []);
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.classList.remove('sr-stand-mode');
+        setStandMode(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
   // Fetch the engraver ahead of time so the first exercise appears promptly.
   useEffect(() => { warmUp(); }, []);
 
@@ -256,11 +277,36 @@ export default function PracticeView({
       if (audioState() === 'running') playPianoNote(now(), midiNote, 0.6, 0.48);
       else unlockAudio().then((ready) => { if (ready) playPianoNote(now(), midiNote, 0.6, 0.48); });
     }
+    const activeCalibration = calibrationRef.current;
+    if (activeCalibration) {
+      const at = activeCalibration.media.currentTime();
+      const available = activeCalibration.expected
+        .map((expected, index) => ({ expected, index, distance: Math.abs(at - expected) }))
+        .filter(({ index, distance }) => !activeCalibration.used.has(index) && distance <= 0.48)
+        .sort((a, b) => a.distance - b.distance)[0];
+      if (available) {
+        activeCalibration.used.add(available.index);
+        activeCalibration.samples.push((at - available.expected) * 1000);
+        const taps = activeCalibration.samples.length;
+        setCalibration((current) => ({ ...current, phase: 'active', taps }));
+        if (taps === activeCalibration.expected.length) {
+          const sorted = [...activeCalibration.samples].sort((a, b) => a - b);
+          const offset = Math.round(Math.max(-250, Math.min(250, (sorted[1] + sorted[2]) / 2)));
+          activeCalibration.media.stop();
+          playbackRef.current = null;
+          calibrationRef.current = null;
+          onSettings({ inputLatencyMs: offset });
+          setCalibration({ phase: 'done', taps, offset });
+          onNotify?.(`Timing calibrated: ${offset > 0 ? '+' : ''}${offset} ms`);
+        }
+      }
+      return;
+    }
     const grader = graderRef.current;
     if (!grader || (phaseRef.current !== 'playing' && phaseRef.current !== 'countin')) return;
-    grader.noteOn(midiNote, clockRef.current());
+    grader.noteOn(midiNote, clockRef.current() - (settings.inputLatencyMs || 0) / 1000);
     setNoteStates(grader.states());
-  }, [settings.keySound]);
+  }, [onNotify, onSettings, settings.inputLatencyMs, settings.keySound]);
 
   const connectMidiWithSound = useCallback(() => {
     // Start both permission-gated operations inside the same click.
@@ -281,6 +327,56 @@ export default function PracticeView({
     playPianoNote(at + 0.22, 67, 0.9, 0.52);
     onNotify?.('Sound is on');
   }, [onNotify, prepareSound]);
+
+  const startCalibration = useCallback(async () => {
+    stopEverything();
+    const calibrationScore = {
+      ...score,
+      tempo: 60,
+      totalTicks: 0,
+      staves: { rh: [], lh: [] },
+    };
+    const media = startPracticePlayback({
+      score: calibrationScore,
+      metronome: false,
+      countInBeats: 4,
+      onEnd: () => {
+        if (!calibrationRef.current) return;
+        calibrationRef.current = null;
+        playbackRef.current = null;
+        setCalibration((current) => ({ ...current, phase: 'idle' }));
+      },
+    });
+    if (!media) {
+      onNotify?.('Timing calibration is unavailable in this browser.', 'down');
+      return;
+    }
+    playbackRef.current = media;
+    calibrationRef.current = {
+      media,
+      expected: Array.from({ length: 4 }, (_, index) => media.leadIn + index),
+      used: new Set(),
+      samples: [],
+    };
+    setCalibration({ phase: 'active', taps: 0, offset: settings.inputLatencyMs || 0 });
+    if (!(await media.started)) {
+      calibrationRef.current = null;
+      playbackRef.current = null;
+      setCalibration((current) => ({ ...current, phase: 'idle' }));
+      onNotify?.('Your browser blocked the calibration clicks.', 'down');
+    }
+  }, [onNotify, score, settings.inputLatencyMs, stopEverything]);
+
+  const toggleStandMode = useCallback(() => {
+    const next = !standMode;
+    setStandMode(next);
+    document.documentElement.classList.toggle('sr-stand-mode', next);
+    if (next && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => {});
+    } else if (!next && document.fullscreenElement && document.exitFullscreen) {
+      void document.exitFullscreen().catch(() => {});
+    }
+  }, [standMode]);
 
   const handleNoteOff = useCallback((midiNote) => {
     setHeld((prev) => { const n = new Set(prev); n.delete(midiNote); return n; });
@@ -324,7 +420,7 @@ export default function PracticeView({
     ? Math.max(1, Math.ceil(-tick / (score.ts.beat)) )
     : null;
 
-  const busy = phase === 'playing' || phase === 'countin' || listening || audioBusy;
+  const busy = phase === 'playing' || phase === 'countin' || listening || audioBusy || calibration.phase === 'active';
   const qualifies = freshRead && !previewed && !settings.guideKeys && settings.curtain === 'off';
   const targetedIds = score.params.targeted || [];
   const focusIds = targetedIds.length ? targetedIds : (level?.focus || []);
@@ -332,6 +428,16 @@ export default function PracticeView({
     .map((id) => SKILLS.find((skill) => skill.id === id)?.label)
     .filter(Boolean)
     .slice(0, 3);
+  const focusReason = targetedIds.length
+    ? `Selected from your recent reads to strengthen ${focusLabels.join(' and ').toLowerCase()}.`
+    : level
+      ? 'A balanced check of this level before the path adapts again.'
+      : 'Built from the musical and technical limits you selected.';
+  const sessionLabel = session?.remaining == null
+    ? 'Open practice'
+    : session.complete
+      ? `${session.takes} ${session.takes === 1 ? 'read' : 'reads'} complete`
+      : `${formatClock(session.remaining)} · ${session.takes} ${session.takes === 1 ? 'read' : 'reads'}`;
 
   const copyLink = async () => {
     const ok = await copyText(window.location.href);
@@ -375,43 +481,39 @@ export default function PracticeView({
         <div className="sr-readbrief-item">
           <span className="sr-readbrief-label">Focus</span>
           <strong>{focusLabels.length ? focusLabels.join(' · ') : 'Build a clean baseline'}</strong>
+          <span className="sr-why">{focusReason}</span>
         </div>
-        {level && (
-          <div className="sr-readbrief-item sr-readbrief-goal">
-            <span className="sr-readbrief-label">Path</span>
-            <strong>{strongReads}/2 fresh reads at 88+</strong>
-          </div>
-        )}
+        <div className="sr-readbrief-item sr-readbrief-session">
+          <label>
+            <span className="sr-readbrief-label">Session</span>
+            <select
+              value={settings.sessionMinutes || 0}
+              onChange={(event) => onSettings({ sessionMinutes: Number(event.target.value) })}
+              disabled={busy}
+            >
+              <option value={0}>Open practice</option>
+              <option value={5}>5-minute set</option>
+              <option value={10}>10-minute set</option>
+            </select>
+          </label>
+          <strong>{sessionLabel}</strong>
+          {level && <span className="sr-why">Path: {strongReads}/2 fresh reads at 88+</span>}
+        </div>
       </section>
 
       <div className="sr-scorecard">
         <div className="sr-scorehead">
           <div className="sr-scoreidentity">
             <div className="sr-scorekicker">
-              <span>Original structured study</span>
-              {score.style?.label && (
-                <span className="sr-stylebadge" title={score.style.description}>{score.style.label}</span>
-              )}
-              {score.form?.label && (
-                <span className="sr-formbadge">{score.form.name || 'Form'} · {score.form.label}</span>
-              )}
-              {score.harmony?.roman && (
-                <span
-                  className="sr-harmonybadge"
-                  title={`${score.harmony.name}; closes ${score.harmony.cadence}`}
-                >{score.harmony.name} · {score.harmony.roman}</span>
-              )}
-              {score.harmony?.cadencePlan && (
-                <span
-                  className="sr-cadencebadge"
-                  title={score.harmony.cadences.map((item) => `${item.short}: ${item.name} (${item.roman})`).join(' → ')}
-                >Cadences {score.harmony.cadencePlan}</span>
-              )}
+              <span>Original study</span>
+              <span className="sr-structure-pill" title={score.style?.description}>
+                {score.style?.label} · {score.form?.name}
+              </span>
               {score.compositionReview && (
                 <span
                   className={`sr-reviewbadge${score.compositionReview.passed ? ' is-passed' : ''}`}
                   title={`Composition review ${score.compositionReview.score}/100; best of ${score.compositionReview.candidates} candidates`}
-                >Composition checked</span>
+                >✓ reviewed {score.compositionReview.score}</span>
               )}
             </div>
             <h2 className="sr-scoretitle">{score.title}</h2>
@@ -419,6 +521,17 @@ export default function PracticeView({
               {keyLabel(score.key)} · {score.ts.name} · ♩= {score.tempo} · {score.measures} bars
               {level ? <> · Level {level.id} <span className="sr-dim">{level.name}</span></> : null}
             </p>
+            <details className="sr-structure">
+              <summary>Structure</summary>
+              <div className="sr-structure-grid">
+                <div><span>Form</span><strong>{score.form.name} · {score.form.label}</strong></div>
+                <div><span>Harmony model</span><strong>{score.harmony.sourceProgression || score.harmony.name}</strong></div>
+                <div><span>Chord path</span><strong>{score.harmony.roman}</strong></div>
+                <div><span>Cadences</span><strong>{score.harmony.cadencePlan}</strong></div>
+                <div><span>Phrase functions</span><strong>{score.form.phrases?.map((item) => item.function).join(' → ')}</strong></div>
+                <div><span>Quality gate</span><strong>Best of {score.compositionReview?.candidates || 1} candidates · {score.compositionReview?.score || '—'}/100</strong></div>
+              </div>
+            </details>
           </div>
           <div className="sr-seed" title="The short seed replays this variation with the same setup. The copied link includes the full setup.">
             <span className="sr-seed-label">Exercise ID</span>
@@ -441,6 +554,14 @@ export default function PracticeView({
           />
           {countdown != null && (
             <div className="sr-countin" aria-live="polite">{countdown}</div>
+          )}
+          {settings.colourNotes && Object.keys(noteStates).length > 0 && (
+            <div className="sr-feedback-legend" aria-label="Score feedback key">
+              <span><b aria-hidden="true">✓</b> correct</span>
+              <span><b aria-hidden="true">△</b> early or late</span>
+              <span><b aria-hidden="true">×</b> wrong</span>
+              <span><b aria-hidden="true">○</b> missed</span>
+            </div>
           )}
         </div>
       </div>
@@ -519,6 +640,19 @@ export default function PracticeView({
                   {CURTAIN_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                 </select>
               </label>
+              <div className="sr-calibration">
+                <div>
+                  <strong>Timing calibration</strong>
+                  <span>
+                    {calibration.phase === 'active'
+                      ? `Tap any key with each click · ${calibration.taps}/4`
+                      : `Current correction: ${(settings.inputLatencyMs || 0) > 0 ? '+' : ''}${settings.inputLatencyMs || 0} ms`}
+                  </span>
+                </div>
+                <button type="button" className="sr-btn sr-btn--small" onClick={startCalibration} disabled={busy}>
+                  {calibration.phase === 'done' ? 'Recalibrate' : 'Calibrate'}
+                </button>
+              </div>
             </div>
           </details>
           <details className="sr-aids sr-more">
@@ -531,6 +665,9 @@ export default function PracticeView({
                 onClick={() => downloadMusicXml(score, settings.showFingerings)}
                 disabled={busy}
               >Export MusicXML</button>
+              <button type="button" className="sr-btn sr-btn--ghost" onClick={toggleStandMode} disabled={busy}>
+                {standMode ? 'Exit music stand' : 'Music stand mode'}
+              </button>
             </div>
           </details>
         </div>
@@ -672,6 +809,12 @@ function ResultPanel({ result, onAgain, onNext, onRepair, tempo, repeat, assiste
       )}
     </section>
   );
+}
+
+function formatClock(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = String(seconds % 60).padStart(2, '0');
+  return `${minutes}:${remainder} left`;
 }
 
 function soundLabel(state) {

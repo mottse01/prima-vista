@@ -43,13 +43,15 @@ test('generated studies use a clear phrase form and repeat their rhythmic idea',
     .filter((note) => Math.floor(note.onset / score.ts.ticks) === measure)
     .map((note) => [note.onset % score.ts.ticks, note.duration, note.rest, note.cellId]);
 
-  assert.equal(score.form.label, 'A–A′');
-  assert.equal(score.form.name, 'Parallel period');
+  assert.equal(score.form.phrases.length, 2);
+  assert.ok(score.form.phrases.every((phrase) => phrase.function));
   assert.deepEqual(signature(0), signature(2));
-  assert.deepEqual(signature(0), signature(4));
+  const classical = planMusicalForm(8, 'classical');
+  assert.equal(classical.name, 'Parallel period');
+  assert.equal(classical.label, 'A–A′');
   assert.equal(planMusicalForm(16).label, 'A–A′–B–A″');
   assert.equal(planMusicalForm(16).name, 'Rounded binary');
-  assert.equal(planMusicalForm(24).name, 'Extended ternary');
+  assert.equal(planMusicalForm(24).name, 'Extended sectional form');
 });
 
 test('selectable styles use coherent, distinct composition grammars', () => {
@@ -71,7 +73,7 @@ test('selectable styles use coherent, distinct composition grammars', () => {
     assert.equal(score.style.id, style);
     assert.equal(score.form.styleId, style);
     assert.ok(score.harmony.styles.includes(style));
-    assert.equal(score.compositionReview.metrics.styleCoherence, 1);
+    assert.ok(score.compositionReview.metrics.styleCoherence >= 0.72);
     assert.equal(score.compositionReview.passed, true);
     formNames.add(score.form.name);
   }
@@ -122,10 +124,11 @@ test('every study follows a named progression with a varied common cadence plan'
       const template = COMMON_PROGRESSIONS[mode].find((item) => item.id === score.harmony.id);
 
       assert.ok(template);
-      assert.equal(score.harmony.name, template.name);
-      assert.deepEqual(score.harmony.degrees, [...template.degrees]);
+      assert.equal(score.harmony.sourceProgression, template.name);
+      assert.equal(score.harmony.degrees.length, score.chords.length);
+      assert.ok(score.harmony.sectionPlans.length >= 1);
       for (const chord of score.chords.filter((item) => item.source === 'progression')) {
-        assert.equal(chord.degree, template.degrees[chord.index % template.degrees.length]);
+        assert.equal(chord.degree, chord.plannedDegree);
       }
       for (const cadence of score.harmony.cadences) {
         assert.equal(COMMON_CADENCES[cadence.id].name, cadence.name);
@@ -139,12 +142,51 @@ test('every study follows a named progression with a varied common cadence plan'
       finalCadences.add(final.id);
       finalPairs.add(final.degrees.join(','));
       assert.equal(score.compositionReview.passed, true);
-      assert.equal(score.compositionReview.candidates, 4);
+      assert.equal(score.compositionReview.candidates, 16);
     }
   }
 
   assert.ok(finalCadences.size >= 3);
   assert.ok([...finalPairs].some((pair) => pair !== '4,0'));
+});
+
+test('perfect authentic cadences preserve root-position V–I in the realised bass', () => {
+  let checked = 0;
+  for (let seed = 1; seed <= 80; seed++) {
+    const score = generateExercise({
+      ...paramsForLevel(12, emptyProfile(), { seed }),
+      compositionStyle: 'classical',
+      measures: 8,
+      chordsPerMeasure: 2,
+      hands: 'both',
+      lhStyle: 'blocked',
+      allowInversions: true,
+    });
+    for (const cadence of score.harmony.cadences.filter((item) => item.id === 'authentic')) {
+      checked += 1;
+      assert.equal(score.compositionReview.metrics.strictPac, 1);
+      assert.equal(score.compositionReview.metrics.cadenceBass, 1);
+      assert.deepEqual(cadence.degrees, [4, 0]);
+    }
+  }
+  assert.ok(checked > 10);
+});
+
+test('formal grammar assigns phrase functions, cadence hierarchy, and sectional contrast', () => {
+  const pop = generateExercise({
+    ...paramsForLevel(12, emptyProfile(), { seed: 97531 }),
+    compositionStyle: 'pop',
+    measures: 16,
+    timeSignature: '4/4',
+    hands: 'both',
+    lhStyle: 'broken',
+  });
+  assert.deepEqual(pop.form.phrases.map((phrase) => phrase.function), [
+    'verse', 'verse development', 'pre-chorus', 'chorus',
+  ]);
+  assert.equal(pop.form.phrases[0].energy < pop.form.phrases.at(-1).energy, true);
+  assert.equal(pop.compositionReview.metrics.phraseHierarchy, 1);
+  assert.ok(pop.compositionReview.metrics.sectionContrast >= 0.12);
 });
 
 test('the composition critic rejects a broken harmonic plan', () => {

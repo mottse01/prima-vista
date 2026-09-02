@@ -4,10 +4,6 @@ import { TIME_SIGNATURES } from '../core/rhythm.js';
 import { codeToSeed, randomSeed, seedToCode } from '../core/rng.js';
 import { STYLE_OPTIONS, styleSetupPatch } from '../core/compositionStyles.js';
 
-// The custom builder. Sight Reading Factory's real strength is how finely a
-// teacher can specify an exercise; this matches that and adds the things it
-// cannot do — an exact share link, and a live left-hand texture choice.
-
 const FIFTHS = [-7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
 
 const RHYTHM_OPTIONS = [
@@ -38,7 +34,6 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
 
   const set = (patch) => onChange({ ...params, ...patch });
   const toggleIn = (list, value) => (list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
-
   const keyOptions = useMemo(
     () => FIFTHS.map((f) => ({ f, label: KEY_NAMES[params.keyMode][String(f)] })),
     [params.keyMode],
@@ -46,224 +41,205 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
 
   return (
     <div className="sr-setup">
-      <p className="sr-setup-lead">
-        Set the parameters and the composition engine writes an original motivic study to match —
-        a clear musical idea, purposeful variation, and a real cadence every time.
-      </p>
+      <div className="sr-setup-heading">
+        <div>
+          <span className="sr-eyebrow">Custom study</span>
+          <h2>Set the musical essentials.</h2>
+        </div>
+        <p>The composer handles phrase shape, repetition, harmony, cadences, and engraving. Open advanced controls only when you need them.</p>
+      </div>
 
-      <div className="sr-setup-grid">
-        <Group title="Composition style" className="sr-group--style">
+      <div className="sr-setup-grid sr-setup-grid--basic">
+        <Group title="Style" className="sr-group--style">
           <div className="sr-stylegrid" role="radiogroup" aria-label="Composition style">
             {STYLE_OPTIONS.map((style) => {
               const selected = (params.compositionStyle || 'auto') === style.id;
               return (
-                <button
-                  key={style.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  className={`sr-stylechoice${selected ? ' is-on' : ''}`}
-                  onClick={() => set(styleSetupPatch(style.id, params))}
-                >
+                <label key={style.id} className={`sr-stylechoice${selected ? ' is-on' : ''}`}>
+                  <input
+                    type="radio"
+                    name="composition-style"
+                    value={style.id}
+                    checked={selected}
+                    onChange={() => set(styleSetupPatch(style.id, params))}
+                  />
                   <strong>{style.label}</strong>
                   <span>{style.description}</span>
-                </button>
+                </label>
               );
             })}
           </div>
-          <p className="sr-hint">
-            Style changes the form, harmonic vocabulary, cadences, and melodic behavior. Blues
-            also selects 12-bar 4/4; Waltz selects 3/4. You can adjust any control afterward.
-          </p>
         </Group>
 
-        <Group title="Key">
-          <div className="sr-segmented">
-            {['major', 'minor'].map((m) => (
+        <Group title="Key, metre & length">
+          <div className="sr-segmented" aria-label="Mode">
+            {['major', 'minor'].map((mode) => (
               <button
-                key={m} type="button"
-                className={`sr-seg${params.keyMode === m ? ' is-on' : ''}`}
-                onClick={() => set({ keyMode: m })}
-              >{m}</button>
+                key={mode} type="button"
+                className={`sr-seg${params.keyMode === mode ? ' is-on' : ''}`}
+                aria-pressed={params.keyMode === mode}
+                onClick={() => set({ keyMode: mode })}
+              >{mode}</button>
             ))}
           </div>
-          <div className="sr-chips">
+          <div className="sr-chips sr-chips--keys" aria-label="Key">
             {keyOptions.map(({ f, label }) => (
               <button
                 key={f} type="button"
                 className={`sr-chip${params.keyFifths === f ? ' is-on' : ''}`}
+                aria-pressed={params.keyFifths === f}
                 onClick={() => set({ keyFifths: f })}
               >{label}</button>
             ))}
           </div>
-        </Group>
-
-        <Group title="Metre">
-          <div className="sr-chips">
-            {Object.keys(TIME_SIGNATURES).map((name) => (
-              <button
-                key={name} type="button"
-                className={`sr-chip${params.timeSignature === name ? ' is-on' : ''}`}
-                onClick={() => set({ timeSignature: name })}
-              >{name}</button>
-            ))}
+          <div className="sr-builder-row">
+            <label className="sr-field">
+              <span>Metre</span>
+              <select value={params.timeSignature} onChange={(event) => set({ timeSignature: event.target.value })}>
+                {Object.keys(TIME_SIGNATURES).map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label className="sr-field">
+              <span>Length</span>
+              <select value={params.measures} onChange={(event) => set({ measures: Number(event.target.value) })}>
+                {[4, 8, 12, 16, 24].map((bars) => <option key={bars} value={bars}>{bars} bars</option>)}
+              </select>
+            </label>
           </div>
           <Slider label="Tempo" suffix=" bpm" min={30} max={180} step={2}
-            value={params.tempo} onChange={(v) => set({ tempo: v })} />
-          <div className="sr-chips">
-            {[4, 8, 12, 16, 24].map((m) => (
-              <button
-                key={m} type="button"
-                className={`sr-chip${params.measures === m ? ' is-on' : ''}`}
-                onClick={() => set({ measures: m })}
-              >{m} bars</button>
-            ))}
-          </div>
+            value={params.tempo} onChange={(value) => set({ tempo: value })} />
         </Group>
 
-        <Group title="Rhythm">
-          <div className="sr-chips">
-            {RHYTHM_OPTIONS.map((o) => (
-              <button
-                key={o.id} type="button"
-                className={`sr-chip${params.rhythmTags.includes(o.id) ? ' is-on' : ''}`}
-                onClick={() => set({ rhythmTags: toggleIn(params.rhythmTags, o.id) })}
-              >{o.label}</button>
-            ))}
-          </div>
-          <Slider label="Rest frequency" min={0} max={0.4} step={0.02}
-            value={params.restRate} format={(v) => `${Math.round(v * 100)}%`}
-            onChange={(v) => set({ restRate: v })} />
-        </Group>
-
-        <Group title="Hands & texture">
+        <Group title="Hands">
           <div className="sr-segmented">
             {[['both', 'Both hands'], ['rh', 'Right only'], ['lh', 'Left only']].map(([id, label]) => (
               <button
                 key={id} type="button"
                 className={`sr-seg${params.hands === id ? ' is-on' : ''}`}
+                aria-pressed={params.hands === id}
                 onClick={() => set({ hands: id })}
               >{label}</button>
             ))}
           </div>
           <label className="sr-field">
-            <span>Left-hand pattern</span>
-            <select value={params.lhStyle} onChange={(e) => set({ lhStyle: e.target.value })} disabled={params.hands === 'rh'}>
-              {LH_STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            <span>Left-hand texture</span>
+            <select value={params.lhStyle} onChange={(event) => set({ lhStyle: event.target.value })} disabled={params.hands === 'rh'}>
+              {LH_STYLES.map((style) => <option key={style.id} value={style.id}>{style.label}</option>)}
             </select>
           </label>
-          <label className="sr-field">
-            <span>Chords per bar</span>
-            <select value={params.chordsPerMeasure} onChange={(e) => set({ chordsPerMeasure: Number(e.target.value) })} disabled={params.hands === 'rh'}>
-              <option value={1}>1 — one chord per bar</option>
-              <option value={2}>2 — faster harmonic rhythm</option>
-            </select>
-          </label>
-          <Check label="Seventh chords" checked={params.allowSevenths} disabled={params.hands === 'rh'} onChange={(v) => set({ allowSevenths: v })} />
-          <Check label="Inversions (moving bass line)" checked={params.allowInversions} disabled={params.hands === 'rh'} onChange={(v) => set({ allowInversions: v })} />
-        </Group>
-
-        <Group title="Range">
-          <RangeRow
-            label="Right hand" low={params.rhLow} high={params.rhHigh}
-            min={21} max={45}
-            onLow={(v) => set({ rhLow: Math.min(v, params.rhHigh - 2) })}
-            onHigh={(v) => set({ rhHigh: Math.max(v, params.rhLow + 2) })}
-          />
-          <RangeRow
-            label="Left hand" low={params.lhLow} high={params.lhHigh}
-            min={8} max={32}
-            onLow={(v) => set({ lhLow: Math.min(v, params.lhHigh - 2) })}
-            onHigh={(v) => set({ lhHigh: Math.max(v, params.lhLow + 2) })}
-          />
-          <p className="sr-hint">
-            Widen these past the staff to drill ledger lines — the exact gap most readers never close.
-          </p>
-        </Group>
-
-        <Group title="Melodic shape">
-          <Slider label="Largest leap" suffix=" steps" min={1} max={7} step={1}
-            value={params.maxLeap} onChange={(v) => set({ maxLeap: v })} />
-          <Slider label="Stepwise motion" min={0.3} max={0.95} step={0.05}
-            value={params.stepwiseBias} format={(v) => `${Math.round(v * 100)}%`}
-            onChange={(v) => set({ stepwiseBias: v })} />
-          <Slider label="Non-chord tones" min={0} max={0.6} step={0.05}
-            value={params.nonChordRate} format={(v) => `${Math.round(v * 100)}%`}
-            onChange={(v) => set({ nonChordRate: v })} />
-          <Slider label="Chromaticism" min={0} max={0.6} step={0.05}
-            value={params.chromaticRate} format={(v) => `${Math.round(v * 100)}%`}
-            onChange={(v) => set({ chromaticRate: v })} />
-        </Group>
-
-        <Group title="Notation">
-          <Check label="Dynamics" checked={params.dynamics} onChange={(v) => set({ dynamics: v })} />
-          <Check label="Articulations" checked={params.articulations} onChange={(v) => set({ articulations: v })} />
-          <Check label="Phrase slurs" checked={params.slurs} onChange={(v) => set({ slurs: v })} />
-          <Check label="Fingering hints" checked={params.fingerings} onChange={(v) => set({ fingerings: v })} />
-        </Group>
-
-        <Group title="Variation seed">
-          <p className="sr-hint">
-            A seed recreates a variation with these settings. To give someone the exact music and
-            setup, generate it and use “Copy exact link” on the practice screen.
-          </p>
-          <div className="sr-row">
-            <input
-              className="sr-input" placeholder={seedToCode(params.seed || 0)} value={seedInput}
-              onChange={(e) => { setSeedInput(e.target.value); setSeedError(''); }} aria-label="Variation seed"
-            />
-            <button
-              type="button" className="sr-btn sr-btn--small"
-              onClick={() => {
-                const s = codeToSeed(seedInput);
-                if (s != null) onGenerate({ ...params, seed: s });
-                else setSeedError('Enter a valid alphanumeric seed (usually 6 characters).');
-              }}
-            >Load seed</button>
-          </div>
-          {seedError && <p className="sr-field-error" role="alert">{seedError}</p>}
-        </Group>
-
-        <Group title="Presets">
-          <div className="sr-row">
-            <input
-              className="sr-input" placeholder="Name this setup" value={presetName}
-              onChange={(e) => setPresetName(e.target.value)} aria-label="Preset name"
-            />
-            <button
-              type="button" className="sr-btn sr-btn--small"
-              onClick={() => { if (presetName.trim()) { onSavePreset(presetName.trim(), params); setPresetName(''); } }}
-            >Save</button>
-          </div>
-          <ul className="sr-presets">
-            {presets.length === 0 && <li className="sr-hint">No saved setups yet.</li>}
-            {presets.map((p) => (
-              <li key={p.id}>
-                <button type="button" className="sr-linkbtn" onClick={() => onLoadPreset(p)}>{p.name}</button>
-                <button type="button" className="sr-linkbtn sr-linkbtn--danger" onClick={() => onDeletePreset(p.id)}>remove</button>
-              </li>
-            ))}
-          </ul>
+          <p className="sr-hint">Style chooses a sensible default; the texture remains editable.</p>
         </Group>
       </div>
 
+      <details className="sr-advanced">
+        <summary>
+          <span>Advanced controls</span>
+          <small>Rhythm, harmony, range, melodic behavior, and notation</small>
+        </summary>
+        <div className="sr-setup-grid">
+          <Group title="Rhythm vocabulary">
+            <div className="sr-chips">
+              {RHYTHM_OPTIONS.map((option) => (
+                <button
+                  key={option.id} type="button"
+                  className={`sr-chip${params.rhythmTags.includes(option.id) ? ' is-on' : ''}`}
+                  aria-pressed={params.rhythmTags.includes(option.id)}
+                  onClick={() => set({ rhythmTags: toggleIn(params.rhythmTags, option.id) })}
+                >{option.label}</button>
+              ))}
+            </div>
+            <Slider label="Rest frequency" min={0} max={0.4} step={0.02}
+              value={params.restRate} format={(value) => `${Math.round(value * 100)}%`}
+              onChange={(value) => set({ restRate: value })} />
+          </Group>
+
+          <Group title="Harmony & accompaniment">
+            <label className="sr-field">
+              <span>Chords per bar</span>
+              <select value={params.chordsPerMeasure} onChange={(event) => set({ chordsPerMeasure: Number(event.target.value) })} disabled={params.hands === 'rh'}>
+                <option value={1}>1 — spacious</option>
+                <option value={2}>2 — more movement</option>
+              </select>
+            </label>
+            <Check label="Seventh chords" checked={params.allowSevenths} disabled={params.hands === 'rh'} onChange={(value) => set({ allowSevenths: value })} />
+            <Check label="Inversions and moving bass" checked={params.allowInversions} disabled={params.hands === 'rh'} onChange={(value) => set({ allowInversions: value })} />
+          </Group>
+
+          <Group title="Range">
+            <RangeRow label="Right hand" low={params.rhLow} high={params.rhHigh} min={21} max={45}
+              onLow={(value) => set({ rhLow: Math.min(value, params.rhHigh - 2) })}
+              onHigh={(value) => set({ rhHigh: Math.max(value, params.rhLow + 2) })} />
+            <RangeRow label="Left hand" low={params.lhLow} high={params.lhHigh} min={8} max={32}
+              onLow={(value) => set({ lhLow: Math.min(value, params.lhHigh - 2) })}
+              onHigh={(value) => set({ lhHigh: Math.max(value, params.lhLow + 2) })} />
+          </Group>
+
+          <Group title="Melodic behavior">
+            <Slider label="Largest leap" suffix=" steps" min={1} max={7} step={1}
+              value={params.maxLeap} onChange={(value) => set({ maxLeap: value })} />
+            <Slider label="Stepwise motion" min={0.3} max={0.95} step={0.05}
+              value={params.stepwiseBias} format={(value) => `${Math.round(value * 100)}%`}
+              onChange={(value) => set({ stepwiseBias: value })} />
+            <Slider label="Non-chord tones" min={0} max={0.6} step={0.05}
+              value={params.nonChordRate} format={(value) => `${Math.round(value * 100)}%`}
+              onChange={(value) => set({ nonChordRate: value })} />
+            <Slider label="Chromaticism" min={0} max={0.6} step={0.05}
+              value={params.chromaticRate} format={(value) => `${Math.round(value * 100)}%`}
+              onChange={(value) => set({ chromaticRate: value })} />
+          </Group>
+
+          <Group title="Notation">
+            <Check label="Dynamics" checked={params.dynamics} onChange={(value) => set({ dynamics: value })} />
+            <Check label="Articulations" checked={params.articulations} onChange={(value) => set({ articulations: value })} />
+            <Check label="Phrase slurs" checked={params.slurs} onChange={(value) => set({ slurs: value })} />
+            <Check label="Fingering hints" checked={params.fingerings} onChange={(value) => set({ fingerings: value })} />
+          </Group>
+
+          <Group title="Variation seed">
+            <p className="sr-hint">A seed recreates a variation with this setup. The practice screen can share the exact finished exercise.</p>
+            <div className="sr-row">
+              <input className="sr-input" placeholder={seedToCode(params.seed || 0)} value={seedInput}
+                onChange={(event) => { setSeedInput(event.target.value); setSeedError(''); }} aria-label="Variation seed" />
+              <button type="button" className="sr-btn sr-btn--small" onClick={() => {
+                const seed = codeToSeed(seedInput);
+                if (seed != null) onGenerate({ ...params, seed });
+                else setSeedError('Enter a valid alphanumeric seed (usually 6 characters).');
+              }}>Load seed</button>
+            </div>
+            {seedError && <p className="sr-field-error" role="alert">{seedError}</p>}
+          </Group>
+
+          <Group title="Presets">
+            <div className="sr-row">
+              <input className="sr-input" placeholder="Name this setup" value={presetName}
+                onChange={(event) => setPresetName(event.target.value)} aria-label="Preset name" />
+              <button type="button" className="sr-btn sr-btn--small" onClick={() => {
+                if (presetName.trim()) { onSavePreset(presetName.trim(), params); setPresetName(''); }
+              }}>Save</button>
+            </div>
+            <ul className="sr-presets">
+              {presets.length === 0 && <li className="sr-hint">No saved setups yet.</li>}
+              {presets.map((preset) => (
+                <li key={preset.id}>
+                  <button type="button" className="sr-linkbtn" onClick={() => onLoadPreset(preset)}>{preset.name}</button>
+                  <button type="button" className="sr-linkbtn sr-linkbtn--danger" onClick={() => onDeletePreset(preset.id)}>remove</button>
+                </li>
+              ))}
+            </ul>
+          </Group>
+        </div>
+      </details>
+
       <div className="sr-setup-actions">
-        <button
-          type="button" className="sr-btn sr-btn--primary sr-btn--large"
-          onClick={() => onGenerate({ ...params, seed: randomSeed() })}
-        >Generate exercise</button>
+        <button type="button" className="sr-btn sr-btn--primary sr-btn--large"
+          onClick={() => onGenerate({ ...params, seed: randomSeed() })}>Generate study</button>
       </div>
     </div>
   );
 }
 
 function Group({ title, children, className = '' }) {
-  return (
-    <section className={`sr-group${className ? ` ${className}` : ''}`}>
-      <h3>{title}</h3>
-      {children}
-    </section>
-  );
+  return <section className={`sr-group${className ? ` ${className}` : ''}`}><h3>{title}</h3>{children}</section>;
 }
 
 function Slider({ label, value, min, max, step, onChange, suffix = '', format }) {
@@ -271,7 +247,7 @@ function Slider({ label, value, min, max, step, onChange, suffix = '', format })
     <label className="sr-field sr-field--slider">
       <span>{label} <b>{format ? format(value) : value}{suffix}</b></span>
       <input type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(Number(e.target.value))} />
+        onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   );
 }
@@ -279,7 +255,7 @@ function Slider({ label, value, min, max, step, onChange, suffix = '', format })
 function Check({ label, checked, disabled = false, onChange }) {
   return (
     <label className="sr-toggle">
-      <input type="checkbox" checked={Boolean(checked)} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" checked={Boolean(checked)} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>
   );
@@ -290,16 +266,8 @@ function RangeRow({ label, low, high, min, max, onLow, onHigh }) {
     <div className="sr-rangerow">
       <span className="sr-rangerow-label">{label}</span>
       <div className="sr-rangerow-controls">
-        <label>
-          <span className="sr-dim">from</span>
-          <input type="range" min={min} max={max} value={low} onChange={(e) => onLow(Number(e.target.value))} />
-          <b>{diaName(low)}</b>
-        </label>
-        <label>
-          <span className="sr-dim">to</span>
-          <input type="range" min={min} max={max} value={high} onChange={(e) => onHigh(Number(e.target.value))} />
-          <b>{diaName(high)}</b>
-        </label>
+        <label><span className="sr-dim">from</span><input type="range" min={min} max={max} value={low} onChange={(event) => onLow(Number(event.target.value))} /><b>{diaName(low)}</b></label>
+        <label><span className="sr-dim">to</span><input type="range" min={min} max={max} value={high} onChange={(event) => onHigh(Number(event.target.value))} /><b>{diaName(high)}</b></label>
       </div>
     </div>
   );

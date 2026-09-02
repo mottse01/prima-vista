@@ -69,38 +69,45 @@ function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks, requiredTag = nu
  * variation, not literal duplication, which is how short pedagogical studies
  * stay recognisable without becoming memorisation drills.
  */
-export function planMusicalForm(measures, styleId = 'classical') {
+export function planMusicalForm(measures, styleId = 'classical', rng = null) {
   const phraseCount = Math.max(1, Math.ceil(measures / 4));
-  const { name, sections } = formForStyle(styleId, phraseCount);
+  const { name, sections, phrases } = formForStyle(styleId, phraseCount, rng);
 
   const plan = [];
   for (let m = 0; m < measures; m++) {
     const phrase = Math.min(sections.length - 1, Math.floor(m / 4));
-    const section = sections[phrase];
+    const phraseSpec = phrases[phrase];
+    const section = phraseSpec.section;
     const base = section.charAt(0);
     const barInPhrase = m % 4;
     const motifBar = barInPhrase % 2;
-    const variant = (section.match(/[′″‴]/g) || []).reduce((count, mark) => (
-      count + (mark === '′' ? 1 : mark === '″' ? 2 : 3)
-    ), 0);
+    const motifBase = phraseSpec.transform === 'fragment' || phraseSpec.transform === 'return'
+      ? 'A' : base;
+    const shift = phraseSpec.transform === 'sequence'
+      ? (phrase % 2 ? 1 : -1)
+      : phraseSpec.transform === 'variation' ? (base === 'A' ? 1 : -1) : 0;
     plan.push({
       measure: m,
       phrase,
       section,
-      motifKey: `${base}${motifBar}`,
-      role: phrase === 0 && barInPhrase < 2
-        ? 'statement'
-        : base !== 'A' && !plan.some((p) => p.motifKey === `${base}${motifBar}`)
-          ? 'contrast'
-          : variant >= 2 || (phrase === sections.length - 1 && base === 'A')
-            ? 'return'
-            : 'echo',
-      shift: variant === 1 ? (base === 'A' ? 1 : -1) : 0,
-      cadence: barInPhrase === 3 || m === measures - 1,
+      phraseFunction: phraseSpec.function,
+      energy: phraseSpec.energy,
+      density: phraseSpec.density,
+      harmonicRole: phraseSpec.harmonicRole,
+      transform: phraseSpec.transform,
+      registerShift: phraseSpec.registerShift,
+      cadenceStrength: phraseSpec.cadenceStrength,
+      motifKey: `${motifBase}${motifBar}`,
+      role: phraseSpec.transform,
+      shift,
+      cadence: (phraseSpec.cadence && barInPhrase === 3) || m === measures - 1,
     });
   }
 
-  return { name, label: sections.join('–'), sections, plan, phraseLength: 4, styleId };
+  return {
+    name, label: sections.join('–'), sections, phrases,
+    plan, phraseLength: 4, styleId,
+  };
 }
 
 function realiseCadenceAttack(events, arrivalOnset) {
@@ -132,6 +139,31 @@ function realiseCadenceAttack(events, arrivalOnset) {
   return realised;
 }
 
+/** Give continuation/chorus phrases perceptibly greater rhythmic momentum. */
+function transformRhythm(events, ts, spec, canSubdivide) {
+  if (!canSubdivide || !spec || spec.density < 3) return events;
+  const transformed = [];
+  for (const event of events) {
+    const maySplit = !event.rest
+      && event.duration >= ts.beat
+      && event.duration % 2 === 0;
+    if (!maySplit) {
+      transformed.push(event);
+      continue;
+    }
+    const half = event.duration / 2;
+    transformed.push({ ...event, duration: half, tags: [...event.tags, 'formal-fragment'] });
+    transformed.push({
+      ...event,
+      onset: event.onset + half,
+      duration: half,
+      motifIndex: Number(event.motifIndex || 0) + 0.5,
+      tags: [...event.tags, 'formal-fragment'],
+    });
+  }
+  return transformed;
+}
+
 /** Rhythm for the whole line, with motivic echoes and cadential arrivals. */
 function buildRhythm(
   rng,
@@ -147,6 +179,10 @@ function buildRhythm(
   const required = [...new Set(focusTags)].slice(0, Math.max(0, measures - 1));
   const prototypes = new Map();
   let focusIndex = 0;
+  const canSubdivide = cellIds.some((id) => {
+    const cell = getCell(id);
+    return cell?.tags?.some((tag) => ['eighth', 'sixteenth', 'triplet'].includes(tag));
+  });
 
   for (let m = 0; m < measures; m++) {
     const offsetTicks = m * ts.ticks;
@@ -183,13 +219,16 @@ function buildRhythm(
       prototypes.set(spec.motifKey, relative);
     }
 
-    let measureEvents = relative.map((event) => ({
+    const shaped = transformRhythm(relative, ts, spec, canSubdivide);
+    let measureEvents = shaped.map((event) => ({
       ...event,
       onset: event.onset + offsetTicks,
       motifKey: spec.motifKey,
       motifRole: spec.role,
       motifShift: spec.shift,
       section: spec.section,
+      phraseFunction: spec.phraseFunction,
+      formalTransform: spec.transform,
       tags: spec.cadence ? [...event.tags, 'phrase-end'] : event.tags,
     }));
     if (spec.cadence) {
@@ -232,7 +271,7 @@ function assignPitches(rng, opts) {
   const {
     key, ts, chords, chordsPerMeasure, rhythm, measures,
     lowDia, highDia, maxLeap, stepwiseBias, nonChordRate, chromaticRate,
-    focusIntervals = [], cadences = [], compositionStyle = null,
+    focusIntervals = [], cadences = [], compositionStyle = null, form = null,
   } = opts;
 
   const styledStepwiseBias = clamp(
@@ -248,12 +287,41 @@ function assignPitches(rng, opts) {
   let lastLeap = 0;
   let lastLeapDir = 0;
   let focusIndex = 0;
+  let prevChord = null;
   const motifPitches = new Map();
 
   const sounded = rhythm.filter((e) => !e.rest);
   const cadenceByMeasure = new Map(cadences.map((item) => [item.measure, item]));
   const lastSoundedByMeasure = new Map();
   sounded.forEach((event, i) => lastSoundedByMeasure.set(Math.floor(event.onset / ts.ticks), i));
+  const phraseStartIndices = new Set();
+  const firstByPhrase = new Map();
+  sounded.forEach((event, i) => {
+    const phraseIndex = Math.floor(event.onset / ts.ticks / 4);
+    if (!firstByPhrase.has(phraseIndex)) {
+      firstByPhrase.set(phraseIndex, i);
+      phraseStartIndices.add(i);
+    }
+  });
+  const highestEnergy = Math.max(1, ...(form?.phrases || []).map((item) => item.energy || 1));
+  const desiredClimax = Math.round((sounded.length - 1) * (compositionStyle?.climaxPosition || 0.62));
+  const climaxPool = sounded
+    .map((event, index) => ({ event, index }))
+    .filter(({ event, index }) => (
+      index > 0
+      && index < sounded.length - 1
+      && !event.cadenceArrival
+      && (form?.phrases?.[Math.floor(event.onset / ts.ticks / 4)]?.energy || 1) === highestEnergy
+    ));
+  const climaxIndex = (climaxPool.length ? climaxPool : sounded.map((event, index) => ({ event, index })))
+    .sort((a, b) => Math.abs(a.index - desiredClimax) - Math.abs(b.index - desiredClimax))[0]?.index ?? 0;
+  const climaxEvent = sounded[climaxIndex];
+  const climaxChord = climaxEvent ? chordAt(chords, ts, chordsPerMeasure, climaxEvent.onset) : chords[0];
+  const climaxCandidates = [];
+  for (let dia = lowDia; dia <= highDia; dia++) {
+    if (isChordTone(key, climaxChord, dia)) climaxCandidates.push(dia);
+  }
+  const climaxDia = climaxCandidates.at(-1) ?? highDia;
 
   for (let i = 0; i < sounded.length; i++) {
     const ev = sounded[i];
@@ -267,20 +335,23 @@ function assignPitches(rng, opts) {
       ? chords[cadence.slots[cadence.slots.length - 1]]
       : chordAt(chords, ts, chordsPerMeasure, ev.onset);
     const isLast = i === sounded.length - 1;
-    const target = archTarget(measure, measures, lowDia, highDia);
+    const phraseSpec = form?.phrases?.[Math.floor(measure / 4)] || null;
+    const target = archTarget(measure, measures, lowDia, highDia)
+      + (phraseSpec?.registerShift || 0);
     const motifId = ev.motifKey ? `${ev.motifKey}:${ev.motifIndex}` : null;
     const remembered = motifId ? motifPitches.get(motifId) : null;
     const motifTarget = remembered == null ? null : remembered + (ev.motifShift || 0);
 
     // Decide whether this slot must be a chord tone.
     let requireChordTone;
-    if (isLast || isCadenceArrival || weight === 2) requireChordTone = true;
+    if (isLast || isCadenceArrival || weight === 2 || phraseStartIndices.has(i) || i === climaxIndex) requireChordTone = true;
     else if (weight === 1) requireChordTone = rng.chance(1 - styledNonChordRate * 0.5);
     else requireChordTone = rng.chance(1 - styledNonChordRate);
     if (lastLeap >= 3) requireChordTone = false; // a leap wants a stepwise answer
 
     let candidates = [];
     for (let d = lowDia; d <= highDia; d++) {
+      if (i !== climaxIndex && highDia - lowDia >= 4 && d >= climaxDia) continue;
       if (requireChordTone && !isChordTone(key, chord, d)) continue;
       candidates.push(d);
     }
@@ -289,7 +360,9 @@ function assignPitches(rng, opts) {
     }
 
     let chosen;
-    if (isCadenceArrival) {
+    if (i === climaxIndex) {
+      chosen = climaxDia;
+    } else if (isCadenceArrival) {
       // The melodic arrival defines the cadence: tonic for PAC/plagal, the
       // third for IAC, dominant for half cadences, and vi/VI for deceptive ones.
       const targets = candidates.filter((d) => scaleDegree(key, d) === cadence.melodyDegree);
@@ -299,6 +372,18 @@ function assignPitches(rng, opts) {
       const pool = candidates.filter((d) => Math.abs(d - target) <= 3);
       chosen = (pool.length ? pool : candidates)[rng.int((pool.length ? pool : candidates).length)];
     } else {
+      // Resolve the two strongest tonal tendencies before applying decorative
+      // motif preferences: the leading tone rises, and a chordal seventh falls.
+      const previousDegree = scaleDegree(key, prev.dia);
+      const previousWasLeading = previousDegree === 6 && prevChord?.fn === 'D';
+      const previousWasSeventh = prevChord?.seventh
+        && previousDegree === (prevChord.degree + 6) % 7;
+      const tendencyTarget = previousWasLeading
+        ? prev.dia + 1
+        : previousWasSeventh ? prev.dia - 1 : null;
+      if (tendencyTarget != null && candidates.includes(tendencyTarget)) {
+        candidates = [tendencyTarget];
+      }
       const focus = focusIntervals[focusIndex];
       let focusApplied = false;
       if (focus) {
@@ -389,24 +474,66 @@ function assignPitches(rng, opts) {
       duration: ev.duration,
       rest: false,
       pitches: [p],
-      tags: ev.tags,
+      tags: blueInflection ? [...ev.tags, 'blue-note'] : ev.tags,
       cellId: ev.cellId,
       chordTone: isChordTone(key, chord, chosen),
       motifKey: ev.motifKey || null,
       motifRole: ev.motifRole || null,
       section: ev.section || null,
+      phraseFunction: ev.phraseFunction || phraseSpec?.function || null,
+      formalTransform: ev.formalTransform || phraseSpec?.transform || null,
+      energy: phraseSpec?.energy || 1,
+      structural: i === climaxIndex ? 'climax' : phraseStartIndices.has(i) ? 'phrase-start' : null,
       cadence: isCadenceArrival ? cadence.id : null,
     });
     if (motifId && !motifPitches.has(motifId)) motifPitches.set(motifId, chosen);
     prev = p;
+    prevChord = chord;
   }
+
+  annotateMelodicFunctions(notes, key, chords, ts, chordsPerMeasure);
 
   // Re-interleave rests so the engraver sees a continuous stream.
   const rests = rhythm.filter((e) => e.rest).map((e) => ({
     onset: e.onset, duration: e.duration, rest: true, pitches: [], tags: e.tags, cellId: e.cellId,
     motifKey: e.motifKey || null, motifRole: e.motifRole || null, section: e.section || null,
+    phraseFunction: e.phraseFunction || null, formalTransform: e.formalTransform || null,
   }));
   return [...notes, ...rests].sort((a, b) => a.onset - b.onset);
+}
+
+/** Classify decorative notes and record whether directed tendencies resolve. */
+function annotateMelodicFunctions(notes, key, chords, ts, chordsPerMeasure) {
+  for (let i = 0; i < notes.length; i++) {
+    const note = notes[i];
+    const prev = notes[i - 1] || null;
+    const next = notes[i + 1] || null;
+    const chord = chordAt(chords, ts, chordsPerMeasure, note.onset);
+    if (!note.chordTone) {
+      const into = prev ? note.pitches[0].dia - prev.pitches[0].dia : null;
+      const out = next ? next.pitches[0].dia - note.pitches[0].dia : null;
+      if (into != null && out != null && Math.abs(into) === 1 && Math.abs(out) === 1) {
+        if (Math.sign(into) === Math.sign(out)) note.nonChordKind = 'passing';
+        else if (prev.pitches[0].dia === next.pitches[0].dia) note.nonChordKind = 'neighbour';
+        else note.nonChordKind = 'embellishing';
+      } else if (next && note.pitches[0].dia === next.pitches[0].dia) {
+        note.nonChordKind = 'anticipation';
+      } else {
+        note.nonChordKind = 'appoggiatura';
+      }
+    } else {
+      note.nonChordKind = null;
+    }
+
+    const degree = scaleDegree(key, note.pitches[0].dia);
+    const chordalSeventh = chord.seventh && degree === (chord.degree + 6) % 7;
+    const leadingTone = degree === 6 && chord.fn === 'D';
+    if (leadingTone || chordalSeventh) {
+      const expected = leadingTone ? note.pitches[0].dia + 1 : note.pitches[0].dia - 1;
+      note.tendency = leadingTone ? 'leading-tone' : 'chordal-seventh';
+      note.tendencyResolved = Boolean(next && next.pitches[0].dia === expected);
+    }
+  }
 }
 
 function scaleDegree(key, dia) {
@@ -434,7 +561,9 @@ function pickUnit(slotTicks, candidates) {
 }
 
 function buildLeftHand(rng, opts) {
-  const { key, ts, chords, chordsPerMeasure, measures, style, lowDia, highDia } = opts;
+  const {
+    key, ts, chords, chordsPerMeasure, measures, style, lowDia, highDia, form, compositionStyle,
+  } = opts;
   const notes = [];
   const slotTicks = ts.ticks / chordsPerMeasure;
   let prevVoicing = null;
@@ -449,6 +578,8 @@ function buildLeftHand(rng, opts) {
       const spelled = spellVoicing(key, chord, voicing);
       spelledFallback = spelled[0];
       const isFinal = m === measures - 1;
+      const phraseSpec = form?.phrases?.[Math.floor(m / 4)] || null;
+      const sectionLift = compositionStyle?.id === 'pop' && (phraseSpec?.energy || 1) >= 3;
 
       if (isFinal || style === 'sustained') {
         notes.push(mk(onset, slotTicks, spelled, ['blocked']));
@@ -458,6 +589,10 @@ function buildLeftHand(rng, opts) {
       switch (style) {
         case 'roots':
           notes.push(mk(onset, slotTicks, [spelled[0]], ['root']));
+          if (sectionLift && spelled.at(-1)?.midi !== spelled[0]?.midi) {
+            notes[notes.length - 1].pitches = [spelled[0], spelled.at(-1)];
+            notes[notes.length - 1].tags.push('section-lift');
+          }
           break;
         case 'blocked':
           notes.push(mk(onset, slotTicks, spelled, ['blocked']));
@@ -629,7 +764,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
     lhStyle: params.lhStyle,
     keyMode: params.keyMode,
   });
-  const form = planMusicalForm(measures, style.id);
+  const form = planMusicalForm(measures, style.id, rng);
   // A harmonic rhythm only works if each chord slot is a whole number of beats.
   const slot = ts.ticks / params.chordsPerMeasure;
   const chordsPerMeasure = Number.isInteger(slot) && slot % ts.beat === 0
@@ -674,6 +809,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
       focusIntervals: params.focusIntervals,
       cadences: harmonyPlan.progression.cadences,
       compositionStyle: style,
+      form,
     });
   }
 
@@ -681,7 +817,6 @@ function composeCandidate(userParams = {}, attempt = 0) {
     if (params.lhStyle === 'melodic') {
       staves.lh = buildLeftHandMelody(rng, {
         key, ts, chords, chordsPerMeasure, measures,
-        form,
         cellIds: params.lhCells || cells,
         restRate: params.restRate,
         lowDia: params.lhLow, highDia: params.lhHigh,
@@ -689,6 +824,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
         nonChordRate: params.nonChordRate * 0.7, chromaticRate: 0,
         cadences: harmonyPlan.progression.cadences,
         compositionStyle: style,
+        form,
       });
     } else if (params.hands === 'lh') {
       // Left hand alone gets the melody, not an accompaniment pattern.
@@ -703,11 +839,13 @@ function composeCandidate(userParams = {}, attempt = 0) {
         focusIntervals: params.focusIntervals,
         cadences: harmonyPlan.progression.cadences,
         compositionStyle: style,
+        form,
       });
     } else {
       staves.lh = buildLeftHand(rng, {
         key, ts, chords, chordsPerMeasure, measures,
         style: params.lhStyle, lowDia: params.lhLow, highDia: params.lhHigh,
+        form, compositionStyle: style,
       });
     }
   }
@@ -743,6 +881,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
       name: form.name,
       label: form.label,
       sections: form.sections,
+      phrases: form.phrases,
       phraseLength: form.phraseLength,
       styleId: form.styleId,
     },
@@ -754,7 +893,7 @@ function composeCandidate(userParams = {}, attempt = 0) {
   };
 }
 
-const COMPOSITION_CANDIDATES = 4;
+const COMPOSITION_CANDIDATES = 16;
 
 /**
  * Compose several deterministic candidates, run the same musicality rubric on

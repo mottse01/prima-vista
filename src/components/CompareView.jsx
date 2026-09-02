@@ -76,6 +76,15 @@ const ROWS = [
   },
 ];
 
+const FRAMEWORK = [
+  ['1', 'Form first', 'Choose a style-specific period, sentence, verse–chorus, refrain, dance, or blues grammar before writing notes.'],
+  ['2', 'Harmonic function', 'Give every phrase a tonic, departure, dominant, or closing role and realise it with a common progression.'],
+  ['3', 'Motif & development', 'State a short idea, then repeat, vary, sequence, fragment, contrast, or return it according to the form.'],
+  ['4', 'Melodic craft', 'Anchor phrase openings, shape one climax, favour singable motion, and resolve leaps and tendency tones.'],
+  ['5', 'Traditional notation', 'Group rhythm by the metre, beam subdivisions conventionally, and let a professional engraver handle spacing and collisions.'],
+  ['6', 'Composition review', 'Generate 16 candidates, inspect the realised harmony and notes, reject rule failures, and serve the strongest score.'],
+];
+
 export default function CompareView() {
   return (
     <div className="sr-compare">
@@ -93,6 +102,24 @@ export default function CompareView() {
           <span>Measure the breakdown</span><b aria-hidden="true">→</b>
           <span>Generate the next study</span>
         </div>
+      </section>
+
+      <section className="sr-panel">
+        <span className="sr-eyebrow">The composition framework</span>
+        <h3>Generated does not have to mean random.</h3>
+        <p>
+          Prima Vista works in the same order a careful miniaturist would: large-scale form first,
+          then harmonic direction, motivic development, melodic detail, engraving, and a final critique.
+          The reference profiles describe musical traits; they do not copy melodies from repertoire.
+        </p>
+        <ol className="sr-framework-grid">
+          {FRAMEWORK.map(([number, title, detail]) => (
+            <li key={number}>
+              <span>{number}</span>
+              <div><strong>{title}</strong><p>{detail}</p></div>
+            </li>
+          ))}
+        </ol>
       </section>
 
       <section className="sr-panel">

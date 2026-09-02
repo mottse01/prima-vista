@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { renderScoreSvg } from '../core/verovio.js';
+import { pageWidthForViewport, renderScoreSvg } from '../core/verovio.js';
 import { xmlNoteId, xmlRestId } from '../core/musicxml.js';
 
 // Renders the engraved score and everything drawn on top of it: the playhead,
@@ -16,14 +16,6 @@ const STATE_COLOURS = {
   wrong: 'var(--bad)',
   missed: '#b9bfcc',
 };
-
-function pageWidthForViewport() {
-  if (typeof window === 'undefined') return 1850;
-  if (window.innerWidth < 560) return 860;
-  if (window.innerWidth < 900) return 1200;
-  if (window.innerWidth < 1220) return 1500;
-  return 1850;
-}
 
 /**
  * Measure where every onset landed, as fractions of the rendered box, so the
@@ -215,8 +207,8 @@ export default function Score({
   }, [tick, curtainTick, svg]);
 
   return (
-    <div className={`sr-score ${className || ''}`}>
-      <div ref={hostRef} className="sr-score-host" aria-label="Engraved exercise" role="img" />
+    <div className={`sr-score ${className || ''}`} aria-busy={!svg && !error}>
+      <div ref={hostRef} className="sr-score-host" aria-label={scoreDescription(score)} role="img" />
       <svg
         ref={overlayRef}
         className="sr-score-overlay"
@@ -224,8 +216,32 @@ export default function Score({
         preserveAspectRatio="none"
         aria-hidden="true"
       />
-      {!svg && !error && <div className="sr-score-loading">Engraving…</div>}
+      {!svg && !error && (
+        <div className="sr-score-loading" role="status">
+          <div className="sr-staff-skeleton" aria-hidden="true">
+            {Array.from({ length: 4 }, (_, system) => (
+              <div className="sr-staff-skeleton-system" key={system}>
+                {Array.from({ length: 5 }, (_, line) => <span key={line} />)}
+              </div>
+            ))}
+          </div>
+          <span>Preparing notation</span>
+        </div>
+      )}
       {error && <div className="sr-score-error">{error}</div>}
     </div>
   );
+}
+
+function scoreDescription(score) {
+  const cadences = score.harmony?.cadences?.map((item) => item.short).join(', ');
+  return [
+    score.title,
+    `${score.key.mode} key with ${score.key.fifths} fifths`,
+    score.ts.name,
+    `${score.measures} bars`,
+    score.style?.label,
+    score.form?.name,
+    cadences ? `cadences ${cadences}` : null,
+  ].filter(Boolean).join('. ');
 }

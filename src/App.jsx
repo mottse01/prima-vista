@@ -10,6 +10,7 @@ import { levelById } from './core/levels.js';
 import { connectMidi } from './core/midi.js';
 import { codeToSeed, randomSeed } from './core/rng.js';
 import { decodeExerciseParams, exactExerciseUrl, exerciseFingerprint } from './core/share.js';
+import { pageWidthForViewport, primeScoreRender } from './core/verovio.js';
 import {
   loadPresets, loadProfile, loadSettings, resetProfile, savePresets, saveProfile, saveSettings,
 } from './core/storage.js';
@@ -55,6 +56,13 @@ export default function App() {
   const [showKeyboard, setShowKeyboard] = useState(false);
   const [toast, setToast] = useState(null);
   const nextPathLevelRef = useRef(null);
+  const preparedExerciseRef = useRef(null);
+  const [session, setSession] = useState(() => ({
+    minutes: loadSettings().sessionMinutes || 0,
+    startedAt: null,
+    takes: 0,
+  }));
+  const [sessionNow, setSessionNow] = useState(0);
 
   const [params, setParams] = useState(() => {
     const shared = exerciseFromUrl();
@@ -85,6 +93,12 @@ export default function App() {
   useEffect(() => { saveProfile(profile); }, [profile]);
   useEffect(() => { saveSettings(settings); }, [settings]);
   useEffect(() => { savePresets(presets); }, [presets]);
+
+  useEffect(() => {
+    if (!session.startedAt || !session.minutes) return undefined;
+    const timer = window.setInterval(() => setSessionNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [session.minutes, session.startedAt]);
 
   // Keep the address bar in step. Unlike a seed alone, this link includes the
   // exact generator recipe and therefore opens identical music for everyone.
@@ -124,7 +138,12 @@ export default function App() {
   // --- Exercise flow ------------------------------------------------------
   const nextFromLevel = useCallback((levelId = profile.level, opts = {}) => {
     nextPathLevelRef.current = null;
-    setParams(paramsForLevel(levelId, profile, { seed: randomSeed(), ...opts }));
+    const prepared = preparedExerciseRef.current;
+    const canUsePrepared = prepared && prepared.level === levelId && Object.keys(opts).length === 0;
+    preparedExerciseRef.current = null;
+    setParams(canUsePrepared
+      ? prepared.params
+      : paramsForLevel(levelId, profile, { seed: randomSeed(), ...opts }));
     setTab('practice');
   }, [profile]);
 
@@ -134,6 +153,7 @@ export default function App() {
   }, [nextFromLevel, params]);
 
   const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain, assisted }) => {
+    setSession((current) => current.startedAt ? { ...current, takes: current.takes + 1 } : current);
     setProfile((prev) => {
       const { profile: next, promoted, demoted } = applyResult(prev, {
         level: params.level || null,
@@ -156,6 +176,30 @@ export default function App() {
       return next;
     });
   }, [params.level, score.seed, scoreId]);
+
+  const startSession = useCallback(() => {
+    if (!settings.sessionMinutes) return;
+    const startedAt = Date.now();
+    setSession((current) => {
+      const stillRunning = current.startedAt
+        && current.minutes === settings.sessionMinutes
+        && startedAt - current.startedAt < settings.sessionMinutes * 60 * 1000;
+      return stillRunning
+        ? current
+        : { minutes: settings.sessionMinutes, startedAt, takes: 0 };
+    });
+    setSessionNow(startedAt);
+  }, [settings.sessionMinutes]);
+
+  const sessionInfo = useMemo(() => {
+    const total = session.minutes * 60;
+    const elapsed = session.startedAt ? Math.floor((sessionNow - session.startedAt) / 1000) : 0;
+    return {
+      ...session,
+      remaining: session.minutes ? Math.max(0, total - elapsed) : null,
+      complete: Boolean(session.minutes && session.startedAt && elapsed >= total),
+    };
+  }, [session, sessionNow]);
 
   const handlePreview = useCallback(() => {
     setProfile((prev) => markExerciseSeen(prev, scoreId));
@@ -180,8 +224,37 @@ export default function App() {
       setParams((p) => ({ ...p, tempo: patch.tempoOverride }));
       return;
     }
+    if (patch.sessionMinutes != null) {
+      setSession({ minutes: patch.sessionMinutes, startedAt: null, takes: 0 });
+      setSessionNow(Date.now());
+    }
     setSettings((s) => ({ ...s, ...patch }));
   }, []);
+
+  // Compose and engrave the likely next adaptive study while the learner is
+  // reading this one. The same score is then ready when “New study” is tapped.
+  useEffect(() => {
+    if (!params.level) return undefined;
+    let cancelled = false;
+    const prepare = () => {
+      if (cancelled) return;
+      const nextParams = paramsForLevel(params.level, profile, { seed: randomSeed() });
+      const nextScore = generateExercise(nextParams);
+      preparedExerciseRef.current = { level: params.level, params: nextParams };
+      void primeScoreRender(nextScore, {
+        pageWidth: pageWidthForViewport(),
+        showFingerings: settings.showFingerings,
+      });
+    };
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(prepare, { timeout: 1400 })
+      : window.setTimeout(prepare, 240);
+    return () => {
+      cancelled = true;
+      if (window.cancelIdleCallback) window.cancelIdleCallback(idle);
+      else window.clearTimeout(idle);
+    };
+  }, [params.level, profile, scoreId, settings.showFingerings]);
 
   const customParams = useMemo(() => customisableParams(params), [params]);
 
@@ -235,6 +308,8 @@ export default function App() {
             onDismissCoach={() => setSettings((s) => ({ ...s, coachDismissed: true }))}
             onPreview={handlePreview}
             onNotify={notify}
+            session={sessionInfo}
+            onSessionStart={startSession}
           />
         )}
 

@@ -59,6 +59,8 @@ export const DEFAULT_SETTINGS = {
   keySound: true,
   masterVolume: 0.82,
   coachDismissed: false,
+  sessionMinutes: 0,
+  inputLatencyMs: 0,
 };
 
 export function loadSettings() {
