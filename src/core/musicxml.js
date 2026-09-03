@@ -189,6 +189,8 @@ function notationsXml(w, { slurStart, slurStop, fingering }) {
     const tag = { staccato: 'staccato', accent: 'accent', tenuto: 'tenuto' }[art];
     if (tag) bits.push(`<articulations><${tag}/></articulations>`);
   }
+  const ornament = { turn: 'turn', mordent: 'mordent' }[w.source.ornament];
+  if (ornament && !w.tieFrom) bits.push(`<ornaments><${ornament}/></ornaments>`);
   if (fingering != null) bits.push(`<technical><fingering>${fingering}</fingering></technical>`);
   return bits.length ? `<notations>${bits.join('')}</notations>` : '';
 }

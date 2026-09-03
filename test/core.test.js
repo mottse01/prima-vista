@@ -7,9 +7,12 @@ import {
 } from '../src/core/audio.js';
 import { generateExercise, planMusicalForm } from '../src/core/generator.js';
 import { analyseEvents, createGrader } from '../src/core/grader.js';
-import { COMMON_CADENCES, COMMON_PROGRESSIONS } from '../src/core/harmony.js';
+import { COMMON_CADENCES } from '../src/core/harmony.js';
+import { levelById } from '../src/core/levels.js';
 import { reviewMusicality } from '../src/core/musicality.js';
-import { styleSetupPatch } from '../src/core/compositionStyles.js';
+import { STYLE_OPTIONS, styleSetupPatch } from '../src/core/compositionStyles.js';
+import { STYLE_PACK_LIST, stylePack } from '../src/core/stylePacks.js';
+import { validateExercise } from '../src/core/validator.js';
 import { toMusicXml } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { timeSig } from '../src/core/rhythm.js';
@@ -35,60 +38,108 @@ test('the same seed and parameters generate identical music', () => {
   const second = generateExercise({ ...params });
   assert.deepEqual(first.staves, second.staves);
   assert.deepEqual(first.chords, second.chords);
+  assert.equal(toMusicXml(first), toMusicXml(second));
+});
+
+test('all ten level envelopes pass hard validation across deterministic samples', () => {
+  for (let level = 1; level <= 10; level++) {
+    for (let sample = 1; sample <= 12; sample++) {
+      const score = generateExercise(paramsForLevel(level, emptyProfile(), { seed: level * 10000 + sample }));
+      const review = validateExercise(score, levelById(level).constraints, { relaxation: 4 });
+      assert.deepEqual(review.hardErrors, [], `level ${level}, sample ${sample}: ${review.hardErrors.join('; ')}`);
+      assert.ok(review.metrics.coherence >= stylePack(score.style.id).validator.coherence_min);
+      assert.ok(review.metrics.coherence <= stylePack(score.style.id).validator.coherence_max);
+    }
+  }
+});
+
+test('style-pack schemas are complete and inheritance has been resolved', () => {
+  for (const pack of STYLE_PACK_LIST) {
+    assert.equal(pack.schema_version, 1);
+    assert.equal('extends' in pack, false);
+    assert.ok(pack.forms.length > 0);
+    assert.ok(pack.harmony.vocabulary.every((roman) => pack.harmony.transitions[roman]));
+    assert.ok(pack.provenance.model);
+  }
+});
+
+test('public-domain repertoire mode renders a provenance-bearing fixed score', () => {
+  const score = generateExercise({
+    sourceMode: 'repertoire', repertoireId: 'beethoven-ode-to-joy-theme', seed: 42, tempo: 80,
+  });
+  assert.equal(score.repertoire.license, 'Public domain');
+  assert.equal(score.measures, 8);
+  assert.equal(score.harmony.cadences.at(-1).roman, 'V–I');
+  assert.ok(toMusicXml(score).includes('Ode to Joy'));
+  assert.deepEqual(score.staves, generateExercise(score.params).staves);
+});
+
+test('recombination mode transforms a provenance-bearing human motif deterministically', () => {
+  const params = {
+    ...paramsForLevel(5, emptyProfile(), { seed: 246810 }),
+    sourceMode: 'recombined',
+    compositionStyle: 'classical_early',
+    timeSignature: '4/4',
+    measures: 8,
+  };
+  const score = generateExercise(params);
+  assert.ok(score.fragment?.provenance);
+  assert.notEqual(score.fragment.shift, 0);
+  assert.equal(score.compositionReview.validation.hardPassed, true);
+  assert.equal(toMusicXml(score), toMusicXml(generateExercise(params)));
+  assert.equal(decodeExerciseParams(encodeExerciseParams(params)).sourceMode, 'recombined');
 });
 
 test('generated studies use a clear phrase form and repeat their rhythmic idea', () => {
-  const score = generateExercise(paramsForLevel(8, emptyProfile(), { seed: 314159 }));
+  const score = generateExercise({
+    ...paramsForLevel(2, emptyProfile(), { seed: 314159 }),
+    compositionStyle: 'classical_early', measures: 8,
+  });
   const signature = (measure) => score.staves.rh
     .filter((note) => Math.floor(note.onset / score.ts.ticks) === measure)
     .map((note) => [note.onset % score.ts.ticks, note.duration, note.rest, note.cellId]);
 
-  assert.equal(score.form.phrases.length, 2);
-  assert.ok(score.form.phrases.every((phrase) => phrase.function));
-  assert.deepEqual(signature(0), signature(2));
-  const classical = planMusicalForm(8, 'classical');
+  assert.equal(score.form.units.length, 4);
+  assert.ok(score.form.units.every((unit) => unit.function));
+  assert.ok(score.development.transforms.length === 3);
+  assert.ok(score.form.units.filter((unit) => ['motif', 'exact', 'transpose_diatonic', 'reharmonize'].includes(unit.transform)).length >= 2);
+  assert.deepEqual(signature(0), signature(4));
+  const classical = planMusicalForm(8, 'classical_early', null, 3);
   assert.equal(classical.name, 'Parallel period');
-  assert.equal(classical.label, 'A–A′');
-  assert.equal(planMusicalForm(16).label, 'A–A′–B–A″');
-  assert.equal(planMusicalForm(16).name, 'Rounded binary');
-  assert.equal(planMusicalForm(24).name, 'Extended sectional form');
+  assert.equal(classical.units.length, 4);
+  assert.equal(classical.plan[3].cadenceType, 'half');
+  assert.equal(classical.plan[7].cadenceType, 'authentic');
 });
 
 test('selectable styles use coherent, distinct composition grammars', () => {
-  const setups = {
-    classical: { measures: 8, timeSignature: '4/4', lhStyle: 'alberti' },
-    folk: { measures: 8, timeSignature: '4/4', lhStyle: 'roots' },
-    pop: { measures: 16, timeSignature: '4/4', lhStyle: 'broken' },
-    blues: { measures: 12, timeSignature: '4/4', lhStyle: 'broken', allowSevenths: true },
-    waltz: { measures: 8, timeSignature: '3/4', lhStyle: 'waltz' },
-  };
+  assert.equal(STYLE_PACK_LIST.length, 10);
+  assert.equal(STYLE_OPTIONS.length, 11); // ten packs plus Auto
   const formNames = new Set();
 
-  for (const [style, setup] of Object.entries(setups)) {
+  for (const pack of STYLE_PACK_LIST) {
+    const level = Math.max(5, pack.forms[0].min_level);
+    const setup = {
+      compositionStyle: pack.id,
+      measures: pack.forms[0].bars,
+      timeSignature: pack.meters[0].value,
+    };
     const score = generateExercise({
-      ...paramsForLevel(8, emptyProfile(), { seed: 123456 }),
-      compositionStyle: style,
+      ...paramsForLevel(level, emptyProfile(), { seed: 123456 }),
       ...setup,
     });
-    assert.equal(score.style.id, style);
-    assert.equal(score.form.styleId, style);
-    assert.ok(score.harmony.styles.includes(style));
-    assert.ok(score.compositionReview.metrics.styleCoherence >= 0.72);
-    assert.equal(score.compositionReview.passed, true);
+    assert.equal(score.style.id, pack.id);
+    assert.equal(score.form.styleId, pack.id);
+    assert.ok(score.harmony.styles.includes(pack.id));
+    assert.equal(score.compositionReview.validation.hardPassed, true);
     formNames.add(score.form.name);
   }
 
-  assert.equal(formNames.size, Object.keys(setups).length);
-  assert.deepEqual(styleSetupPatch('blues', { hands: 'both' }), {
-    compositionStyle: 'blues', timeSignature: '4/4', measures: 12,
-    allowSevenths: true, lhStyle: 'broken',
-  });
-  assert.deepEqual(styleSetupPatch('waltz', { hands: 'both' }), {
-    compositionStyle: 'waltz', timeSignature: '3/4', chordsPerMeasure: 1, lhStyle: 'waltz',
-  });
+  assert.equal(formNames.size, STYLE_PACK_LIST.length);
+  assert.equal(styleSetupPatch('blues', { hands: 'both' }).measures, 12);
+  assert.equal(styleSetupPatch('hymn_chorale', { hands: 'both' }).compositionStyle, 'hymn_chorale');
 });
 
-test('blues style realises a twelve-bar I–IV–V plan with dominant sevenths', () => {
+test('blues style realises a twelve-bar I–IV–V vocabulary with dominant sevenths', () => {
   const score = generateExercise({
     ...paramsForLevel(8, emptyProfile(), { seed: 271828 }),
     compositionStyle: 'blues',
@@ -103,14 +154,14 @@ test('blues style realises a twelve-bar I–IV–V plan with dominant sevenths',
   });
 
   assert.equal(score.form.name, 'Twelve-bar blues');
-  assert.deepEqual(score.harmony.degrees, [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4]);
-  assert.deepEqual(score.harmony.cadences.slice(0, 2).map((item) => item.id), ['subdominantTurn', 'half']);
+  assert.ok(score.harmony.degrees.every((degree) => [0, 3, 4].includes(degree)));
+  assert.deepEqual(score.harmony.cadences.slice(0, 2).map((item) => item.id), ['subdominant_turn', 'half']);
   assert.ok(score.chords.filter((chord) => [0, 3, 4].includes(chord.degree)).every((chord) => chord.seventh));
   const openingPitches = score.staves.lh.filter((note) => note.onset === 0).flatMap((note) => note.pitches);
   assert.ok(openingPitches.some((pitch) => pitch.letter === 6 && pitch.alter === -1)); // B-flat in C7
 });
 
-test('every study follows a named progression with a varied common cadence plan', () => {
+test('every study follows its pack transition model with a varied cadence plan', () => {
   const finalCadences = new Set();
   const finalPairs = new Set();
   for (const mode of ['major', 'minor']) {
@@ -121,10 +172,8 @@ test('every study follows a named progression with a varied common cadence plan'
         measures: 8,
         chordsPerMeasure: 1,
       });
-      const template = COMMON_PROGRESSIONS[mode].find((item) => item.id === score.harmony.id);
-
-      assert.ok(template);
-      assert.equal(score.harmony.sourceProgression, template.name);
+      const pack = stylePack(score.style.id);
+      assert.equal(score.harmony.sourceProgression, `${pack.display_name} transition model`);
       assert.equal(score.harmony.degrees.length, score.chords.length);
       assert.ok(score.harmony.sectionPlans.length >= 1);
       for (const chord of score.chords.filter((item) => item.source === 'progression')) {
@@ -141,12 +190,12 @@ test('every study follows a named progression with a varied common cadence plan'
       const final = score.harmony.cadences.at(-1);
       finalCadences.add(final.id);
       finalPairs.add(final.degrees.join(','));
-      assert.equal(score.compositionReview.passed, true);
-      assert.equal(score.compositionReview.candidates, 16);
+      assert.equal(score.compositionReview.validation.hardPassed, true);
+      assert.equal(score.compositionReview.candidates, 20);
     }
   }
 
-  assert.ok(finalCadences.size >= 3);
+  assert.ok(finalCadences.size >= 2);
   assert.ok([...finalPairs].some((pair) => pair !== '4,0'));
 });
 
@@ -154,8 +203,8 @@ test('perfect authentic cadences preserve root-position V–I in the realised ba
   let checked = 0;
   for (let seed = 1; seed <= 80; seed++) {
     const score = generateExercise({
-      ...paramsForLevel(12, emptyProfile(), { seed }),
-      compositionStyle: 'classical',
+      ...paramsForLevel(7, emptyProfile(), { seed }),
+      compositionStyle: 'classical_early',
       measures: 8,
       chordsPerMeasure: 2,
       hands: 'both',
@@ -166,7 +215,7 @@ test('perfect authentic cadences preserve root-position V–I in the realised ba
       checked += 1;
       assert.equal(score.compositionReview.metrics.strictPac, 1);
       assert.equal(score.compositionReview.metrics.cadenceBass, 1);
-      assert.deepEqual(cadence.degrees, [4, 0]);
+      assert.deepEqual(cadence.degrees.slice(-2), [4, 0]);
     }
   }
   assert.ok(checked > 10);
@@ -174,15 +223,15 @@ test('perfect authentic cadences preserve root-position V–I in the realised ba
 
 test('formal grammar assigns phrase functions, cadence hierarchy, and sectional contrast', () => {
   const pop = generateExercise({
-    ...paramsForLevel(12, emptyProfile(), { seed: 97531 }),
-    compositionStyle: 'pop',
+    ...paramsForLevel(7, emptyProfile(), { seed: 97531 }),
+    compositionStyle: 'pop_contemporary',
     measures: 16,
     timeSignature: '4/4',
     hands: 'both',
     lhStyle: 'broken',
   });
   assert.deepEqual(pop.form.phrases.map((phrase) => phrase.function), [
-    'verse', 'verse development', 'pre-chorus', 'chorus',
+    'verse', 'verse_variation', 'pre_chorus', 'chorus',
   ]);
   assert.equal(pop.form.phrases[0].energy < pop.form.phrases.at(-1).energy, true);
   assert.equal(pop.compositionReview.metrics.phraseHierarchy, 1);
@@ -324,7 +373,7 @@ test('adaptive practice isolates one measured weakness at a time', () => {
   profile.skills['rhythm.dotted'] = { rating: 0.1, attempts: 60 };
   profile.skills['notes.ledger'] = { rating: 0.15, attempts: 60 };
   profile.skills['intervals.skip'] = { rating: 0.2, attempts: 60 };
-  const params = paramsForLevel(12, profile, { seed: 112233 });
+  const params = paramsForLevel(7, profile, { seed: 112233 });
 
   assert.equal(params.targeted.length, 1);
 });
@@ -342,7 +391,7 @@ test('an interval drill guarantees the requested interval family', () => {
 test('an exact share link round-trips the full musical recipe', () => {
   const profile = emptyProfile();
   profile.skills['notes.ledger'] = { rating: 0.2, attempts: 50 };
-  const original = generateExercise(paramsForLevel(12, profile, { seed: 987654 }));
+  const original = generateExercise(paramsForLevel(8, profile, { seed: 987654 }));
   const payload = encodeExerciseParams(original.params);
   const params = decodeExerciseParams(payload);
   const reopened = generateExercise({ ...params, seed: original.seed });

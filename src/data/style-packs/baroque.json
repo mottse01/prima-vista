@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "classical_early",
+  "id": "baroque",
+  "display_name": "Baroque",
+  "description": "Sequential motives, circle motion, contrapuntal clarity, and firm cadences.",
+  "title": "Invention Study",
+  "enabled": true,
+  "tempo_range": [
+    66,
+    126
+  ],
+  "forms": [
+    {
+      "id": "baroque_8",
+      "name": "Binary invention",
+      "weight": 1,
+      "min_level": 1,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "subject",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "sequence",
+          "transform": "transpose_diatonic",
+          "transform_value": 1,
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "episode",
+          "transform": "invert",
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "return",
+          "transform": "fragment",
+          "cadence": "authentic"
+        }
+      ]
+    }
+  ],
+  "lh_textures": [
+    {
+      "id": "root_fifth",
+      "weight": 0.25,
+      "min_level": 1
+    },
+    {
+      "id": "alberti",
+      "weight": 0.15,
+      "min_level": 3
+    },
+    {
+      "id": "contrapuntal",
+      "weight": 0.6,
+      "min_level": 6
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.72,
+    "step_ratio_tolerance": 0.14,
+    "max_leap_semitones": 12,
+    "leap_recovery": true,
+    "contours": [
+      {
+        "id": "wave",
+        "weight": 0.5
+      },
+      {
+        "id": "ascending",
+        "weight": 0.25
+      },
+      {
+        "id": "descending",
+        "weight": 0.25
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "suspension",
+      "escape"
+    ]
+  },
+  "expression": {
+    "dynamics": [
+      "p",
+      "mf",
+      "f"
+    ],
+    "articulations": [
+      "legato",
+      "detached"
+    ],
+    "hairpin": false,
+    "ornaments": {
+      "allowed": [
+        "turn",
+        "mordent"
+      ],
+      "min_level": 6,
+      "density": 0.09
+    }
+  },
+  "validator": {
+    "coherence_min": 0.5,
+    "coherence_max": 0.94,
+    "forbid_outer_parallels": true
+  },
+  "provenance": {
+    "model": "bootstrap-awaiting-corpus",
+    "corpus_snapshot": null
+  }
+}

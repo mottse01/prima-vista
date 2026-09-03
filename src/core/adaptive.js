@@ -26,7 +26,7 @@ export function emptyProfile() {
   const skills = {};
   for (const s of SKILLS) skills[s.id] = { rating: 0.5, attempts: 0 };
   return {
-    version: 2,
+    version: 3,
     level: 1,
     skills,
     history: [],       // { at, level, score, seed, repeat, curtain, ... }

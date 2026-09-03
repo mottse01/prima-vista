@@ -3,6 +3,7 @@ import { KEY_NAMES, LETTERS } from '../core/theory.js';
 import { TIME_SIGNATURES } from '../core/rhythm.js';
 import { codeToSeed, randomSeed, seedToCode } from '../core/rng.js';
 import { STYLE_OPTIONS, styleSetupPatch } from '../core/compositionStyles.js';
+import { REPERTOIRE_OPTIONS } from '../core/repertoire.js';
 
 const FIFTHS = [-7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
 
@@ -38,6 +39,8 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
     () => FIFTHS.map((f) => ({ f, label: KEY_NAMES[params.keyMode][String(f)] })),
     [params.keyMode],
   );
+  const sourceMode = params.sourceMode || 'generated';
+  const selectedRepertoire = REPERTOIRE_OPTIONS.find((item) => item.id === params.repertoireId) || REPERTOIRE_OPTIONS[0];
 
   return (
     <div className="sr-setup">
@@ -49,6 +52,33 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
         <p>The composer handles phrase shape, repetition, harmony, cadences, and engraving. Open advanced controls only when you need them.</p>
       </div>
 
+      <div className="sr-source-choice">
+        <div className="sr-segmented" aria-label="Practice source">
+          <button type="button" className={`sr-seg${sourceMode === 'generated' ? ' is-on' : ''}`}
+            aria-pressed={sourceMode === 'generated'} onClick={() => set({ sourceMode: 'generated' })}>Freshly generated</button>
+          <button type="button" className={`sr-seg${sourceMode === 'recombined' ? ' is-on' : ''}`}
+            aria-pressed={sourceMode === 'recombined'} onClick={() => set({ sourceMode: 'recombined', timeSignature: '4/4', measures: 8 })}>Recombined motifs</button>
+          <button type="button" className={`sr-seg${sourceMode === 'repertoire' ? ' is-on' : ''}`}
+            aria-pressed={sourceMode === 'repertoire'} onClick={() => set({ sourceMode: 'repertoire' })}>Public-domain repertoire</button>
+        </div>
+      </div>
+
+      {sourceMode === 'repertoire' ? (
+        <div className="sr-setup-grid sr-setup-grid--basic">
+          <Group title="Real repertoire">
+            <label className="sr-field">
+              <span>Piece</span>
+              <select value={selectedRepertoire.id} onChange={(event) => set({ repertoireId: event.target.value })}>
+                {REPERTOIRE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.title} — {item.composer}</option>)}
+              </select>
+            </label>
+            <p className="sr-hint">{selectedRepertoire.subtitle}. {selectedRepertoire.provenance}</p>
+          </Group>
+        </div>
+      ) : <>
+      {sourceMode === 'recombined' && (
+        <p className="sr-hint">Starts from a provenance-tracked public-domain motif, then transposes, reharmonizes, and develops it into a new study.</p>
+      )}
       <div className="sr-setup-grid sr-setup-grid--basic">
         <Group title="Style" className="sr-group--style">
           <div className="sr-stylegrid" role="radiogroup" aria-label="Composition style">
@@ -112,7 +142,7 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
 
         <Group title="Hands">
           <div className="sr-segmented">
-            {[['both', 'Both hands'], ['rh', 'Right only'], ['lh', 'Left only']].map(([id, label]) => (
+            {[['both', 'Grand staff'], ['rh', 'Melody only (treble)'], ['lh', 'Melody only (bass)']].map(([id, label]) => (
               <button
                 key={id} type="button"
                 className={`sr-seg${params.hands === id ? ' is-on' : ''}`}
@@ -229,10 +259,11 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
           </Group>
         </div>
       </details>
+      </>}
 
       <div className="sr-setup-actions">
         <button type="button" className="sr-btn sr-btn--primary sr-btn--large"
-          onClick={() => onGenerate({ ...params, seed: randomSeed() })}>Generate study</button>
+          onClick={() => onGenerate({ ...params, seed: randomSeed() })}>{sourceMode === 'repertoire' ? 'Open repertoire' : 'Generate study'}</button>
       </div>
     </div>
   );

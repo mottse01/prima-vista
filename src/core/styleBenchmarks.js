@@ -1,53 +1,18 @@
-// Style reference profiles.
-//
-// These are intentionally feature ranges rather than source melodies. They
-// encode common-practice and songwriting expectations the critic can measure
-// without copying repertoire: phrase motion, recurrence, cadence behavior,
-// sectional lift, and texture.
+import { stylePack } from './stylePacks.js';
 
-export const STYLE_BENCHMARKS = Object.freeze({
-  classical: Object.freeze({
-    smallMotion: [0.62, 0.92],
-    repeatedNotes: [0.01, 0.22],
-    strongBeatChordTones: 0.72,
-    motifRecognition: 0.58,
-    sectionContrast: 0.08,
-    finalCadences: ['authentic', 'imperfect', 'plagal'],
-  }),
-  folk: Object.freeze({
-    smallMotion: [0.68, 0.96],
-    repeatedNotes: [0.02, 0.3],
-    strongBeatChordTones: 0.75,
-    motifRecognition: 0.64,
-    sectionContrast: 0.04,
-    finalCadences: ['authentic', 'imperfect', 'plagal', 'modal'],
-  }),
-  pop: Object.freeze({
-    smallMotion: [0.55, 0.9],
-    repeatedNotes: [0.04, 0.38],
-    strongBeatChordTones: 0.66,
-    motifRecognition: 0.68,
-    sectionContrast: 0.12,
-    finalCadences: ['authentic', 'imperfect', 'plagal', 'deceptive'],
-  }),
-  blues: Object.freeze({
-    smallMotion: [0.42, 0.88],
-    repeatedNotes: [0.05, 0.48],
-    strongBeatChordTones: 0.55,
-    motifRecognition: 0.66,
-    sectionContrast: 0.04,
-    finalCadences: ['authentic', 'plagal', 'bluesTurnaround'],
-  }),
-  waltz: Object.freeze({
-    smallMotion: [0.62, 0.94],
-    repeatedNotes: [0.01, 0.24],
-    strongBeatChordTones: 0.72,
-    motifRecognition: 0.58,
-    sectionContrast: 0.06,
-    finalCadences: ['authentic', 'imperfect', 'plagal'],
-  }),
-});
-
+/** Critic targets are projected from the same versioned pack used to compose. */
 export function styleBenchmark(styleId) {
-  return STYLE_BENCHMARKS[styleId] || STYLE_BENCHMARKS.classical;
+  const pack = stylePack(styleId);
+  const target = pack.melody.step_ratio_target;
+  const tolerance = pack.melody.step_ratio_tolerance;
+  const finalCadences = Object.keys(pack.harmony.cadence_weights.final)
+    .filter((id) => pack.harmony.cadences[id]);
+  return {
+    smallMotion: [Math.max(0, target - tolerance), Math.min(1, target + tolerance)],
+    repeatedNotes: [0, pack.validator.coherence_max > 0.95 ? 0.42 : 0.3],
+    strongBeatChordTones: 0.72,
+    motifRecognition: pack.validator.coherence_min,
+    sectionContrast: Math.max(0.04, 1 - pack.validator.coherence_max),
+    finalCadences,
+  };
 }

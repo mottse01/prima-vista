@@ -505,7 +505,7 @@ export default function PracticeView({
         <div className="sr-scorehead">
           <div className="sr-scoreidentity">
             <div className="sr-scorekicker">
-              <span>Original study</span>
+              <span>{score.repertoire ? 'Public-domain repertoire' : score.fragment ? 'Recombined human motif' : 'Original study'}</span>
               <span className="sr-structure-pill" title={score.style?.description}>
                 {score.style?.label} · {score.form?.name}
               </span>
@@ -529,7 +529,11 @@ export default function PracticeView({
                 <div><span>Chord path</span><strong>{score.harmony.roman}</strong></div>
                 <div><span>Cadences</span><strong>{score.harmony.cadencePlan}</strong></div>
                 <div><span>Phrase functions</span><strong>{score.form.phrases?.map((item) => item.function).join(' → ')}</strong></div>
-                <div><span>Quality gate</span><strong>Best of {score.compositionReview?.candidates || 1} candidates · {score.compositionReview?.score || '—'}/100</strong></div>
+                <div><span>{score.repertoire ? 'Source status' : 'Quality gate'}</span><strong>{score.repertoire
+                  ? `${score.repertoire.license} · provenance recorded`
+                  : score.fragment
+                    ? `Transposed ${score.fragment.shift > 0 ? 'up' : 'down'} ${Math.abs(score.fragment.shift)} scale step${Math.abs(score.fragment.shift) === 1 ? '' : 's'} · provenance recorded`
+                    : `Best of ${score.compositionReview?.candidates || 1} candidates · ${score.compositionReview?.score || '—'}/100`}</strong></div>
               </div>
             </details>
           </div>

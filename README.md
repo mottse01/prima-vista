@@ -26,6 +26,7 @@ npm run build    # production build to dist/
 npm run preview  # serve the production build locally
 npm run lint      # eslint
 npm test          # deterministic generation, scoring and audio regressions
+npm run acceptance # 1,000 hard-valid generations at each of 10 levels
 ```
 
 Connect a MIDI keyboard for real grading, or use the on-screen / computer
@@ -39,14 +40,18 @@ src/
   core/
     theory.js      spelled pitches, keys, scale degrees, chord membership
     rhythm.js      rhythm-cell vocabulary, time signatures, metric weight
-    harmony.js     phrase-level functional progressions, cadences, voice leading
-    generator.js   motivic form + melody/accompaniment from a parameter envelope
+    stylePacks.js  validated, versioned JSON genre models
+    harmony.js     pack-driven progressions, cadence splicing, voice leading
+    generator.js   form -> harmony -> motif -> development -> surface realisation
+    validator.js   hard pedagogy rules, soft musical checks, coherence band
+    fragments.js   provenance-checked public-domain motif recombination
+    repertoire.js  fixed public-domain repertoire mode
     musicxml.js    score -> MusicXML (also the user-facing export)
     verovio.js     lazy-loaded Verovio toolkit; MusicXML -> engraved SVG
     grader.js      note matching, scoring, per-skill attribution
     adaptive.js    skill ratings, promotion, weakness-targeted parameters
     curtain.js     look-ahead curtain modes and their tick offsets
-    levels.js      the 20-level graded path
+    levels.js      the 10-level graded path and exam-board crosswalk
     audio.js       live WebAudio plus locally rendered media reference playback
     midi.js        Web MIDI input
     rng.js         seeded PRNG + six-character variation seeds
@@ -69,6 +74,18 @@ src/
   `generateExercise({ seed, ... })` always produces identical music for the same
   recipe. Exact share links carry both; the short seed is a convenient way to
   replay a variation inside the same setup.
+- **Style lives in data.** Ten genre packs live in `src/data/style-packs/` and
+  are schema-checked at startup. The Auto setting uses the currently
+  hand-audited Classical and Hymn/Chorale packs; the remaining packs are
+  selectable previews until corpus calibration is complete.
+- **Every generated score passes a validator before display.** Bar arithmetic,
+  range, accidentals, hand span, collisions, cadence arrivals, subdivision,
+  development, and the coherence band are hard gates. Soft preferences relax
+  only after ten failed attempts; hard failures are never emitted.
+- **The public-domain pipeline has one license boundary.**
+  `tools/corpus_pipeline/` records provenance in SQLite and accepts only public
+  domain, CC0, or explicitly approved permissive sources. NonCommercial and
+  ShareAlike material is excluded from the commercial path.
 - **Ticks, not seconds.** `TPQ = 48` per quarter note, chosen because it divides
   by both 3 (triplets) and 16 (sixteenths). Seconds are derived at playback.
 - **Engraving is Verovio's job, not ours.** The score model exports to

@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "blues",
+  "id": "jazz_lead",
+  "display_name": "Jazz lead sheet",
+  "description": "Compact song form, seventh-chord motion, syncopated melody, and guide-tone-aware phrasing.",
+  "title": "Lead-Sheet Study",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "4/4",
+      "weight": 0.72
+    },
+    {
+      "value": "3/4",
+      "weight": 0.13
+    },
+    {
+      "value": "6/8",
+      "weight": 0.15
+    }
+  ],
+  "tempo_range": [
+    60,
+    160
+  ],
+  "forms": [
+    {
+      "id": "jazz_aaba_16",
+      "name": "Condensed AABA",
+      "weight": 1,
+      "min_level": 5,
+      "bars": 16,
+      "units": [
+        {
+          "bars": [
+            0,
+            3
+          ],
+          "role": "A1",
+          "transform": "motif",
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            7
+          ],
+          "role": "A2",
+          "transform": "reharmonize",
+          "cadence": "authentic"
+        },
+        {
+          "bars": [
+            8,
+            11
+          ],
+          "role": "bridge",
+          "transform": "transpose_diatonic",
+          "transform_value": 2,
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            12,
+            15
+          ],
+          "role": "A3",
+          "transform": "exact",
+          "cadence": "authentic"
+        }
+      ]
+    }
+  ],
+  "harmony": {
+    "vocabulary": [
+      "I",
+      "ii",
+      "V7",
+      "vi",
+      "IV",
+      "iii",
+      "VI7"
+    ],
+    "roman_degrees": {
+      "I": 0,
+      "ii": 1,
+      "iii": 2,
+      "IV": 3,
+      "V7": 4,
+      "vi": 5,
+      "VI7": 5
+    },
+    "transitions": {
+      "I": {
+        "vi": 0.25,
+        "VI7": 0.2,
+        "ii": 0.25,
+        "IV": 0.15,
+        "iii": 0.15
+      },
+      "ii": {
+        "V7": 0.82,
+        "vi": 0.18
+      },
+      "iii": {
+        "VI7": 0.62,
+        "vi": 0.38
+      },
+      "IV": {
+        "ii": 0.35,
+        "V7": 0.45,
+        "I": 0.2
+      },
+      "V7": {
+        "I": 0.68,
+        "vi": 0.2,
+        "iii": 0.12
+      },
+      "vi": {
+        "ii": 0.48,
+        "IV": 0.28,
+        "VI7": 0.24
+      },
+      "VI7": {
+        "ii": 0.82,
+        "IV": 0.18
+      }
+    },
+    "cadences": {
+      "half": [
+        [
+          "ii",
+          "V7"
+        ]
+      ],
+      "authentic": [
+        [
+          "ii",
+          "V7",
+          "I"
+        ]
+      ],
+      "deceptive": [
+        [
+          "V7",
+          "vi"
+        ]
+      ],
+      "plagal": [
+        [
+          "IV",
+          "I"
+        ]
+      ]
+    },
+    "cadence_weights": {
+      "internal": {
+        "half": 0.55,
+        "deceptive": 0.45
+      },
+      "final": {
+        "authentic": 0.65,
+        "plagal": 0.2,
+        "deceptive": 0.15
+      }
+    },
+    "licensed_retrogressions": [
+      "V7>IV"
+    ]
+  },
+  "lh_textures": [
+    {
+      "id": "block_chord",
+      "weight": 0.35,
+      "min_level": 5
+    },
+    {
+      "id": "root_fifth",
+      "weight": 0.25,
+      "min_level": 4
+    },
+    {
+      "id": "walking",
+      "weight": 0.4,
+      "min_level": 7
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.61,
+    "step_ratio_tolerance": 0.18,
+    "max_leap_semitones": 16,
+    "leap_recovery": true,
+    "contours": [
+      {
+        "id": "wave",
+        "weight": 0.45
+      },
+      {
+        "id": "arch",
+        "weight": 0.35
+      },
+      {
+        "id": "ascending",
+        "weight": 0.2
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "appoggiatura",
+      "escape"
+    ]
+  },
+  "validator": {
+    "coherence_min": 0.38,
+    "coherence_max": 0.9,
+    "forbid_outer_parallels": false
+  },
+  "provenance": {
+    "model": "bootstrap-awaiting-corpus",
+    "corpus_snapshot": null
+  }
+}

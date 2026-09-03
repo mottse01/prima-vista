@@ -42,6 +42,7 @@ function customisableParams(source) {
     meters: _meters,
     fifths: _fifths,
     modes: _modes,
+    constraints: _constraints,
     level: _level,
     ...params
   } = source;
@@ -164,7 +165,18 @@ export default function App() {
         takeIndex,
         curtain,
         assisted,
-        meta: { pitches: summary.pitches, recovery: summary.recovery },
+        meta: {
+          pitches: summary.pitches,
+          recovery: summary.recovery,
+          recipe: {
+            seed: score.seed,
+            params: score.params,
+            generatorVersion: score.generatorVersion,
+            stylePackVersion: score.stylePackVersion,
+            title: score.title,
+            style: score.style.label,
+          },
+        },
       });
       if (promoted) {
         nextPathLevelRef.current = next.level;
@@ -175,7 +187,7 @@ export default function App() {
       }
       return next;
     });
-  }, [params.level, score.seed, scoreId]);
+  }, [params.level, score, scoreId]);
 
   const startSession = useCallback(() => {
     if (!settings.sessionMinutes) return;
@@ -333,6 +345,10 @@ export default function App() {
           <ProgressView
             profile={profile}
             onDrill={drillSkill}
+            onResume={(recipe) => {
+              setParams({ ...recipe.params, seed: recipe.seed });
+              setTab('practice');
+            }}
             onReset={() => { resetProfile(); setProfile(loadProfile()); }}
             onReload={() => { setProfile(loadProfile()); setPresets(loadPresets()); setSettings(loadSettings()); }}
           />

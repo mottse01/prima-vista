@@ -1,0 +1,366 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "classical_early",
+  "id": "hymn_chorale",
+  "display_name": "Hymn / chorale",
+  "description": "Four-square phrases, singable melody, plagal color, and disciplined common-tone voice leading.",
+  "title": "Chorale Prelude",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "4/4",
+      "weight": 0.72
+    },
+    {
+      "value": "3/4",
+      "weight": 0.18
+    },
+    {
+      "value": "2/4",
+      "weight": 0.1
+    }
+  ],
+  "modes": [
+    {
+      "value": "major",
+      "weight": 0.7
+    },
+    {
+      "value": "minor",
+      "weight": 0.3
+    }
+  ],
+  "tempo_range": [
+    56,
+    96
+  ],
+  "forms": [
+    {
+      "id": "hymn_4",
+      "name": "Four-bar hymn phrase",
+      "weight": 0.2,
+      "min_level": 1,
+      "bars": 4,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "statement",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "answer",
+          "transform": "reharmonize",
+          "cadence": "plagal"
+        }
+      ]
+    },
+    {
+      "id": "hymn_period_8",
+      "name": "Hymn period",
+      "weight": 0.62,
+      "min_level": 1,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "statement",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "antecedent",
+          "transform": "reharmonize",
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "answer",
+          "transform": "exact",
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "close",
+          "transform": "fragment",
+          "cadence": "plagal"
+        }
+      ]
+    },
+    {
+      "id": "chorale_16",
+      "name": "Four-phrase chorale",
+      "weight": 0.18,
+      "min_level": 5,
+      "bars": 16,
+      "units": [
+        {
+          "bars": [
+            0,
+            3
+          ],
+          "role": "statement",
+          "transform": "motif",
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            7
+          ],
+          "role": "answer",
+          "transform": "reharmonize",
+          "cadence": "authentic"
+        },
+        {
+          "bars": [
+            8,
+            11
+          ],
+          "role": "contrast",
+          "transform": "transpose_diatonic",
+          "transform_value": -1,
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            12,
+            15
+          ],
+          "role": "final",
+          "transform": "exact",
+          "cadence": "plagal"
+        }
+      ]
+    }
+  ],
+  "harmony": {
+    "vocabulary": [
+      "I",
+      "I6",
+      "ii6",
+      "IV",
+      "IV6",
+      "V",
+      "V7",
+      "vi",
+      "viio6"
+    ],
+    "roman_degrees": {
+      "I": 0,
+      "I6": 0,
+      "ii6": 1,
+      "IV": 3,
+      "IV6": 3,
+      "V": 4,
+      "V7": 4,
+      "vi": 5,
+      "viio6": 6
+    },
+    "transitions": {
+      "I": {
+        "I6": 0.15,
+        "ii6": 0.2,
+        "IV": 0.3,
+        "V": 0.2,
+        "vi": 0.15
+      },
+      "I6": {
+        "ii6": 0.28,
+        "IV": 0.34,
+        "V": 0.24,
+        "vi": 0.14
+      },
+      "ii6": {
+        "V": 0.62,
+        "V7": 0.33,
+        "viio6": 0.05
+      },
+      "IV": {
+        "I": 0.34,
+        "ii6": 0.16,
+        "V": 0.32,
+        "V7": 0.18
+      },
+      "IV6": {
+        "I": 0.34,
+        "V": 0.46,
+        "V7": 0.2
+      },
+      "V": {
+        "I": 0.78,
+        "vi": 0.16,
+        "I6": 0.06
+      },
+      "V7": {
+        "I": 0.84,
+        "vi": 0.16
+      },
+      "vi": {
+        "ii6": 0.28,
+        "IV": 0.42,
+        "V": 0.2,
+        "I6": 0.1
+      },
+      "viio6": {
+        "I": 0.84,
+        "I6": 0.16
+      }
+    },
+    "cadences": {
+      "half": [
+        [
+          "IV",
+          "V"
+        ],
+        [
+          "ii6",
+          "V"
+        ]
+      ],
+      "authentic": [
+        [
+          "ii6",
+          "V7",
+          "I"
+        ],
+        [
+          "IV",
+          "V",
+          "I"
+        ]
+      ],
+      "imperfect": [
+        [
+          "IV",
+          "V",
+          "I6"
+        ]
+      ],
+      "deceptive": [
+        [
+          "V7",
+          "vi"
+        ]
+      ],
+      "plagal": [
+        [
+          "IV",
+          "I"
+        ],
+        [
+          "IV6",
+          "I"
+        ]
+      ]
+    },
+    "cadence_weights": {
+      "internal": {
+        "half": 0.62,
+        "plagal": 0.25,
+        "deceptive": 0.13
+      },
+      "final": {
+        "plagal": 0.5,
+        "authentic": 0.4,
+        "imperfect": 0.1
+      }
+    },
+    "licensed_retrogressions": []
+  },
+  "lh_textures": [
+    {
+      "id": "block_chord",
+      "weight": 0.64,
+      "min_level": 1
+    },
+    {
+      "id": "root_fifth",
+      "weight": 0.24,
+      "min_level": 1
+    },
+    {
+      "id": "broken_octave",
+      "weight": 0.12,
+      "min_level": 6
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.82,
+    "step_ratio_tolerance": 0.1,
+    "max_leap_semitones": 12,
+    "leap_recovery": true,
+    "contours": [
+      {
+        "id": "arch",
+        "weight": 0.56
+      },
+      {
+        "id": "ascending",
+        "weight": 0.12
+      },
+      {
+        "id": "descending",
+        "weight": 0.2
+      },
+      {
+        "id": "wave",
+        "weight": 0.12
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "suspension"
+    ]
+  },
+  "expression": {
+    "dynamics": [
+      "p",
+      "mp",
+      "mf",
+      "f"
+    ],
+    "articulations": [
+      "legato",
+      "tenuto"
+    ],
+    "hairpin": true,
+    "ornaments": {
+      "allowed": [],
+      "min_level": 10,
+      "density": 0
+    }
+  },
+  "validator": {
+    "coherence_min": 0.48,
+    "coherence_max": 0.94,
+    "forbid_outer_parallels": true
+  },
+  "provenance": {
+    "model": "bootstrap-hand-audited",
+    "corpus_snapshot": null,
+    "notes": "Seed pack for the first corpus A/B pass; probabilities are explicitly marked unmined."
+  }
+}

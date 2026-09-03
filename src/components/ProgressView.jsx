@@ -10,7 +10,7 @@ import { exportAll, importAll } from '../core/storage.js';
 
 const NOTE_ORDER = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B', 'Cb', 'Fb', 'E#', 'B#'];
 
-export default function ProgressView({ profile, onDrill, onReset, onReload }) {
+export default function ProgressView({ profile, onDrill, onResume, onReset, onReload }) {
   const fileRef = useRef(null);
   const avg = recentAverage(profile, 10);
   const weak = weakestSkills(profile, 3);
@@ -21,6 +21,14 @@ export default function ProgressView({ profile, onDrill, onReset, onReload }) {
   // Replays, assisted practice, and curtain takes are not clean first reads;
   // charting them together would flatter or distort the sight-reading trend.
   const history = profile.history.filter((h) => !h.repeat && !h.assisted && !h.curtain).slice(-40);
+  const savedExercises = [...profile.history]
+    .reverse()
+    .filter((take) => take.meta?.recipe)
+    .filter((take, index, all) => all.findIndex((other) => (
+      other.meta.recipe.seed === take.meta.recipe.seed
+      && JSON.stringify(other.meta.recipe.params) === JSON.stringify(take.meta.recipe.params)
+    )) === index)
+    .slice(0, 8);
 
   return (
     <div className="sr-progress">
@@ -131,6 +139,29 @@ export default function ProgressView({ profile, onDrill, onReset, onReload }) {
           <p className="sr-hint">Two takes and a trend line appears here.</p>
         ) : (
           <Sparkline points={history.map((h) => h.score)} />
+        )}
+      </section>
+
+      <section className="sr-panel">
+        <h3>Past exercises</h3>
+        <p className="sr-hint">Saved as a seed and musical recipe, so a repeat opens the exact exercise without storing the score.</p>
+        {savedExercises.length === 0 ? (
+          <p className="sr-hint">Completed exercises will appear here.</p>
+        ) : (
+          <ul className="sr-weaklist">
+            {savedExercises.map((take) => {
+              const recipe = take.meta.recipe;
+              return (
+                <li key={`${take.at}:${recipe.seed}`}>
+                  <div>
+                    <b>{recipe.title || 'Saved exercise'}</b>
+                    <span className="sr-dim"> · {recipe.style || 'Auto'} · score {take.score}</span>
+                  </div>
+                  <button type="button" className="sr-btn sr-btn--small" onClick={() => onResume(recipe)}>Practice again</button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
 

@@ -28,12 +28,12 @@ function write(key, value) {
 
 export function loadProfile() {
   const stored = read(KEY, null);
-  if (!stored || ![1, 2].includes(stored.version)) return emptyProfile();
+  if (!stored || ![1, 2, 3].includes(stored.version)) return emptyProfile();
   const blank = emptyProfile();
   return {
     ...blank,
     ...stored,
-    version: 2,
+    version: 3,
     skills: { ...blank.skills, ...stored.skills },
     seenExercises: stored.seenExercises || [],
   };

@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/build-style-catalog.mjs",
     "build": "vite build",
     "lint": "eslint .",
+    "pretest": "node scripts/build-style-catalog.mjs",
     "test": "node --test",
+    "acceptance": "node scripts/acceptance.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -39,12 +39,12 @@ export const SIMPLE_CELLS = [
 
 /** Compound-metre cells. One "beat" here is a dotted quarter. */
 export const COMPOUND_CELLS = [
-  { id: 'cdq', label: 'dotted quarter', beats: 1, events: [n(3 * E)], tags: ['quarter'] },
+  { id: 'cdq', label: 'dotted quarter', beats: 1, events: [n(3 * E)], tags: ['quarter', 'dotted'] },
   { id: 'ceee', label: 'three eighths', beats: 1, events: [n(E), n(E), n(E)], tags: ['eighth'] },
   { id: 'cqe', label: 'quarter + eighth', beats: 1, events: [n(2 * E), n(E)], tags: ['eighth'] },
   { id: 'ceq', label: 'eighth + quarter', beats: 1, events: [n(E), n(2 * E)], tags: ['eighth', 'syncopation'] },
   { id: 'cer', label: 'eighth rest + two eighths', beats: 1, events: [r(E), n(E), n(E)], tags: ['rest', 'offbeat'] },
-  { id: 'cdh', label: 'dotted half', beats: 2, events: [n(6 * E)], tags: ['half'] },
+  { id: 'cdh', label: 'dotted half', beats: 2, events: [n(6 * E)], tags: ['half', 'dotted'] },
   { id: 'cssee', label: 'two sixteenths + two eighths', beats: 1, events: [n(S), n(S), n(E), n(E)], tags: ['sixteenth'] },
 ];
 

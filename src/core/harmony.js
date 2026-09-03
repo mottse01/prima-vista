@@ -1,394 +1,179 @@
-// Progression-based harmony engine.
-//
-// Every exercise starts from a recognised tonal progression, repeats that
-// harmonic pattern, and receives phrase-aware cadences. Chord voicings still
-// use nearest-motion voice leading rather than parallel blocks.
+// Data-driven harmonic planner. Genre vocabulary, transition probabilities,
+// cadence formulae, and licensed retrogressions all live in JSON style packs.
 
-import { chordTones, ROMAN, spellChordTone, tonicLetter } from './theory.js';
+import { chordTones, spellChordTone, tonicLetter } from './theory.js';
+import { stylePack } from './stylePacks.js';
 
-// Degree indices: 0 = I, 1 = ii, 2 = iii, 3 = IV, 4 = V, 5 = vi, 6 = vii.
 const FUNCTION_OF = ['T', 'PD', 'T', 'PD', 'D', 'T', 'D'];
-
-const progression = (id, name, style, degrees, styles) => Object.freeze({
-  id,
-  name,
-  style,
-  degrees: Object.freeze(degrees),
-  styles: Object.freeze(styles),
-});
-
-const cadence = (id, name, short, options) => Object.freeze({ id, name, short, ...options });
-
-/** Cadential grammar shared by the harmonic and melodic planners. */
-export const COMMON_CADENCES = Object.freeze({
-  authentic: cadence('authentic', 'Perfect authentic cadence', 'PAC', {
-    approaches: [4], arrival: 0, melodyDegree: 0,
-  }),
-  imperfect: cadence('imperfect', 'Imperfect authentic cadence', 'IAC', {
-    approaches: [4], arrival: 0, melodyDegree: 2,
-  }),
-  plagal: cadence('plagal', 'Plagal cadence', 'PC', {
-    approaches: [3], arrival: 0, melodyDegree: 0,
-  }),
-  half: cadence('half', 'Half cadence', 'HC', {
-    approaches: [1, 3], arrival: 4, melodyDegree: 4,
-  }),
-  deceptive: cadence('deceptive', 'Deceptive cadence', 'DC', {
-    approaches: [4], arrival: 5, melodyDegree: 5,
-  }),
-  phrygian: cadence('phrygian', 'Phrygian half cadence', 'PHC', {
-    approaches: [3], approachInversion: 1, arrival: 4, melodyDegree: 4, modes: ['minor'],
-  }),
-  modal: cadence('modal', 'Modal close', 'MC', {
-    approaches: [6], arrival: 0, melodyDegree: 0, modes: ['minor'],
-  }),
-  subdominantTurn: cadence('subdominantTurn', 'Blues subdominant turn', '→IV', {
-    approaches: [0], arrival: 3, melodyDegree: 3,
-  }),
-  bluesTurnaround: cadence('bluesTurnaround', 'Blues turnaround', 'TURN', {
-    approaches: [0], arrival: 4, melodyDegree: 4,
-  }),
-});
-
-/** Familiar loops used as the harmonic spine of every generated study. */
-export const COMMON_PROGRESSIONS = Object.freeze({
-  major: Object.freeze([
-    progression('pop-loop', 'Pop loop', 'Song', [0, 4, 5, 3], ['pop']),               // I–V–vi–IV
-    progression('fifties', '’50s progression', 'Song', [0, 5, 3, 4], ['pop']),       // I–vi–IV–V
-    progression('turnaround', 'Tonal turnaround', 'Classical', [0, 5, 1, 4], ['classical', 'waltz']),
-    progression('canon', 'Canon sequence', 'Classical', [0, 4, 5, 2, 3, 0, 3, 4], ['classical']),
-    progression('hymn', 'Hymn progression', 'Folk', [0, 3, 1, 4], ['folk', 'classical']),
-    progression('primary-period', 'Primary-chord period', 'Folk', [0, 3, 0, 4], ['folk', 'waltz']),
-    progression('waltz-circle', 'Waltz circle', 'Waltz', [0, 5, 1, 4], ['waltz']),
-    progression('major-blues', 'Twelve-bar blues', 'Blues', [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4], ['blues']),
-  ]),
-  minor: Object.freeze([
-    progression('andalusian', 'Andalusian sequence', 'Folk', [0, 6, 5, 4], ['folk', 'pop']),
-    progression('minor-pop', 'Minor pop loop', 'Song', [0, 5, 2, 6], ['pop']),
-    progression('minor-turnaround', 'Minor turnaround', 'Classical', [0, 5, 1, 4], ['classical', 'waltz']),
-    progression('minor-circle', 'Minor circle sequence', 'Classical', [0, 3, 6, 2], ['classical']),
-    progression('minor-folk', 'Minor folk progression', 'Folk', [0, 3, 6, 4], ['folk', 'waltz']),
-    progression('minor-blues', 'Twelve-bar minor blues', 'Blues', [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 4], ['blues']),
-  ]),
-});
-
-// Four-bar functional plans used inside the larger formal grammar. A piece
-// may retain a familiar loop as its harmonic identity while changing the
-// route through tonic, predominant, dominant, and cadence by section.
-const SECTION_PLANS = Object.freeze({
-  classical: {
-    major: { tonic: [0, 0, 1, 4], dominant: [0, 5, 1, 4], departure: [5, 1, 3, 4], cadence: [0, 3, 1, 4], closure: [0, 1, 4, 0] },
-    minor: { tonic: [0, 0, 1, 4], dominant: [0, 5, 1, 4], departure: [5, 3, 1, 4], cadence: [0, 3, 1, 4], closure: [0, 1, 4, 0] },
-  },
-  folk: {
-    major: { tonic: [0, 3, 0, 4], subdominant: [3, 0, 1, 4], dominant: [0, 3, 1, 4], cadence: [3, 0, 4, 0], closure: [0, 3, 4, 0] },
-    minor: { tonic: [0, 3, 6, 4], subdominant: [3, 0, 6, 4], dominant: [0, 3, 1, 4], cadence: [3, 6, 4, 0], closure: [0, 3, 4, 0] },
-  },
-  pop: {
-    major: { tonic: [0, 4, 5, 3], subdominant: [5, 3, 0, 4], dominant: [5, 3, 1, 4], cadence: [0, 3, 5, 4], closure: [0, 4, 5, 3] },
-    minor: { tonic: [0, 5, 2, 6], subdominant: [5, 2, 6, 4], dominant: [5, 3, 1, 4], cadence: [0, 5, 3, 4], closure: [0, 5, 2, 6] },
-  },
-  waltz: {
-    major: { tonic: [0, 5, 1, 4], dominant: [0, 3, 1, 4], departure: [5, 1, 3, 4], cadence: [0, 1, 4, 0], closure: [0, 3, 4, 0] },
-    minor: { tonic: [0, 5, 1, 4], dominant: [0, 3, 1, 4], departure: [5, 3, 1, 4], cadence: [0, 1, 4, 0], closure: [0, 3, 4, 0] },
-  },
-});
-
-function sectionSequence(styleId, mode, phraseSpec, fallback) {
-  if (styleId === 'blues') return fallback;
-  const byStyle = SECTION_PLANS[styleId] || SECTION_PLANS.classical;
-  const byMode = byStyle[mode] || byStyle.major;
-  return byMode[phraseSpec?.harmonicRole] || byMode.tonic || fallback;
-}
-
-const CADENCE_POOLS = {
-  classical: {
-    internal: [['half', 5], ['deceptive', 2], ['imperfect', 3], ['phrygian', 2]],
-    final: [['authentic', 5], ['imperfect', 2.5], ['plagal', 1.5], ['modal', 1.5]],
-    short: [['authentic', 4], ['imperfect', 3], ['half', 2], ['deceptive', 1.5], ['phrygian', 1.5]],
-  },
-  folk: {
-    internal: [['half', 4], ['plagal', 3], ['deceptive', 1.5], ['phrygian', 2]],
-    final: [['plagal', 5], ['authentic', 3], ['imperfect', 2], ['modal', 3]],
-    short: [['plagal', 4], ['authentic', 3], ['half', 2], ['modal', 2], ['phrygian', 1.5]],
-  },
-  pop: {
-    internal: [['deceptive', 4], ['half', 3], ['plagal', 2], ['imperfect', 2]],
-    final: [['plagal', 4], ['imperfect', 3], ['authentic', 2], ['modal', 1.5]],
-    short: [['deceptive', 3], ['plagal', 3], ['imperfect', 2.5], ['authentic', 2], ['half', 2]],
-  },
-  waltz: {
-    internal: [['half', 5], ['imperfect', 3], ['deceptive', 1.5], ['phrygian', 1.5]],
-    final: [['authentic', 4], ['imperfect', 3], ['plagal', 2], ['modal', 1.5]],
-    short: [['authentic', 3], ['imperfect', 3], ['half', 2], ['plagal', 2]],
-  },
-  blues: {
-    internal: [['subdominantTurn', 3], ['half', 3]],
-    final: [['bluesTurnaround', 4], ['plagal', 2.5], ['authentic', 2.5]],
-    short: [['bluesTurnaround', 3], ['plagal', 2], ['authentic', 2], ['half', 1.5]],
-  },
+const CADENCE_LABELS = {
+  authentic: ['Authentic cadence', 'AC'], imperfect: ['Imperfect authentic cadence', 'IAC'],
+  half: ['Half cadence', 'HC'], deceptive: ['Deceptive cadence', 'DC'],
+  plagal: ['Plagal cadence', 'PC'], subdominant_turn: ['Subdominant turn', '→IV'],
+  blues_turnaround: ['Blues turnaround', 'TURN'],
 };
 
-function chooseCadence(rng, {
-  final, onlyPhrase, mode, previous, melodyDegrees, compositionStyle, cadenceIndex, phraseSpec,
-}) {
-  // A twelve-bar blues has structural turns at bars 4 and 8, then either a
-  // closed ending or a V turnaround. These are ordered, not random labels.
-  if (compositionStyle === 'blues' && !onlyPhrase && !final) {
-    return cadenceIndex % 3 === 0
-      ? COMMON_CADENCES.subdominantTurn
-      : COMMON_CADENCES.half;
-  }
-  const profile = CADENCE_POOLS[compositionStyle] || CADENCE_POOLS.classical;
-  let pool = profile[onlyPhrase ? 'short' : final ? 'final' : 'internal'];
-  const strength = phraseSpec?.cadenceStrength;
-  if (strength === 'weak') {
-    const ids = compositionStyle === 'folk'
-      ? ['half', 'plagal', 'imperfect', 'phrygian']
-      : ['half', 'imperfect', 'deceptive', 'phrygian'];
-    pool = ids.map((id, i) => [id, ids.length - i]);
-  } else if (strength === 'open') {
-    const ids = compositionStyle === 'folk'
-      ? ['half', 'deceptive', 'phrygian']
-      : ['half', 'deceptive', 'imperfect', 'phrygian'];
-    pool = ids.map((id, i) => [id, ids.length - i]);
-  } else if (strength === 'strong') {
-    pool = profile.final;
-  } else if (strength === 'turn' && compositionStyle === 'blues') {
-    pool = final
-      ? [['bluesTurnaround', 4], ['plagal', 3], ['authentic', 2]]
-      : [['subdominantTurn', 3], ['half', 3]];
-  }
-  const modeChoices = pool
-    .map(([id, weight]) => [COMMON_CADENCES[id], weight])
-    .filter(([item]) => !item.modes || item.modes.includes(mode));
-  const ranged = melodyDegrees?.length
-    ? modeChoices.filter(([item]) => melodyDegrees.includes(item.melodyDegree))
-    : modeChoices;
-  const choices = ranged.length ? ranged : modeChoices;
-  const weights = choices.map(([item, weight]) => item.id === previous?.id ? weight * 0.12 : weight);
-  return rng.weighted(choices.map(([item]) => item), weights);
+export const COMMON_CADENCES = Object.freeze(Object.fromEntries(
+  Object.entries(CADENCE_LABELS).map(([id, [name, short]]) => [id, Object.freeze({ id, name, short })]),
+));
+export const COMMON_PROGRESSIONS = Object.freeze({ major: [], minor: [] });
+
+function pickObject(rng, row) {
+  const entries = Object.entries(row);
+  return rng.weighted(entries.map(([value]) => value), entries.map(([, weight]) => weight));
 }
 
-function romanWithInversion(mode, degree, inversion = 0) {
-  return ROMAN[mode][degree] + (inversion === 1 ? '6' : inversion === 2 ? '64' : '');
+function degreeFor(pack, roman) {
+  const exact = pack.harmony.roman_degrees[roman];
+  if (Number.isInteger(exact)) return exact;
+  const bare = roman.replace(/[0-9°ø+]/g, '');
+  const degree = pack.harmony.roman_degrees[bare];
+  if (Number.isInteger(degree)) return degree;
+  throw new Error(`Style pack ${pack.id} does not map Roman numeral ${roman}`);
+}
+
+function inversionFor(roman) {
+  if (roman.endsWith('64')) return 2;
+  if (roman.endsWith('6')) return 1;
+  return 0;
+}
+
+function cadenceChoice(rng, pack, requested, final) {
+  if (requested && pack.harmony.cadences[requested]) return requested;
+  const pool = pack.harmony.cadence_weights[final ? 'final' : 'internal'];
+  const available = Object.fromEntries(Object.entries(pool).filter(([id]) => pack.harmony.cadences[id]));
+  return pickObject(rng, available);
+}
+
+function melodicArrival(cadenceId, degrees) {
+  if (cadenceId === 'half' || cadenceId === 'blues_turnaround' && degrees.at(-1) === 4) return 4;
+  if (cadenceId === 'deceptive') return 5;
+  if (cadenceId === 'subdominant_turn') return 3;
+  return degrees.at(-1) === 0 ? 0 : degrees.at(-1);
 }
 
 /**
- * Choose and repeat one common progression across `measures` bars, then shape
- * each phrase with a common cadence. The chosen pattern and cadence plan are
- * returned so the melodic planner and the player can see the same structure.
+ * Walk a pack's transition table, then splice its exact cadence formulae into
+ * cadence slots fixed by the form. No pitch or rhythm exists at this stage.
  */
 export function planProgression(rng, {
-  measures,
-  chordsPerMeasure = 1,
-  allowSevenths = false,
-  allowInversions = false,
-  mode = 'major',
-  form = null,
-  melodyDegrees = null,
-  compositionStyle = 'classical',
+  measures, chordsPerMeasure = 1, allowSevenths = false, allowInversions = false,
+  mode = 'major', form = null, compositionStyle = 'classical_early',
 }) {
+  const pack = stylePack(compositionStyle);
   const slots = measures * chordsPerMeasure;
-  const resolvedMode = COMMON_PROGRESSIONS[mode] ? mode : 'major';
-  const matching = COMMON_PROGRESSIONS[resolvedMode]
-    .filter((item) => item.styles.includes(compositionStyle));
-  const template = rng.pick(matching.length ? matching : COMMON_PROGRESSIONS[resolvedMode]);
-  const sectionPlans = [];
-  const plannedDegrees = Array.from({ length: slots }, (_, i) => {
-    const measure = Math.floor(i / chordsPerMeasure);
-    const phraseIndex = Math.floor(measure / 4);
-    const phraseSpec = form?.phrases?.[phraseIndex] || null;
-    const sequence = compositionStyle === 'blues'
-      ? template.degrees
-      : sectionSequence(compositionStyle, resolvedMode, phraseSpec, template.degrees);
-    const index = compositionStyle === 'blues'
-      ? measure % sequence.length
-      : ((measure % 4) * chordsPerMeasure + (i % chordsPerMeasure)) % sequence.length;
-    if (!sectionPlans[phraseIndex]) {
-      sectionPlans[phraseIndex] = {
-        phrase: phraseIndex,
-        section: phraseSpec?.section || String.fromCharCode(65 + phraseIndex),
-        function: phraseSpec?.function || 'phrase',
-        harmonicRole: phraseSpec?.harmonicRole || 'tonic',
-        degrees: [...sequence],
-        roman: sequence.map((degree) => ROMAN[resolvedMode][degree]).join('–'),
-      };
-    }
-    return sequence[index];
-  });
-  const degrees = [...plannedDegrees];
-
-  const phraseEndMeasures = form?.plan
-    ? form.plan.filter((item) => item.cadence).map((item) => item.measure)
-    : Array.from({ length: Math.ceil(measures / 4) }, (_, i) => Math.min(measures - 1, i * 4 + 3));
-  const uniqueEnds = [...new Set(phraseEndMeasures)];
-  const cadenceSlots = new Map();
-  const cadences = [];
-  let previousCadence = null;
-
-  for (let cadenceIndex = 0; cadenceIndex < uniqueEnds.length; cadenceIndex++) {
-    const measure = uniqueEnds[cadenceIndex];
-    const phraseSpec = form?.phrases?.[Math.floor(measure / 4)] || null;
-    const endSlot = Math.min(slots - 1, (measure + 1) * chordsPerMeasure - 1);
-    const startSlot = Math.max(0, endSlot - 1);
-    const final = endSlot === slots - 1;
-    const chosen = chooseCadence(rng, {
-      final,
-      onlyPhrase: uniqueEnds.length === 1,
-      mode: resolvedMode,
-      previous: previousCadence,
-      melodyDegrees,
-      compositionStyle,
-      cadenceIndex,
-      phraseSpec,
-    });
-    const approach = rng.pick(chosen.approaches);
-    const appliedSlots = startSlot === endSlot ? [endSlot] : [startSlot, endSlot];
-    const appliedDegrees = startSlot === endSlot ? [chosen.arrival] : [approach, chosen.arrival];
-    const inversions = startSlot === endSlot ? [0] : [chosen.approachInversion || 0, 0];
-
-    appliedSlots.forEach((slot, i) => {
-      degrees[slot] = appliedDegrees[i];
-      cadenceSlots.set(slot, {
-        id: chosen.id,
-        position: i === appliedSlots.length - 1 ? 'arrival' : 'approach',
-        inversion: inversions[i],
-      });
-    });
-
-    cadences.push({
-      id: chosen.id,
-      name: chosen.name,
-      short: chosen.short,
-      measure,
-      final,
-      slots: appliedSlots,
-      degrees: appliedDegrees,
-      melodyDegree: chosen.melodyDegree,
-      strength: phraseSpec?.cadenceStrength || (final ? 'strong' : 'weak'),
-      phraseFunction: phraseSpec?.function || null,
-      roman: appliedDegrees.map((degree, i) => romanWithInversion(resolvedMode, degree, inversions[i])).join('–'),
-    });
-    previousCadence = chosen;
+  const tonic = pack.harmony.vocabulary.find((roman) => degreeFor(pack, roman) === 0)
+    || pack.harmony.vocabulary[0];
+  const romans = [tonic];
+  while (romans.length < slots) {
+    const current = romans.at(-1);
+    const row = pack.harmony.transitions[current]
+      || pack.harmony.transitions[current.replace(/[0-9°ø+]/g, '')]
+      || pack.harmony.transitions[tonic];
+    romans.push(pickObject(rng, row));
   }
 
-  const chords = degrees.map((degree, i) => {
-    const cadenceMark = cadenceSlots.get(i);
-    // Sevenths belong on the dominant above all, and on ii as a pre-dominant.
-    const seventhChance = degree === 4 ? 0.5 : degree === 1 ? 0.3 : 0;
-    const bluesPrimary = compositionStyle === 'blues' && [0, 3, 4].includes(degree);
-    const seventh = bluesPrimary || (allowSevenths && rng.chance(seventhChance));
-    let inversion = cadenceMark?.inversion || 0;
-    if (allowInversions && !cadenceMark && rng.chance(0.3)) inversion = rng.chance(0.7) ? 1 : 2;
+  const cadenceEnds = form?.plan
+    ? form.plan.filter((bar) => bar.cadence).map((bar) => bar.measure)
+    : [measures - 1];
+  const cadences = [];
+  const cadenceSlot = new Map();
+
+  for (const measure of [...new Set(cadenceEnds)]) {
+    const final = measure === measures - 1;
+    const planBar = form?.plan?.[measure];
+    const id = cadenceChoice(rng, pack, planBar?.cadenceType, final);
+    const formulas = pack.harmony.cadences[id];
+    const formula = structuredClone(rng.pick(formulas));
+    const endSlot = Math.min(slots - 1, (measure + 1) * chordsPerMeasure - 1);
+    const startSlot = Math.max(0, endSlot - formula.length + 1);
+    const applied = formula.slice(formula.length - (endSlot - startSlot + 1));
+    applied.forEach((roman, index) => {
+      const slot = startSlot + index;
+      romans[slot] = roman;
+      cadenceSlot.set(slot, { id, position: index === applied.length - 1 ? 'arrival' : 'approach' });
+    });
+    const degrees = applied.map((roman) => degreeFor(pack, roman));
+    const [name, short] = CADENCE_LABELS[id] || [id.replaceAll('_', ' '), id.toUpperCase()];
+    cadences.push({
+      id, name, short, measure, final,
+      slots: applied.map((_, index) => startSlot + index), degrees,
+      melodyDegree: melodicArrival(id, degrees),
+      strength: planBar?.cadenceStrength || (final ? 'strong' : 'weak'),
+      phraseFunction: planBar?.phraseFunction || null,
+      roman: applied.join('–'),
+    });
+  }
+
+  const alteredSevenths = new Set(pack.harmony.altered_sevenths || []);
+  const chords = romans.map((roman, index) => {
+    const degree = degreeFor(pack, roman);
+    const mark = cadenceSlot.get(index);
+    const labelledSeventh = roman.includes('7');
+    let inversion = inversionFor(roman);
+    if (allowInversions && !mark && inversion === 0 && rng.chance(0.24)) inversion = 1;
     return {
-      degree,
-      plannedDegree: plannedDegrees[i],
-      seventh: Boolean(seventh),
-      inversion,
-      inversionLocked: true,
-      fn: FUNCTION_OF[degree],
-      index: i,
-      source: cadenceMark ? 'cadence' : 'progression',
-      cadence: cadenceMark ? { id: cadenceMark.id, position: cadenceMark.position } : null,
-      // Major blues I7 and IV7 borrow a flattened chordal seventh. V7 is
-      // already diatonic; minor-blues sevenths need no extra alteration.
-      bluesDominant: bluesPrimary && resolvedMode === 'major' && [0, 3].includes(degree),
+      degree, plannedDegree: degree, plannedRoman: roman,
+      seventh: labelledSeventh && (allowSevenths || pack.harmony.require_labelled_sevenths === true),
+      inversion, inversionLocked: Boolean(mark) || inversionFor(roman) > 0,
+      fn: FUNCTION_OF[degree], index,
+      source: mark ? 'cadence' : 'progression',
+      cadence: mark || null,
+      bluesDominant: mode === 'major' && alteredSevenths.has(degree) && labelledSeventh,
     };
   });
 
-  const finalCadence = cadences[cadences.length - 1] || null;
+  const degrees = chords.map((chord) => chord.degree);
+  const unitPlans = (form?.units || []).map((unit) => {
+    const first = unit.bars[0] * chordsPerMeasure;
+    const last = Math.min(chords.length, (unit.bars[1] + 1) * chordsPerMeasure);
+    return { phrase: unit.index, function: unit.role, roman: romans.slice(first, last).join('–') };
+  });
 
   return {
     chords,
     progression: {
-      id: template.id,
-      name: compositionStyle === 'blues' ? template.name : `${form?.name || template.name} harmony`,
-      sourceProgression: template.name,
-      style: template.style,
-      styles: [...template.styles],
-      degrees: plannedDegrees,
-      roman: sectionPlans.map((item) => item.roman).filter(Boolean).join(' | '),
-      sectionPlans,
-      cadence: finalCadence?.name || null,
-      cadencePlan: cadences.map((item) => item.short).join(' → '),
-      cadences,
+      id: `${pack.id}:${form?.id || 'free'}`, name: `${form?.name || pack.display_name} harmony`,
+      sourceProgression: `${pack.display_name} transition model`, style: pack.display_name,
+      styles: [pack.id], degrees, roman: unitPlans.map((item) => item.roman).join(' | '),
+      sectionPlans: unitPlans, cadence: cadences.at(-1)?.name || null,
+      cadencePlan: cadences.map((item) => item.short).join(' → '), cadences,
+      stylePackVersion: pack.version,
     },
   };
 }
 
-/**
- * Voice a chord in the left hand, choosing the rotation (inversion) that moves
- * least from the previous voicing. Returns ascending diatonic indices.
- */
+/** Voice a chord with minimum movement and a fixed cadential bass when required. */
 export function voiceChord(key, chord, prevVoicing, { lowDia, highDia }) {
   const centre = Math.round((lowDia + highDia) / 2);
   const base = chordTones(key, chord, centre - 2);
   const candidates = [];
-
-  for (let rot = 0; rot < base.length; rot++) {
-    for (let oct = -1; oct <= 1; oct++) {
-      const voicing = [];
-      for (let i = 0; i < base.length; i++) {
-        const idx = (rot + i) % base.length;
-        const wraps = rot + i >= base.length ? 7 : 0;
-        voicing.push(base[idx] + wraps + oct * 7);
-      }
-      voicing.sort((a, b) => a - b);
-      if (voicing[0] < lowDia || voicing[voicing.length - 1] > highDia) continue;
-      // Fixed inversions requested by the plan pin the bass note.
+  for (let rotation = 0; rotation < base.length; rotation++) {
+    for (let octave = -1; octave <= 1; octave++) {
+      const voicing = base.map((_, index) => {
+        const source = (rotation + index) % base.length;
+        return base[source] + (rotation + index >= base.length ? 7 : 0) + octave * 7;
+      }).sort((a, b) => a - b);
+      if (voicing[0] < lowDia || voicing.at(-1) > highDia) continue;
       if (chord.inversionLocked) {
         const bassDegree = ((voicing[0] - tonicLetter(key)) % 7 + 7) % 7;
-        const expectedDegree = (chord.degree + chord.inversion * 2) % 7;
-        if (bassDegree !== expectedDegree) continue;
+        if (bassDegree !== (chord.degree + chord.inversion * 2) % 7) continue;
       }
       candidates.push(voicing);
     }
   }
   if (!candidates.length) {
-    // Range is too tight for a full chord. Preserve the planned bass degree
-    // rather than silently changing a cadence's inversion.
-    const desiredDegree = (chord.degree + chord.inversion * 2) % 7;
-    const roots = [];
-    for (let dia = lowDia; dia <= highDia; dia++) {
-      if (((dia - tonicLetter(key)) % 7 + 7) % 7 === desiredDegree) roots.push(dia);
-    }
-    const root = roots.sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre))[0] ?? lowDia;
-    return [root];
+    const desired = (chord.degree + chord.inversion * 2) % 7;
+    const choices = Array.from({ length: highDia - lowDia + 1 }, (_, index) => lowDia + index)
+      .filter((dia) => ((dia - tonicLetter(key)) % 7 + 7) % 7 === desired);
+    return [choices.sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre))[0] ?? lowDia];
   }
-
-  if (!prevVoicing) {
-    // Open with something centred, root-position by preference.
-    candidates.sort((a, b) => Math.abs(a[0] - lowDia - 2) - Math.abs(b[0] - lowDia - 2));
-    return candidates[0];
-  }
-
-  let best = candidates[0];
-  let bestCost = Infinity;
-  for (const cand of candidates) {
-    let cost = 0;
-    for (let i = 0; i < cand.length; i++) {
-      const prev = prevVoicing[Math.min(i, prevVoicing.length - 1)];
-      cost += Math.abs(cand[i] - prev);
-    }
-    // Prefer contrary/oblique motion and avoid identical parallel blocks.
-    const bassMove = Math.sign(cand[0] - prevVoicing[0]);
-    const upperMove = Math.sign(cand[cand.length - 1] - prevVoicing[prevVoicing.length - 1]);
-    if (bassMove && bassMove === upperMove) cost += 0.35;
-    if (cand.every((pitch, i) => pitch - prevVoicing[Math.min(i, prevVoicing.length - 1)] === cand[0] - prevVoicing[0])) {
-      cost += 0.8;
-    }
-    // Nudge away from a stagnant bass so the left hand still has a line.
-    if (cand[0] === prevVoicing[0]) cost += 0.5;
-    if (cost < bestCost) {
-      bestCost = cost;
-      best = cand;
-    }
-  }
-  return best;
+  if (!prevVoicing) return candidates.sort((a, b) => Math.abs(a[0] - centre) - Math.abs(b[0] - centre))[0];
+  const cost = (voicing) => voicing.reduce((sum, pitch, index) => (
+    sum + Math.abs(pitch - prevVoicing[Math.min(index, prevVoicing.length - 1)])
+  ), 0);
+  return candidates.sort((a, b) => cost(a) - cost(b))[0];
 }
 
-/** Spell a voicing inside the key, applying leading tones where the chord needs them. */
 export function spellVoicing(key, chord, voicing) {
   return voicing.map((dia) => spellChordTone(key, chord, dia));
 }

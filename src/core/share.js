@@ -6,26 +6,29 @@
 
 import { DEFAULT_PARAMS } from './generator.js';
 import { seedToCode } from './rng.js';
+import { STYLE_IDS } from './compositionStyles.js';
 
 const EXTRA_KEYS = new Set(['level', 'targeted', 'focusRhythmTags', 'focusIntervals']);
 const ALLOWED_KEYS = new Set([...Object.keys(DEFAULT_PARAMS), ...EXTRA_KEYS]);
 const ARRAY_KEYS = new Set(['rhythmTags', 'cells', 'lhCells', 'targeted', 'focusRhythmTags', 'focusIntervals']);
 const ENUMS = {
+  sourceMode: new Set(['generated', 'recombined', 'repertoire']),
   keyMode: new Set(['major', 'minor']),
   hands: new Set(['both', 'rh', 'lh']),
   timeSignature: new Set(['4/4', '3/4', '2/4', '5/4', '2/2', '3/8', '6/8', '9/8', '12/8']),
   lhStyle: new Set(['roots', 'blocked', 'alberti', 'broken', 'waltz', 'sustained', 'melodic']),
-  compositionStyle: new Set(['auto', 'classical', 'folk', 'pop', 'blues', 'waltz']),
+  compositionStyle: new Set(STYLE_IDS),
 };
 const BOUNDS = {
   keyFifths: [-7, 7], measures: [1, 32], tempo: [30, 200],
   rhLow: [0, 70], rhHigh: [0, 70], lhLow: [0, 70], lhHigh: [0, 70],
   maxLeap: [1, 12], stepwiseBias: [0, 1], nonChordRate: [0, 1],
   chromaticRate: [0, 1], chordsPerMeasure: [1, 2], restRate: [0, 1],
-  level: [1, 20],
+  level: [1, 10],
+  generatorVersion: [1, 99],
 };
 const INTEGER_KEYS = new Set([
-  'keyFifths', 'measures', 'rhLow', 'rhHigh', 'lhLow', 'lhHigh', 'maxLeap', 'chordsPerMeasure', 'level',
+  'keyFifths', 'measures', 'rhLow', 'rhHigh', 'lhLow', 'lhHigh', 'maxLeap', 'chordsPerMeasure', 'level', 'generatorVersion',
 ]);
 
 function primitiveArray(value) {

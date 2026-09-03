@@ -79,7 +79,7 @@ function reviewCadences(score, notes) {
       });
       const sopranoTonic = arrival && scaleDegree(score.key, arrival.pitches[0].dia) === 0;
       const impliedOnly = bassDegrees.every((degree) => degree == null);
-      if ((impliedOnly || (bassDegrees[0] === 4 && bassDegrees.at(-1) === 0)) && sopranoTonic) pacPassed += 1;
+      if ((impliedOnly || (bassDegrees.at(-2) === 4 && bassDegrees.at(-1) === 0)) && sopranoTonic) pacPassed += 1;
     }
   }
 
@@ -186,8 +186,8 @@ function reviewMelody(score, notes) {
 const CADENCE_RANK = {
   half: 1,
   deceptive: 1.5,
-  bluesTurnaround: 1.5,
-  subdominantTurn: 1.5,
+  blues_turnaround: 1.5,
+  subdominant_turn: 1.5,
   imperfect: 2,
   modal: 2.3,
   plagal: 2.5,
@@ -206,7 +206,7 @@ function reviewForm(score, notes) {
   for (const phrase of phrases) {
     if (!phrase.cadence) continue;
     const cadence = cadenceByFunction.get(phrase.function)
-      || cadences.find((item) => Math.floor(item.measure / 4) === phrase.index);
+      || cadences.find((item) => item.measure >= phrase.bars[0] && item.measure <= phrase.bars[1]);
     if (!cadence) continue;
     hierarchyChecks += 1;
     const rank = CADENCE_RANK[cadence.id] || 1;
@@ -218,10 +218,13 @@ function reviewForm(score, notes) {
   const hierarchy = hierarchyChecks ? hierarchyPassed / hierarchyChecks : 1;
 
   const byPhrase = phrases.map((phrase) => {
-    const phraseNotes = notes.filter((note) => Math.floor(note.onset / score.ts.ticks / 4) === phrase.index);
+    const phraseNotes = notes.filter((note) => {
+      const measure = Math.floor(note.onset / score.ts.ticks);
+      return measure >= phrase.bars[0] && measure <= phrase.bars[1];
+    });
     const mean = phraseNotes.length
       ? phraseNotes.reduce((sum, note) => sum + note.pitches[0].dia, 0) / phraseNotes.length : 0;
-    return { phrase, mean, density: phraseNotes.length / 4 };
+    return { phrase, mean, density: phraseNotes.length / Math.max(1, phrase.bars[1] - phrase.bars[0] + 1) };
   });
   let contrast = phrases.length <= 1 ? 1 : 0;
   for (let i = 0; i < byPhrase.length; i++) {
@@ -299,7 +302,7 @@ function inRange(value, [low, high]) {
 }
 
 function reviewStyle(score, notes, melody, motifs, formReview) {
-  const id = score.style?.id || 'classical';
+  const id = score.style?.id || 'classical_early';
   const benchmark = styleBenchmark(id);
   const finalCadence = score.harmony?.cadences?.at(-1)?.id;
   const finalCadenceFit = benchmark.finalCadences.includes(finalCadence) ? 1 : 0.45;
@@ -309,18 +312,7 @@ function reviewStyle(score, notes, melody, motifs, formReview) {
   const motifFit = clamp(motifs.recognition / benchmark.motifRecognition);
   const contrastFit = score.form?.phrases?.length <= 1
     ? 1 : clamp(formReview.contrast / benchmark.sectionContrast);
-  let idiom = 1;
-  if (id === 'blues') {
-    const primary = score.chords.filter((chord) => [0, 3, 4].includes(chord.degree));
-    const sevenths = primary.length ? primary.filter((chord) => chord.seventh).length / primary.length : 0;
-    const blueNotes = notes.filter((note) => note.tags?.includes('blue-note')).length;
-    idiom = (score.measures === 12 ? 0.45 : 0) + sevenths * 0.35 + (blueNotes || motifs.recognition >= 0.7 ? 0.2 : 0);
-  } else if (id === 'waltz') {
-    idiom = score.ts.name === '3/4' ? 0.7 : 0.2;
-    if (score.params.hands !== 'both' || score.params.lhStyle === 'waltz') idiom += 0.3;
-  } else if (id === 'pop') {
-    idiom = formReview.contrast >= benchmark.sectionContrast ? 1 : 0.62;
-  }
+  const idiom = 1;
   return clamp(metadata * 0.16 + motion * 0.13 + repetition * 0.09 + motifFit * 0.2
     + contrastFit * 0.16 + finalCadenceFit * 0.12 + idiom * 0.14);
 }
