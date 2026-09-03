@@ -12,11 +12,11 @@ import { levelById } from '../src/core/levels.js';
 import { reviewMusicality } from '../src/core/musicality.js';
 import { STYLE_OPTIONS, styleSetupPatch } from '../src/core/compositionStyles.js';
 import { STYLE_PACK_LIST, stylePack } from '../src/core/stylePacks.js';
-import { validateExercise } from '../src/core/validator.js';
+import { ledgerLines, validateExercise } from '../src/core/validator.js';
 import { toMusicXml } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { timeSig } from '../src/core/rhythm.js';
-import { fromDia, tonicLetter } from '../src/core/theory.js';
+import { fromDia, keyAlterations, tonicLetter } from '../src/core/theory.js';
 import {
   decodeExerciseParams, encodeExerciseParams, exerciseFingerprint, exactExerciseUrl,
 } from '../src/core/share.js';
@@ -30,6 +30,15 @@ test('new variation seeds are six characters and validation is strict', () => {
   }
   assert.equal(codeToSeed('ABC123!'), null);
   assert.equal(codeToSeed(''), null);
+});
+
+test('all circle-of-fifths tonics map to the correct staff letter', () => {
+  const majorLetters = [0, 4, 1, 5, 2, 6, 3, 0, 4, 1, 5, 2, 6, 3, 0];
+  for (let fifths = -7; fifths <= 7; fifths++) {
+    const expected = majorLetters[fifths + 7];
+    assert.equal(tonicLetter({ fifths, mode: 'major' }), expected, `major fifths ${fifths}`);
+    assert.equal(tonicLetter({ fifths, mode: 'minor' }), (expected + 5) % 7, `minor fifths ${fifths}`);
+  }
 });
 
 test('the same seed and parameters generate identical music', () => {
@@ -109,6 +118,101 @@ test('generated studies use a clear phrase form and repeat their rhythmic idea',
   assert.equal(classical.units.length, 4);
   assert.equal(classical.plan[3].cadenceType, 'half');
   assert.equal(classical.plan[7].cadenceType, 'authentic');
+  assert.equal(score.development.motif.source, 'generated');
+  assert.ok(score.development.motif.rhythmCellId);
+  assert.ok(score.development.motif.rhythm.length >= 1);
+  assert.ok(score.development.motif.seedPitches.length >= 1);
+  assert.ok(['arch', 'ascending', 'descending', 'wave'].includes(score.development.motif.contour));
+});
+
+test('Auto never escapes to a meter-incompatible style pack', () => {
+  const params = {
+    ...paramsForLevel(8, emptyProfile(), { seed: 808080 }),
+    compositionStyle: 'auto', timeSignature: '5/4', measures: 8,
+  };
+  const score = generateExercise(params);
+  assert.ok(stylePack(score.style.id).meters.some((meter) => meter.value === '5/4'));
+  assert.throws(() => generateExercise({ ...params, compositionStyle: 'classical_early' }), /does not support 5\/4/);
+});
+
+test('validator mutations trip each independent hard pedagogical gate', () => {
+  const source = generateExercise({
+    ...paramsForLevel(2, emptyProfile(), { seed: 220022 }),
+    compositionStyle: 'classical_early', timeSignature: '4/4', measures: 8,
+  });
+  const constraints = levelById(2).constraints;
+  const errorsFor = (mutate) => {
+    const score = structuredClone(source);
+    mutate(score);
+    return validateExercise(score, constraints, { relaxation: 4 }).hardErrors;
+  };
+
+  assert.ok(errorsFor((score) => {
+    score.staves.rh.find((note) => !note.rest).pitches = [fromDia(score.params.rhHigh + 8)];
+  }).some((error) => error.includes('pitch range')));
+
+  assert.ok(errorsFor((score) => {
+    const note = score.staves.rh.find((event) => !event.rest);
+    note.pitches = [fromDia(score.params.rhHigh + 4)];
+  }).some((error) => error.includes('ledger-line budget')));
+
+  assert.ok(errorsFor((score) => {
+    const signature = keyAlterations(score.key.fifths);
+    for (const note of score.staves.rh.filter((event) => !event.rest).slice(0, constraints.chromatic_notes + 1)) {
+      note.pitches[0].alter = signature[note.pitches[0].letter] + 1;
+    }
+  }).some((error) => error.includes('chromatic-note count')));
+
+  assert.ok(errorsFor((score) => {
+    const note = score.staves.rh[0];
+    note.duration = Math.max(1, constraints.smallest_ticks - 1);
+  }).some((error) => error.includes('shorter than the level permits')));
+
+  assert.ok(errorsFor((score) => {
+    const attacks = score.staves.rh.filter((event) => !event.rest).slice(0, 2);
+    attacks[0].pitches = [fromDia(score.params.rhLow)];
+    attacks[1].pitches = [fromDia(score.params.rhHigh)];
+  }).some((error) => error.includes('melodic-interval cap')));
+
+  assert.ok(errorsFor((score) => {
+    const cadence = score.harmony.cadences.at(-1);
+    const arrival = score.staves.rh.find((note) => note.cadence === cadence.id
+      && Math.floor(note.onset / score.ts.ticks) === cadence.measure);
+    arrival.pitches = [fromDia(arrival.pitches[0].dia + 1)];
+  }).some((error) => error.includes('cadence')));
+
+  assert.ok(errorsFor((score) => {
+    const right = score.staves.rh.find((note) => !note.rest);
+    const left = score.staves.lh.find((note) => !note.rest && note.onset === right.onset);
+    left.pitches = [fromDia(right.pitches[0].dia)];
+  }).some((error) => error.includes('collide')));
+
+  assert.ok(errorsFor((score) => {
+    score.form.units.forEach((unit, index) => { if (index) unit.transform = 'invert'; });
+  }).some((error) => error.includes('recognizable motivic restatement')));
+  assert.equal(ledgerLines('rh', 35), 0);
+});
+
+test('property grid emits only critic-approved, hard-valid candidates', () => {
+  for (let level = 1; level <= 10; level++) {
+    const definition = levelById(level);
+    for (let sample = 0; sample < 5; sample++) {
+      const base = paramsForLevel(level, emptyProfile(), { seed: level * 700001 + sample * 97 });
+      const score = generateExercise({
+        ...base,
+        keyFifths: definition.params.fifths[sample % definition.params.fifths.length],
+        keyMode: definition.params.modes[sample % definition.params.modes.length],
+        timeSignature: definition.constraints.meters[sample % definition.constraints.meters.length],
+        compositionStyle: 'auto',
+      });
+      assert.equal(score.compositionReview.passed, true);
+      assert.equal(score.compositionReview.validation.hardPassed, true);
+      assert.ok(score.compositionReview.selectedAttempt < 20);
+      if (score.compositionReview.selectedAttempt < 10) {
+        assert.equal(score.compositionReview.validation.relaxation, 0);
+      }
+    }
+  }
 });
 
 test('selectable styles use coherent, distinct composition grammars', () => {
@@ -191,7 +295,7 @@ test('every study follows its pack transition model with a varied cadence plan',
       finalCadences.add(final.id);
       finalPairs.add(final.degrees.join(','));
       assert.equal(score.compositionReview.validation.hardPassed, true);
-      assert.equal(score.compositionReview.candidates, 20);
+      assert.ok([10, 20].includes(score.compositionReview.candidates));
     }
   }
 
@@ -210,6 +314,7 @@ test('perfect authentic cadences preserve root-position V–I in the realised ba
       hands: 'both',
       lhStyle: 'blocked',
       allowInversions: true,
+      timeSignature: '4/4',
     });
     for (const cadence of score.harmony.cadences.filter((item) => item.id === 'authentic')) {
       checked += 1;

@@ -13,7 +13,7 @@ The commercial path accepts only public-domain, CC0, and explicitly approved per
 Pass a JSON Lines manifest with one object per score:
 
 ```json
-{"path":"/corpus/score.musicxml","source":"OpenScore","source_id":"openscore:123","genre":"classical_early","composer":"W. A. Mozart","work":"K. 545","license":"CC0-1.0","no_license_conflict":true}
+{"path":"/corpus/score.musicxml","source":"OpenScore","source_id":"openscore:123","genre":"classical_early","composer":"W. A. Mozart","work":"K. 545","date":"1788","tags":["sonata","classical"],"license":"CC0-1.0","no_license_conflict":true,"bucket_audited":true}
 ```
 
 Run:
@@ -22,5 +22,13 @@ Run:
 python tools/corpus_pipeline/pipeline.py manifest.jsonl --out corpus-output
 ```
 
-The output contains `provenance.sqlite`, per-genre analysis JSON, generated style packs, and a provenance-bearing fragment library. Review genre buckets and accompaniment-cluster labels before promoting the generated packs into `src/data/style-packs/`.
+`bucket_audited` is mandatory for inclusion: noisy automatic genre tags are never
+silently promoted. The output contains `provenance.sqlite`, per-genre bigram and
+trigram analysis, cadence candidates, rhythm and interval distributions,
+coherence quantiles, accompaniment clusters, generated style packs, and a
+provenance-bearing fragment library. Review accompaniment-cluster labels before
+promoting generated packs into `src/data/style-packs/`.
 
+After a sufficiently large, reviewed snapshot, add
+`--apply-coherence-calibration` to copy the corpus p10/p90 band into emitted
+packs. The flag refuses to calibrate from fewer than twenty eight-bar samples.

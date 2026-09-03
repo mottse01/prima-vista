@@ -58,8 +58,8 @@
       "modes": [
         "major"
       ],
-      "rhLow": 28,
-      "rhHigh": 32,
+      "rhLow": 35,
+      "rhHigh": 39,
       "lhLow": 18,
       "lhHigh": 22
     },
@@ -134,10 +134,10 @@
       "modes": [
         "major"
       ],
-      "rhLow": 28,
-      "rhHigh": 32,
-      "lhLow": 18,
-      "lhHigh": 22
+      "rhLow": 35,
+      "rhHigh": 39,
+      "lhLow": 17,
+      "lhHigh": 23
     },
     "focus": [
       "coordination.together",

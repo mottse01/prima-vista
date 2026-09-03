@@ -392,6 +392,14 @@ export default [
       {
         "value": "2/4",
         "weight": 0.2
+      },
+      {
+        "value": "6/8",
+        "weight": 0.12
+      },
+      {
+        "value": "9/8",
+        "weight": 0.04
       }
     ],
     "modes": [
@@ -734,6 +742,36 @@ export default [
         "5": 1,
         "7": 2
       },
+      "functions_by_degree": [
+        "T",
+        "PD",
+        "T",
+        "PD",
+        "D",
+        "T",
+        "D"
+      ],
+      "mode_degree_weights": {
+        "major": [
+          1,
+          1,
+          0.9,
+          1,
+          1,
+          1,
+          1
+        ],
+        "minor": [
+          1,
+          1.05,
+          0.55,
+          0.9,
+          1.2,
+          0.72,
+          1.1
+        ]
+      },
+      "inversion_probability": 0.24,
       "licensed_retrogressions": []
     },
     "lh_textures": [
@@ -813,6 +851,8 @@ export default [
       "step_ratio_tolerance": 0.12,
       "max_leap_semitones": 12,
       "leap_recovery": true,
+      "motif_strength": 18,
+      "climax_position": 0.64,
       "contours": [
         {
           "id": "arch",
@@ -841,6 +881,7 @@ export default [
     },
     "development": {
       "recognizable_min_ratio": 0.5,
+      "fallback_transform": "reharmonize",
       "advanced_transforms": {
         "invert": 5,
         "augment": 5,
@@ -1028,6 +1069,30 @@ export default [
       {
         "value": "2/4",
         "weight": 0.1
+      },
+      {
+        "value": "6/8",
+        "weight": 0.12
+      },
+      {
+        "value": "9/8",
+        "weight": 0.06
+      },
+      {
+        "value": "12/8",
+        "weight": 0.04
+      },
+      {
+        "value": "5/4",
+        "weight": 0.03
+      },
+      {
+        "value": "2/2",
+        "weight": 0.04
+      },
+      {
+        "value": "3/8",
+        "weight": 0.03
       }
     ],
     "modes": [

@@ -11,6 +11,7 @@
     "pretest": "node scripts/build-style-catalog.mjs",
     "test": "node --test",
     "acceptance": "node scripts/acceptance.mjs",
+    "prepare:evaluation": "node scripts/prepare-human-evaluation.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
