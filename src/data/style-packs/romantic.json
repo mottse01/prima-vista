@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "classical_early",
+  "id": "romantic",
+  "display_name": "Romantic",
+  "description": "Longer arches, expressive chromatic color, broader accompaniment, and delayed closure.",
+  "title": "Lyric Piece",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "4/4",
+      "weight": 0.45
+    },
+    {
+      "value": "3/4",
+      "weight": 0.4
+    },
+    {
+      "value": "6/8",
+      "weight": 0.15
+    }
+  ],
+  "tempo_range": [
+    48,
+    132
+  ],
+  "forms": [
+    {
+      "id": "romantic_8",
+      "name": "Lyric period",
+      "weight": 1,
+      "min_level": 1,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "opening",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "yearning",
+          "transform": "expand_intervals",
+          "cadence": "deceptive"
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "climax",
+          "transform": "transpose_diatonic",
+          "transform_value": 1,
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "release",
+          "transform": "fragment",
+          "cadence": "authentic"
+        }
+      ]
+    }
+  ],
+  "lh_textures": [
+    {
+      "id": "block_chord",
+      "weight": 0.15,
+      "min_level": 1
+    },
+    {
+      "id": "alberti",
+      "weight": 0.2,
+      "min_level": 3
+    },
+    {
+      "id": "broken_octave",
+      "weight": 0.65,
+      "min_level": 5
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.68,
+    "step_ratio_tolerance": 0.15,
+    "max_leap_semitones": 15,
+    "leap_recovery": true,
+    "contours": [
+      {
+        "id": "arch",
+        "weight": 0.62
+      },
+      {
+        "id": "wave",
+        "weight": 0.25
+      },
+      {
+        "id": "ascending",
+        "weight": 0.13
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "appoggiatura",
+      "suspension",
+      "escape"
+    ]
+  },
+  "validator": {
+    "coherence_min": 0.38,
+    "coherence_max": 0.91,
+    "forbid_outer_parallels": false
+  },
+  "provenance": {
+    "model": "bootstrap-awaiting-corpus",
+    "corpus_snapshot": null
+  }
+}

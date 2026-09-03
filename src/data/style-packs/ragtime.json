@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "classical_early",
+  "id": "ragtime",
+  "display_name": "Ragtime",
+  "description": "Syncopated right-hand cells over a steady stride-derived bass pattern.",
+  "title": "Ragtime Study",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "2/4",
+      "weight": 0.75
+    },
+    {
+      "value": "4/4",
+      "weight": 0.25
+    }
+  ],
+  "tempo_range": [
+    72,
+    132
+  ],
+  "forms": [
+    {
+      "id": "rag_strain_8",
+      "name": "Ragtime strain",
+      "weight": 1,
+      "min_level": 4,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "riff",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "sequence",
+          "transform": "transpose_diatonic",
+          "transform_value": 1,
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "return",
+          "transform": "exact",
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "tag",
+          "transform": "fragment",
+          "cadence": "authentic"
+        }
+      ]
+    }
+  ],
+  "lh_textures": [
+    {
+      "id": "root_fifth",
+      "weight": 0.2,
+      "min_level": 4
+    },
+    {
+      "id": "stride",
+      "weight": 0.8,
+      "min_level": 6
+    }
+  ],
+  "rhythm_cells": [
+    {
+      "id": "q",
+      "meter": "simple",
+      "min_level": 1,
+      "weight": 0.4
+    },
+    {
+      "id": "ee",
+      "meter": "simple",
+      "min_level": 2,
+      "weight": 0.7
+    },
+    {
+      "id": "eqe",
+      "meter": "simple",
+      "min_level": 4,
+      "weight": 1.4
+    },
+    {
+      "id": "edq",
+      "meter": "simple",
+      "min_level": 4,
+      "weight": 1.2
+    },
+    {
+      "id": "sde",
+      "meter": "simple",
+      "min_level": 7,
+      "weight": 0.8
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.62,
+    "step_ratio_tolerance": 0.16,
+    "max_leap_semitones": 15,
+    "leap_recovery": true,
+    "contours": [
+      {
+        "id": "wave",
+        "weight": 0.5
+      },
+      {
+        "id": "ascending",
+        "weight": 0.25
+      },
+      {
+        "id": "arch",
+        "weight": 0.25
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "escape"
+    ]
+  },
+  "validator": {
+    "coherence_min": 0.5,
+    "coherence_max": 0.94,
+    "forbid_outer_parallels": false
+  },
+  "provenance": {
+    "model": "bootstrap-awaiting-corpus",
+    "corpus_snapshot": null
+  }
+}

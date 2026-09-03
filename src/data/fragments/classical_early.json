@@ -1,0 +1,12 @@
+[
+  {
+    "id":"frag_beethoven_op125_01","genre":"classical_early","level":2,"meter":"4/4","bars":2,"role":"opening","harmonic_context":["I","V"],
+    "events":[{"bar":0,"degree":3,"octave_offset":0,"dur":1},{"bar":0,"degree":3,"octave_offset":0,"dur":1},{"bar":0,"degree":4,"octave_offset":0,"dur":1},{"bar":0,"degree":5,"octave_offset":0,"dur":1},{"bar":1,"degree":5,"octave_offset":0,"dur":1},{"bar":1,"degree":4,"octave_offset":0,"dur":1},{"bar":1,"degree":3,"octave_offset":0,"dur":1},{"bar":1,"degree":2,"octave_offset":0,"dur":1}],
+    "contour":"arch","lh_compatible":["root_fifth","block_chord"],"provenance":{"source_id":"pd:beethoven-op125-mvmt4","source":"Prima Vista public-domain repertoire encoding","composer":"Ludwig van Beethoven","work":"Symphony No. 9, Op. 125, movement IV","measures":"theme mm. 1–2","license":"Public domain"}
+  },
+  {
+    "id":"frag_beethoven_op125_02","genre":"classical_early","level":3,"meter":"4/4","bars":2,"role":"cadential","harmonic_context":["I","V"],
+    "events":[{"bar":0,"degree":1,"octave_offset":0,"dur":1},{"bar":0,"degree":1,"octave_offset":0,"dur":1},{"bar":0,"degree":2,"octave_offset":0,"dur":1},{"bar":0,"degree":3,"octave_offset":0,"dur":1},{"bar":1,"degree":3,"octave_offset":0,"dur":1.5},{"bar":1,"degree":2,"octave_offset":0,"dur":0.5},{"bar":1,"degree":2,"octave_offset":0,"dur":2}],
+    "contour":"arch","lh_compatible":["root_fifth","block_chord","alberti"],"provenance":{"source_id":"pd:beethoven-op125-mvmt4","source":"Prima Vista public-domain repertoire encoding","composer":"Ludwig van Beethoven","work":"Symphony No. 9, Op. 125, movement IV","measures":"theme mm. 3–4","license":"Public domain"}
+  }
+]

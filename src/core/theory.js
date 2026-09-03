@@ -129,7 +129,14 @@ export function chordTones(key, chord, nearDia) {
 export function spellChordTone(key, chord, dia) {
   const needsLeadingTone =
     key.mode === 'minor' && (chord.degree === 4 || chord.degree === 6);
-  return spellInKey(key, dia, { raisedSeventh: needsLeadingTone });
+  const spelled = spellInKey(key, dia, { raisedSeventh: needsLeadingTone });
+  const tl = tonicLetter(key);
+  const degree = (((dia - tl) % 7) + 7) % 7;
+  const chordMember = ((degree - chord.degree) % 7 + 7) % 7;
+  if (chord.bluesDominant && chordMember === 6) {
+    return fromDia(dia, clamp(spelled.alter - 1, -2, 2));
+  }
+  return spelled;
 }
 
 /** True when `dia` is a member of `chord` (octave-agnostic). */

@@ -1,172 +1,155 @@
-// Positioning page. It states plainly what the two established products do
-// well, where they fall down for pianists, and which of those gaps this app
-// actually closes — including the ones it does not.
+// Positioning page. Competitor details are deliberately conservative and
+// based on each product's public feature pages rather than old assumptions.
 
 const ROWS = [
   {
-    feature: 'Where the music comes from',
-    srf: 'Generated on demand, unlimited',
-    tree: 'A fixed library of real pieces',
-    us: 'Generated on demand from real functional harmony',
+    feature: 'Practice material',
+    srf: 'Unlimited generated exercises for piano and 60+ instruments/voice types',
+    tree: 'A large library of graded repertoire and focus packs',
+    us: 'Unlimited piano studies generated from functional harmony',
+  },
+  {
+    feature: 'Performance feedback',
+    srf: 'Auto Assessment reports accuracy and timing',
+    tree: 'Real-time feedback while the music keeps moving',
+    us: 'Per-note pitch, pulse, continuity, timing bias and recovery',
+  },
+  {
+    feature: 'Piano input',
+    srf: 'MIDI for piano Auto Assessment; recording workflows for assignments',
+    tree: 'MIDI or device microphone',
+    us: 'MIDI, on-screen piano or computer keyboard',
+  },
+  {
+    feature: 'Read-ahead training',
+    srf: 'Optional disappearing measures',
+    tree: 'Read-ahead mode hides the current bar',
+    us: 'Adjustable curtain from one beat to one full bar ahead',
+  },
+  {
+    feature: 'What changes after a weak read?',
+    srf: 'The learner or teacher adjusts the next exercise',
+    tree: 'Structured path and focused practice packs',
+    us: 'The next generated study isolates one measured weak skill automatically',
     us_win: true,
   },
   {
-    feature: 'Can you memorise your way through it?',
-    srf: 'No — always new',
-    tree: 'Eventually yes; the library is finite',
-    us: 'No — every exercise is new, and reproducible from a code',
+    feature: 'Fresh-read integrity',
+    srf: 'Unlimited generation keeps material fresh',
+    tree: 'Library and imported-piece practice support repetition',
+    us: 'Replays, previews and guide-assisted takes are labelled and cannot advance the path',
     us_win: true,
   },
   {
-    feature: 'Does the piano writing sound like music?',
-    srf: 'The common complaint: odd progressions, thin left hand',
-    tree: 'Yes — it is real repertoire',
-    us: 'Planned cadences, voice-led left hand, real accompaniment patterns',
+    feature: 'Custom exercise control',
+    srf: 'Deep controls across rhythms, range, leaps, keys and notation',
+    tree: 'Tempo, transposition, looping and focus settings on pieces',
+    us: 'Per-hand range, texture, harmony, rhythm, notation and reproducible seeds',
   },
   {
-    feature: 'Does it hear what you played?',
-    srf: 'No. It shows notes and stops there',
-    tree: 'Yes — MIDI and microphone',
-    us: 'Yes — MIDI, or the on-screen and computer keyboard',
-    us_win: true,
-  },
-  {
-    feature: 'Does it make you read ahead of your hands?',
-    srf: 'No — the page just sits there',
-    tree: 'Keeps the music moving, but every note stays visible',
-    us: 'A curtain hides the music as you reach it, up to a full bar ahead',
-    us_win: true,
-  },
-  {
-    feature: 'Does a replay count as sight-reading?',
-    srf: 'No scoring at all, so the question does not arise',
-    tree: 'Repeat practice on a piece is the point',
-    us: 'No — replays are flagged and cannot advance your level',
-  },
-  {
-    feature: 'Does it tell you which skill is failing?',
-    srf: 'No',
-    tree: 'Shows where you went wrong in the piece',
-    us: 'Every note is attributed to a skill; the weakest ones are named',
-    us_win: true,
-  },
-  {
-    feature: 'Does the next exercise target your weakness?',
-    srf: 'Only if you set the parameters yourself',
-    tree: 'Progresses by level, not by diagnosis',
-    us: 'Weak skills bend the generator automatically',
-    us_win: true,
-  },
-  {
-    feature: 'Control over range and ledger lines',
-    srf: 'Reviewers report this is hard to set usefully',
-    tree: 'Fixed by whatever the piece does',
-    us: 'Explicit per-hand range sliders, in staff steps',
-    us_win: true,
-  },
-  {
-    feature: 'Sharing an exercise with a class',
-    srf: 'Yes, via teacher/student accounts',
-    tree: 'Assign pieces from the library',
-    us: 'A six-character code. No accounts on either end',
-  },
-  {
-    feature: 'Notation quality',
-    srf: 'Publication-grade; engraving is its core competence',
-    tree: 'Clean rendering of real published editions',
-    us: 'Engraved by Verovio with Bravura — the engine behind scholarly editions',
-  },
-  {
-    feature: 'Getting the music out',
-    srf: 'Print and PDF',
-    tree: 'Not the focus',
-    us: 'Print, or export MusicXML into MuseScore, Finale or Sibelius',
-    us_win: true,
-  },
-  {
-    feature: 'Printing',
-    srf: 'Yes — a core feature',
-    tree: 'Not the focus',
-    us: 'Yes — print the score straight from the page',
-  },
-  {
-    feature: 'Instruments beyond piano',
-    srf: 'Many, plus voice and full ensembles',
-    tree: 'Piano only',
-    us: 'Piano only — this is where it is deliberately narrow',
-    us_win: false,
+    feature: 'Share or assign',
+    srf: 'Class rosters, assignments, assessment and live practice',
+    tree: 'Teacher workflows and a synced account',
+    us: 'Exact exercise links and print; no roster or gradebook',
     us_loss: true,
   },
   {
-    feature: 'Real repertoire by real composers',
-    srf: 'No',
-    tree: 'Yes — thousands of pieces',
-    us: 'No. Generated study material only',
+    feature: 'Existing music',
+    srf: 'Generated exercises rather than repertoire',
+    tree: 'Thousands of pieces plus MusicXML import on paid plans',
+    us: 'Generated studies only; MusicXML export, not import',
     us_loss: true,
   },
   {
-    feature: 'Classroom tooling (rosters, assessment records)',
-    srf: 'Yes, including live ensemble casting',
-    tree: 'Teacher features available',
-    us: 'Not yet. Codes and printing only',
-    us_loss: true,
-  },
-  {
-    feature: 'Cost',
-    srf: 'Subscription',
-    tree: 'Subscription after a trial',
-    us: 'Free, offline-capable, data stays in your browser',
+    feature: 'Privacy and account model',
+    srf: 'Account and cloud-based practice/teacher records',
+    tree: 'Account and synced progress',
+    us: 'No account; settings and progress stay in this browser',
     us_win: true,
   },
+  {
+    feature: 'Price',
+    srf: 'Yearly subscription',
+    tree: 'Free tier plus monthly or annual plans',
+    us: 'No subscription',
+    us_win: true,
+  },
+];
+
+const FRAMEWORK = [
+  ['1', 'Form first', 'Choose a style-specific period, sentence, verse–chorus, refrain, dance, or blues grammar before writing notes.'],
+  ['2', 'Harmonic function', 'Give every phrase a tonic, departure, dominant, or closing role and realise it with a common progression.'],
+  ['3', 'Motif & development', 'State a short idea, then repeat, vary, sequence, fragment, contrast, or return it according to the form.'],
+  ['4', 'Melodic craft', 'Anchor phrase openings, shape one climax, favour singable motion, and resolve leaps and tendency tones.'],
+  ['5', 'Traditional notation', 'Group rhythm by the metre, beam subdivisions conventionally, and let a professional engraver handle spacing and collisions.'],
+  ['6', 'Composition review', 'Generate 16 candidates, inspect the realised harmony and notes, reject rule failures, and serve the strongest score.'],
 ];
 
 export default function CompareView() {
   return (
     <div className="sr-compare">
-      <section className="sr-panel">
-        <h3>The gap this is built for</h3>
+      <section className="sr-panel sr-positioning">
+        <span className="sr-eyebrow">Why Prima Vista</span>
+        <h2>The differentiator is the loop, not a longer feature list.</h2>
         <p>
-          The two best-known options solve opposite halves of the same problem. <b>Sight Reading
-          Factory</b> generates unlimited material but never hears you play, and pianists
-          consistently report that its generated piano writing sounds computer-made — odd chord
-          progressions and a thin left hand. <b>Piano Tree</b> hears every note through MIDI and
-          gives real feedback, but it draws on a finite library, so the material eventually becomes
-          familiar and the progression is by level rather than by diagnosis.
+          Sight Reading Factory is a mature generator with assessment and classroom tools. Piano
+          Tree combines a large repertoire library with MIDI or microphone feedback and read-ahead
+          practice. Prima Vista takes a narrower route: it measures a genuinely fresh piano read,
+          names the skill that broke down, and generates the next musical study around that evidence.
         </p>
-        <p>
-          Unlimited generation and real-time listening have never been in the same product. Putting
-          them together makes a third thing possible: an exercise generator that <i>knows what you
-          just got wrong</i> and writes the next exercise around it.
-        </p>
+        <div className="sr-loop" aria-label="Prima Vista practice loop">
+          <span>Read fresh music</span><b aria-hidden="true">→</b>
+          <span>Measure the breakdown</span><b aria-hidden="true">→</b>
+          <span>Generate the next study</span>
+        </div>
       </section>
 
       <section className="sr-panel">
-        <h3>Side by side</h3>
+        <span className="sr-eyebrow">The composition framework</span>
+        <h3>Generated does not have to mean random.</h3>
+        <p>
+          Prima Vista works in the same order a careful miniaturist would: large-scale form first,
+          then harmonic direction, motivic development, melodic detail, engraving, and a final critique.
+          The reference profiles describe musical traits; they do not copy melodies from repertoire.
+        </p>
+        <ol className="sr-framework-grid">
+          {FRAMEWORK.map(([number, title, detail]) => (
+            <li key={number}>
+              <span>{number}</span>
+              <div><strong>{title}</strong><p>{detail}</p></div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="sr-panel">
+        <h3>An honest side-by-side</h3>
         <div className="sr-tablewrap">
           <table className="sr-table">
             <thead>
               <tr>
-                <th scope="col">&nbsp;</th>
+                <th scope="col">Capability</th>
                 <th scope="col">Sight Reading Factory</th>
                 <th scope="col">Piano Tree</th>
                 <th scope="col">Prima Vista</th>
               </tr>
             </thead>
             <tbody>
-              {ROWS.map((r) => (
-                <tr key={r.feature}>
-                  <th scope="row">{r.feature}</th>
-                  <td>{r.srf}</td>
-                  <td>{r.tree}</td>
-                  <td className={r.us_win ? 'is-win' : r.us_loss ? 'is-loss' : ''}>{r.us}</td>
+              {ROWS.map((row) => (
+                <tr key={row.feature}>
+                  <th scope="row">{row.feature}</th>
+                  <td>{row.srf}</td>
+                  <td>{row.tree}</td>
+                  <td className={row.us_win ? 'is-win' : row.us_loss ? 'is-loss' : ''}>{row.us}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="sr-hint">
-          The last three rows are the honest ones. If you need band and choir parts, an assessment
-          record for thirty students, or graded Bach, the established products still win.
+          Product details checked against the official{' '}
+          <a href="https://www.sightreadingfactory.com/" target="_blank" rel="noreferrer">Sight Reading Factory</a>{' '}
+          and <a href="https://piano-tree.com/" target="_blank" rel="noreferrer">Piano Tree</a> pages.
         </p>
       </section>
     </div>

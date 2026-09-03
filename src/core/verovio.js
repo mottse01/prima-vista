@@ -13,6 +13,8 @@
 import { toMusicXml } from './musicxml.js';
 
 let toolkitPromise = null;
+let renderQueue = Promise.resolve();
+const renderCache = new Map();
 
 function loadToolkit() {
   if (!toolkitPromise) {
@@ -39,6 +41,14 @@ export const warmUp = () => loadToolkit().catch(() => {});
 // viewBox, so it scales to whatever width the page gives it.
 const PAGE_WIDTH = 2100;
 
+export function pageWidthForViewport() {
+  if (typeof window === 'undefined') return 1850;
+  if (window.innerWidth < 560) return 860;
+  if (window.innerWidth < 900) return 1200;
+  if (window.innerWidth < 1220) return 1500;
+  return 1850;
+}
+
 const OPTIONS = {
   scale: 40,
   pageWidth: PAGE_WIDTH,
@@ -61,13 +71,40 @@ const OPTIONS = {
  * @returns {Promise<string>} SVG markup
  */
 export async function renderScoreSvg(score, opts = {}) {
-  const toolkit = await loadToolkit();
-  toolkit.setOptions(OPTIONS);
-  const xml = toMusicXml(score, opts);
-  if (!toolkit.loadData(xml)) {
-    throw new Error(toolkit.getLog() || 'The engraver could not read this exercise.');
+  const { pageWidth = PAGE_WIDTH, ...musicXmlOptions } = opts;
+  const xml = toMusicXml(score, musicXmlOptions);
+  const key = `${pageWidth}:${musicXmlOptions.showFingerings ? 1 : 0}:${hashText(xml)}`;
+  if (renderCache.has(key)) return renderCache.get(key);
+
+  const job = renderQueue.then(async () => {
+    const toolkit = await loadToolkit();
+    toolkit.setOptions({ ...OPTIONS, pageWidth });
+    if (!toolkit.loadData(xml)) {
+      throw new Error(toolkit.getLog() || 'The engraver could not read this exercise.');
+    }
+    return toolkit.renderToSVG(1);
+  });
+  renderQueue = job.catch(() => {});
+  renderCache.set(key, job);
+  if (renderCache.size > 12) renderCache.delete(renderCache.keys().next().value);
+  try {
+    return await job;
+  } catch (error) {
+    renderCache.delete(key);
+    throw error;
   }
-  return toolkit.renderToSVG(1);
+}
+
+/** Prepare a future exercise without making its notation visible. */
+export const primeScoreRender = (score, opts = {}) => renderScoreSvg(score, opts).catch(() => null);
+
+function hashText(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 export { toMusicXml };

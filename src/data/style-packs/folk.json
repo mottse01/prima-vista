@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "hymn_chorale",
+  "id": "folk",
+  "display_name": "Folk",
+  "description": "Singable strains, primary-chord harmony, modal turns, and memorable returns.",
+  "title": "Folk Tune",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "4/4",
+      "weight": 0.45
+    },
+    {
+      "value": "3/4",
+      "weight": 0.25
+    },
+    {
+      "value": "2/4",
+      "weight": 0.3
+    }
+  ],
+  "tempo_range": [
+    66,
+    126
+  ],
+  "forms": [
+    {
+      "id": "folk_8",
+      "name": "Strophic refrain",
+      "weight": 1,
+      "min_level": 1,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "call",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "answer",
+          "transform": "reharmonize",
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "refrain",
+          "transform": "exact",
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "close",
+          "transform": "fragment",
+          "cadence": "plagal"
+        }
+      ]
+    }
+  ],
+  "lh_textures": [
+    {
+      "id": "root_fifth",
+      "weight": 0.6,
+      "min_level": 1
+    },
+    {
+      "id": "block_chord",
+      "weight": 0.3,
+      "min_level": 1
+    },
+    {
+      "id": "broken_octave",
+      "weight": 0.1,
+      "min_level": 5
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.84,
+    "step_ratio_tolerance": 0.11,
+    "max_leap_semitones": 12,
+    "leap_recovery": true,
+    "contours": [
+      {
+        "id": "arch",
+        "weight": 0.45
+      },
+      {
+        "id": "descending",
+        "weight": 0.25
+      },
+      {
+        "id": "wave",
+        "weight": 0.3
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "escape"
+    ]
+  },
+  "validator": {
+    "coherence_min": 0.52,
+    "coherence_max": 0.95,
+    "forbid_outer_parallels": false
+  },
+  "provenance": {
+    "model": "bootstrap-awaiting-corpus",
+    "corpus_snapshot": null
+  }
+}

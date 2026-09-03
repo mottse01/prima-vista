@@ -4,7 +4,7 @@
 // the other half of the loop: it matches what you actually played against what
 // was written, and attributes every miss to a *skill*, so practice can be aimed.
 
-import { TPQ, diaToY, keyAlterations, pitchClassName } from './theory.js';
+import { TPQ, diaToY, pitchClassName } from './theory.js';
 import { xmlNoteId } from './musicxml.js';
 import { expectedEvents } from './generator.js';
 
@@ -12,7 +12,7 @@ export const SKILLS = [
   { id: 'notes.treble', label: 'Treble staff notes' },
   { id: 'notes.bass', label: 'Bass staff notes' },
   { id: 'notes.ledger', label: 'Ledger-line notes' },
-  { id: 'notes.accidental', label: 'Accidentals' },
+  { id: 'notes.accidental', label: 'Sharps & flats' },
   { id: 'intervals.step', label: 'Steps' },
   { id: 'intervals.skip', label: 'Skips (3rds)' },
   { id: 'intervals.leap', label: 'Leaps (4ths+)' },
@@ -35,10 +35,43 @@ const RHYTHM_TAG_TO_SKILL = {
 /** Annotate each expected event with the skills it exercises. */
 export function analyseEvents(score) {
   const events = expectedEvents(score);
-  const keyAlt = keyAlterations(score.key.fifths);
-  const byHandPrev = { rh: null, lh: null };
-  const onsetCounts = new Map();
-  for (const e of events) onsetCounts.set(e.onset, (onsetCounts.get(e.onset) || 0) + 1);
+  const groups = new Map();
+  const handsAtOnset = new Map();
+  for (const event of events) {
+    const key = `${event.hand}:${event.onset}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(event);
+    if (!handsAtOnset.has(event.onset)) handsAtOnset.set(event.onset, new Set());
+    handsAtOnset.get(event.onset).add(event.hand);
+  }
+
+  // Melodic intervals run from one hand-position/attack to the next. Vertical
+  // thirds inside a blocked chord are not melodic skips, and must not pollute
+  // the learner's interval diagnosis.
+  const anchorForGroup = new Map();
+  const intervalForEvent = new WeakMap();
+  for (const hand of ['rh', 'lh']) {
+    const handGroups = [...groups.entries()]
+      .filter(([key]) => key.startsWith(`${hand}:`))
+      .sort((a, b) => a[1][0].onset - b[1][0].onset);
+    let previous = null;
+    for (const [key, attack] of handGroups) {
+      const anchor = attack.reduce((best, event) => {
+        if (!best) return event;
+        return hand === 'rh'
+          ? (event.pitch.dia > best.pitch.dia ? event : best)
+          : (event.pitch.dia < best.pitch.dia ? event : best);
+      }, null);
+      anchorForGroup.set(key, anchor);
+      if (previous) {
+        const steps = Math.abs(anchor.pitch.dia - previous.pitch.dia);
+        intervalForEvent.set(anchor, steps <= 1
+          ? 'intervals.step'
+          : steps === 2 ? 'intervals.skip' : 'intervals.leap');
+      }
+      previous = anchor;
+    }
+  }
 
   return events.map((e, i) => {
     const clef = e.hand === 'rh' ? 'treble' : 'bass';
@@ -46,23 +79,25 @@ export function analyseEvents(score) {
     const skills = new Set();
     skills.add(e.hand === 'rh' ? 'notes.treble' : 'notes.bass');
     if (y < -0.2 || y > 4.2) skills.add('notes.ledger');
-    if (e.pitch.alter !== keyAlt[e.pitch.letter]) skills.add('notes.accidental');
+    // Reading a sharp or flat from the key signature is still accidental
+    // fluency; written chromatic accidentals are included by the same test.
+    if (e.pitch.alter !== 0) skills.add('notes.accidental');
 
-    const prev = byHandPrev[e.hand];
-    if (prev) {
-      const steps = Math.abs(e.pitch.dia - prev.pitch.dia);
-      if (steps <= 1) skills.add('intervals.step');
-      else if (steps === 2) skills.add('intervals.skip');
-      else skills.add('intervals.leap');
-    }
-    byHandPrev[e.hand] = e;
+    const intervalSkill = intervalForEvent.get(e);
+    if (intervalSkill) skills.add(intervalSkill);
 
     for (const tag of e.tags || []) {
       const s = RHYTHM_TAG_TO_SKILL[tag];
       if (s) skills.add(s);
     }
     if (!(e.tags || []).some((t) => RHYTHM_TAG_TO_SKILL[t])) skills.add('rhythm.quarter');
-    if ((onsetCounts.get(e.onset) || 0) > 1) skills.add('coordination.together');
+    // Simultaneous pitches in one hand form a chord; coordination means the
+    // two hands actually attack together. Count one anchor per hand so a triad
+    // does not create three times as much evidence as a single bass note.
+    const groupKey = `${e.hand}:${e.onset}`;
+    if ((handsAtOnset.get(e.onset)?.size || 0) > 1 && anchorForGroup.get(groupKey) === e) {
+      skills.add('coordination.together');
+    }
 
     return {
       ...e,
@@ -247,15 +282,26 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
     });
 
     const total = expected.length || 1;
-    const pitchAccuracy = correct / total;
+    // Extra notes matter: key-mashing must not produce the same pitch score as
+    // a clean reading that found the written notes.
+    const pitchAccuracy = correct / (total + extras);
     const rhythmAccuracy = deltaCount ? (deltaCount - timingOff) / total : 0;
-    // Continuity: did the take keep moving, or did it stall and restart?
-    const continuity = 1 - Math.min(1, missed / total);
+    // Continuity is attack-based, not another spelling of note accuracy. A
+    // wrong note played on the beat still shows that the pulse kept moving;
+    // an entirely absent attack is a stall.
+    const attacks = new Map();
+    for (const event of expected) {
+      const current = attacks.get(event.onset) || false;
+      attacks.set(event.onset, current || Boolean(event.matched));
+    }
+    const attackCount = attacks.size || 1;
+    const attacksKept = [...attacks.values()].filter(Boolean).length;
+    const continuity = attacksKept / attackCount;
     const overall = 0.5 * pitchAccuracy + 0.3 * rhythmAccuracy + 0.2 * continuity;
 
     return {
       total, correct, wrong, missed, extras, timingOff, timedNotes: deltaCount,
-      pitchAccuracy, rhythmAccuracy, continuity, overall,
+      pitchAccuracy, rhythmAccuracy, continuity, overall, attackCount, attacksKept,
       meanAbsTiming: deltaCount ? absDelta / deltaCount : null,
       meanSignedTiming: deltaCount ? signedDelta / deltaCount : null,
       skills: skillTally,

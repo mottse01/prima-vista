@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "folk",
+  "id": "pop_contemporary",
+  "display_name": "Contemporary pop",
+  "description": "Loop harmony, hook repetition, sectional lift, and clean rhythmic identity.",
+  "title": "Song Study",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "4/4",
+      "weight": 0.82
+    },
+    {
+      "value": "6/8",
+      "weight": 0.18
+    }
+  ],
+  "tempo_range": [
+    64,
+    148
+  ],
+  "forms": [
+    {
+      "id": "pop_8",
+      "name": "Verse–refrain",
+      "weight": 0.55,
+      "min_level": 1,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "verse",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "verse_answer",
+          "transform": "reharmonize",
+          "cadence": "deceptive"
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "hook",
+          "transform": "exact",
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "tag",
+          "transform": "fragment",
+          "cadence": "plagal"
+        }
+      ]
+    },
+    {
+      "id": "pop_16",
+      "name": "Verse–pre-chorus–chorus",
+      "weight": 0.45,
+      "min_level": 4,
+      "bars": 16,
+      "units": [
+        {
+          "bars": [
+            0,
+            3
+          ],
+          "role": "verse",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            4,
+            7
+          ],
+          "role": "verse_variation",
+          "transform": "reharmonize",
+          "cadence": "deceptive"
+        },
+        {
+          "bars": [
+            8,
+            11
+          ],
+          "role": "pre_chorus",
+          "transform": "transpose_diatonic",
+          "transform_value": 1,
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            12,
+            15
+          ],
+          "role": "chorus",
+          "transform": "exact",
+          "cadence": "plagal"
+        }
+      ]
+    }
+  ],
+  "harmony": {
+    "vocabulary": [
+      "I",
+      "ii",
+      "IV",
+      "V",
+      "vi"
+    ],
+    "roman_degrees": {
+      "I": 0,
+      "ii": 1,
+      "IV": 3,
+      "V": 4,
+      "vi": 5
+    },
+    "transitions": {
+      "I": {
+        "V": 0.34,
+        "vi": 0.36,
+        "IV": 0.3
+      },
+      "ii": {
+        "V": 0.68,
+        "IV": 0.32
+      },
+      "IV": {
+        "I": 0.24,
+        "V": 0.42,
+        "vi": 0.34
+      },
+      "V": {
+        "I": 0.42,
+        "vi": 0.38,
+        "IV": 0.2
+      },
+      "vi": {
+        "IV": 0.44,
+        "I": 0.22,
+        "V": 0.22,
+        "ii": 0.12
+      }
+    },
+    "cadences": {
+      "half": [
+        [
+          "ii",
+          "V"
+        ],
+        [
+          "IV",
+          "V"
+        ]
+      ],
+      "authentic": [
+        [
+          "V",
+          "I"
+        ]
+      ],
+      "deceptive": [
+        [
+          "V",
+          "vi"
+        ]
+      ],
+      "plagal": [
+        [
+          "IV",
+          "I"
+        ]
+      ]
+    },
+    "cadence_weights": {
+      "internal": {
+        "deceptive": 0.55,
+        "half": 0.3,
+        "plagal": 0.15
+      },
+      "final": {
+        "plagal": 0.45,
+        "authentic": 0.3,
+        "deceptive": 0.25
+      }
+    },
+    "licensed_retrogressions": [
+      "V>IV"
+    ]
+  },
+  "lh_textures": [
+    {
+      "id": "root_fifth",
+      "weight": 0.45,
+      "min_level": 1
+    },
+    {
+      "id": "block_chord",
+      "weight": 0.2,
+      "min_level": 1
+    },
+    {
+      "id": "broken_octave",
+      "weight": 0.35,
+      "min_level": 4
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.7,
+    "step_ratio_tolerance": 0.15,
+    "max_leap_semitones": 14,
+    "leap_recovery": true,
+    "contours": [
+      {
+        "id": "arch",
+        "weight": 0.35
+      },
+      {
+        "id": "wave",
+        "weight": 0.4
+      },
+      {
+        "id": "ascending",
+        "weight": 0.25
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "escape"
+    ]
+  },
+  "validator": {
+    "coherence_min": 0.55,
+    "coherence_max": 0.96,
+    "forbid_outer_parallels": false
+  },
+  "provenance": {
+    "model": "bootstrap-awaiting-corpus",
+    "corpus_snapshot": null
+  }
+}

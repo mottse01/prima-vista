@@ -10,7 +10,7 @@ import { exportAll, importAll } from '../core/storage.js';
 
 const NOTE_ORDER = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B', 'Cb', 'Fb', 'E#', 'B#'];
 
-export default function ProgressView({ profile, onDrill, onReset, onReload }) {
+export default function ProgressView({ profile, onDrill, onResume, onReset, onReload }) {
   const fileRef = useRef(null);
   const avg = recentAverage(profile, 10);
   const weak = weakestSkills(profile, 3);
@@ -18,14 +18,23 @@ export default function ProgressView({ profile, onDrill, onReset, onReload }) {
 
   const pitchTally = useMemo(() => aggregatePitches(profile), [profile]);
   const recovery = useMemo(() => aggregateRecovery(profile), [profile]);
-  // Replays and curtain takes are not sight-reads; charting them flatters the trend.
-  const history = profile.history.filter((h) => !h.repeat && !h.curtain).slice(-40);
+  // Replays, assisted practice, and curtain takes are not clean first reads;
+  // charting them together would flatter or distort the sight-reading trend.
+  const history = profile.history.filter((h) => !h.repeat && !h.assisted && !h.curtain).slice(-40);
+  const savedExercises = [...profile.history]
+    .reverse()
+    .filter((take) => take.meta?.recipe)
+    .filter((take, index, all) => all.findIndex((other) => (
+      other.meta.recipe.seed === take.meta.recipe.seed
+      && JSON.stringify(other.meta.recipe.params) === JSON.stringify(take.meta.recipe.params)
+    )) === index)
+    .slice(0, 8);
 
   return (
     <div className="sr-progress">
       <section className="sr-stats">
         <Stat label="Current level" value={profile.level} detail={level.name} />
-        <Stat label="Last 10 takes" value={avg == null ? '—' : avg} detail={avg == null ? 'no takes yet' : 'average score'} />
+        <Stat label="Fresh-read average" value={avg == null ? '—' : avg} detail={avg == null ? 'no qualifying reads yet' : 'last 10 qualifying reads'} />
         <Stat label="Day streak" value={profile.streak.count || 0} detail={profile.streak.count ? 'keep it going' : 'start today'} />
         <Stat label="Notes read" value={profile.totals.notes.toLocaleString()} detail={`${Math.round(profile.totals.minutes)} minutes`} />
         <Stat
@@ -134,6 +143,29 @@ export default function ProgressView({ profile, onDrill, onReset, onReload }) {
       </section>
 
       <section className="sr-panel">
+        <h3>Past exercises</h3>
+        <p className="sr-hint">Saved as a seed and musical recipe, so a repeat opens the exact exercise without storing the score.</p>
+        {savedExercises.length === 0 ? (
+          <p className="sr-hint">Completed exercises will appear here.</p>
+        ) : (
+          <ul className="sr-weaklist">
+            {savedExercises.map((take) => {
+              const recipe = take.meta.recipe;
+              return (
+                <li key={`${take.at}:${recipe.seed}`}>
+                  <div>
+                    <b>{recipe.title || 'Saved exercise'}</b>
+                    <span className="sr-dim"> · {recipe.style || 'Auto'} · score {take.score}</span>
+                  </div>
+                  <button type="button" className="sr-btn sr-btn--small" onClick={() => onResume(recipe)}>Practice again</button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="sr-panel">
         <h3>Your data</h3>
         <p className="sr-hint">
           Everything is stored in this browser. No account, nothing uploaded. Take it with you:
@@ -161,7 +193,12 @@ export default function ProgressView({ profile, onDrill, onReset, onReload }) {
               e.target.value = '';
             }}
           />
-          <button type="button" className="sr-btn sr-btn--small sr-btn--ghost" onClick={onReset}>Reset everything</button>
+          <button
+            type="button" className="sr-btn sr-btn--small sr-btn--ghost"
+            onClick={() => {
+              if (window.confirm('Reset your Prima Vista progress? Saved setups and preferences will stay.')) onReset();
+            }}
+          >Reset progress</button>
         </div>
       </section>
     </div>
@@ -186,7 +223,7 @@ function aggregatePitches(profile) {
  * sight-read, and a curtain take is expected to derail you more often.
  */
 function aggregateRecovery(profile) {
-  const takes = profile.history.filter((h) => !h.repeat && !h.curtain && h.meta?.recovery);
+  const takes = profile.history.filter((h) => !h.repeat && !h.assisted && !h.curtain && h.meta?.recovery);
   const means = takes.map((h) => h.meta.recovery.meanNotes).filter((n) => n != null);
   return {
     takes: takes.length,
