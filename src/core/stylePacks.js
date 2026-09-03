@@ -47,12 +47,24 @@ function validateStylePack(pack) {
   validateWeights(pack.meters, `${pack.id}.meters`);
   validateWeights(pack.modes, `${pack.id}.modes`);
   invariant(Array.isArray(pack.tempo_range) && pack.tempo_range.length === 2, `${pack.id}.tempo_range is invalid`);
+  invariant(pack.tempo_range.every(Number.isFinite) && pack.tempo_range[0] <= pack.tempo_range[1], `${pack.id}.tempo_range is unordered`);
   validateWeights(pack.forms, `${pack.id}.forms`);
   pack.forms.forEach((form) => validateForm(form, pack.id));
   invariant(isRecord(pack.harmony), `${pack.id}.harmony is required`);
   invariant(Array.isArray(pack.harmony.vocabulary) && pack.harmony.vocabulary.length > 0, `${pack.id}.harmony.vocabulary is empty`);
   invariant(isRecord(pack.harmony.transitions), `${pack.id}.harmony.transitions is required`);
   invariant(isRecord(pack.harmony.cadences), `${pack.id}.harmony.cadences is required`);
+  invariant(Array.isArray(pack.harmony.functions_by_degree) && pack.harmony.functions_by_degree.length === 7,
+    `${pack.id}.harmony.functions_by_degree must contain seven entries`);
+  invariant(isRecord(pack.harmony.mode_degree_weights), `${pack.id}.harmony.mode_degree_weights is required`);
+  for (const mode of ['major', 'minor']) {
+    const weights = pack.harmony.mode_degree_weights[mode];
+    invariant(Array.isArray(weights) && weights.length === 7 && weights.every((weight) => weight > 0),
+      `${pack.id}.harmony.mode_degree_weights.${mode} must contain seven positive weights`);
+  }
+  invariant(typeof pack.harmony.inversion_probability === 'number'
+    && pack.harmony.inversion_probability >= 0 && pack.harmony.inversion_probability <= 1,
+  `${pack.id}.harmony.inversion_probability is invalid`);
   for (const roman of pack.harmony.vocabulary) {
     const row = pack.harmony.transitions[roman];
     invariant(isRecord(row) && Object.keys(row).length > 0, `${pack.id} has no transition row for ${roman}`);
@@ -62,7 +74,17 @@ function validateStylePack(pack) {
   validateWeights(pack.rhythm_cells, `${pack.id}.rhythm_cells`);
   invariant(isRecord(pack.melody), `${pack.id}.melody is required`);
   validateWeights(pack.melody.contours, `${pack.id}.melody.contours`);
+  invariant(typeof pack.melody.motif_strength === 'number' && pack.melody.motif_strength > 0,
+    `${pack.id}.melody.motif_strength is invalid`);
+  invariant(typeof pack.melody.climax_position === 'number'
+    && pack.melody.climax_position >= 0 && pack.melody.climax_position <= 1,
+  `${pack.id}.melody.climax_position is invalid`);
   invariant(isRecord(pack.development), `${pack.id}.development is required`);
+  invariant(typeof pack.development.recognizable_min_ratio === 'number'
+    && pack.development.recognizable_min_ratio >= 0.5 && pack.development.recognizable_min_ratio <= 1,
+  `${pack.id}.development.recognizable_min_ratio is invalid`);
+  invariant(typeof pack.development.fallback_transform === 'string' && pack.development.fallback_transform,
+    `${pack.id}.development.fallback_transform is required`);
   invariant(isRecord(pack.expression), `${pack.id}.expression is required`);
   invariant(isRecord(pack.validator), `${pack.id}.validator is required`);
   invariant(pack.validator.coherence_min < pack.validator.coherence_max, `${pack.id} has an inverted coherence band`);

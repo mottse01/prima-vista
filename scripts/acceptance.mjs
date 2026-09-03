@@ -8,14 +8,34 @@ import { validateExercise } from '../src/core/validator.js';
 
 const samples = Number(process.env.PV_ACCEPTANCE_SAMPLES || 1000);
 const profile = emptyProfile();
-const summary = { samplesPerLevel: samples, hardViolations: 0, levels: {}, diversity: null, determinism: null };
+const summary = {
+  samplesPerLevel: samples,
+  hardViolations: 0,
+  criticFailuresEmitted: 0,
+  strictSelections: 0,
+  relaxedSelections: 0,
+  levels: {},
+  diversity: null,
+  determinism: null,
+};
 
 for (let level = 1; level <= 10; level++) {
   let minimumCoherence = 1;
   let maximumCoherence = 0;
   for (let sample = 0; sample < samples; sample++) {
     const seed = (level * 1000003 + sample * 7919) >>> 0;
-    const score = generateExercise(paramsForLevel(level, profile, { seed, targeting: false }));
+    let score;
+    try {
+      score = generateExercise(paramsForLevel(level, profile, { seed, targeting: false }));
+    } catch (error) {
+      throw new Error(`level ${level} seed ${seed}: ${error.message}`, { cause: error });
+    }
+    if (!score.compositionReview.passed) {
+      summary.criticFailuresEmitted += 1;
+      throw new Error(`level ${level} seed ${seed}: a critic-failed score escaped ranking`);
+    }
+    if (score.compositionReview.selectedAttempt < 10) summary.strictSelections += 1;
+    else summary.relaxedSelections += 1;
     const review = validateExercise(score, levelById(level).constraints, { relaxation: 4 });
     if (review.hardErrors.length) {
       summary.hardViolations += 1;

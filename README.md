@@ -79,9 +79,12 @@ src/
   hand-audited Classical and Hymn/Chorale packs; the remaining packs are
   selectable previews until corpus calibration is complete.
 - **Every generated score passes a validator before display.** Bar arithmetic,
-  range, accidentals, hand span, collisions, cadence arrivals, subdivision,
-  development, and the coherence band are hard gates. Soft preferences relax
-  only after ten failed attempts; hard failures are never emitted.
+  range and ledger lines, melodic interval and hand-shift caps, chromatic-event
+  counts, simultaneous span, collisions, cadence arrivals, licensed harmonic
+  seams and non-chord tones, subdivision, audible development, and the
+  coherence band are hard gates. Ten strict candidates are ranked first; only
+  if all ten fail may ten progressively softer candidates be considered. Hard
+  failures and critic-rejected candidates are never emitted.
 - **The public-domain pipeline has one license boundary.**
   `tools/corpus_pipeline/` records provenance in SQLite and accepts only public
   domain, CC0, or explicitly approved permissive sources. NonCommercial and
@@ -103,10 +106,19 @@ src/
   imported lazily and lands in its own chunk. The app shell stays small.
 - **Timing uses the audio clock**, not `performance.now()` and not MIDI
   timestamps, so playback, metronome and grading all share one time base.
-- **Generated does not mean random-walk.** Each study states a two-bar rhythmic
-  and melodic idea, answers it, introduces contrast on longer exercises, then
-  returns to the opening material. Four-bar harmonic punctuation alternates
-  half and authentic cadences, so the form can be heard as well as analysed.
+- **Generated does not mean random-walk.** A pack-authored form fixes phrase
+  functions and cadences first. A pack transition/trigram model then supplies
+  harmony, including a whole-progression bridge solve around protected cadence
+  formulas. Exactly one explicit motif records its rhythm cell, contour, and
+  seed scale degrees; exact, diatonic-transposition, reharmonisation, inversion,
+  augmentation, diminution, fragmentation, and interval-expansion transforms
+  develop that same object rather than generating independent bars.
+- **Corpus calibration is reproducible.** The offline Python pipeline mines
+  licensed, hand-audited genre buckets into bigrams, trigrams, phrase cadence
+  candidates, rhythm and interval distributions, accompaniment clusters,
+  fragment provenance, and coherence quantiles. `npm run prepare:evaluation`
+  creates the blinded A/B and teacher-review packages required before a preview
+  pack can be promoted.
 - **Audio has a robust dual path.** Live key sounds stay on low-latency
   WebAudio. “Hear the score” and the practice count-in/metronome render locally
   to WAV media, which is more reliable in iOS webviews and embedded Sites;

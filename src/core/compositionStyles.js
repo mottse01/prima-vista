@@ -12,11 +12,11 @@ function publicProfile(pack) {
   return Object.freeze({
     id: pack.id, label: pack.display_name, description: pack.description,
     title: pack.title, version: pack.version, pack,
-    motifStrength: 18,
+    motifStrength: pack.melody.motif_strength,
     stepwiseAdjustment: pack.melody.step_ratio_target - 0.72,
     nonChordMultiplier: Math.max(0.55, Math.min(1.25, 1 - (pack.melody.step_ratio_target - 0.72))),
     blueNoteRate: pack.melody.blue_note_density || 0,
-    climaxPosition: 0.64,
+    climaxPosition: pack.melody.climax_position,
   });
 }
 
@@ -38,14 +38,19 @@ export function compositionStyle(id) {
 
 /** Resolve Auto from pack data without a genre-specific branch. */
 export function resolveCompositionStyle(rng, requested, context = {}) {
-  if (requested && requested !== 'auto') return compositionStyle(requested);
-  const eligible = STYLE_PACK_LIST.filter((pack) => (
-    pack.provenance.model === 'bootstrap-hand-audited'
-    &&
+  if (requested && requested !== 'auto') {
+    const selected = compositionStyle(requested);
+    if (context.timeSignature && !selected.pack.meters.some((meter) => meter.value === context.timeSignature)) {
+      throw new Error(`${selected.label} does not support ${context.timeSignature}`);
+    }
+    return selected;
+  }
+  const compatible = STYLE_PACK_LIST.filter((pack) => (
     pack.meters.some((meter) => meter.value === context.timeSignature)
     && pack.forms.some((form) => form.min_level <= (context.level || 1))
   ));
-  const pool = eligible.length ? eligible : STYLE_PACK_LIST;
+  const pool = compatible.filter((pack) => pack.provenance.model === 'bootstrap-hand-audited');
+  if (!pool.length) throw new Error(`No audited style pack supports ${context.timeSignature}`);
   const weighted = pool.map((pack) => ({
     pack,
     weight: pack.meters.find((meter) => meter.value === context.timeSignature)?.weight || 0.08,
@@ -94,6 +99,12 @@ function repeatToLength(form, bars) {
   return { ...structuredClone(form), id: `${form.id}_${bars}`, name: `${form.name} (${bars} bars)`, bars, units };
 }
 
+function cadenceStrength(unit) {
+  if (!unit.cadence) return 'none';
+  if (['half', 'deceptive', 'subdominant_turn', 'blues_turnaround'].includes(unit.cadence)) return 'open';
+  return 'strong';
+}
+
 /** Return a pack-authored phrase plan fitted to the requested length. */
 export function formForStyle(styleId, bars, rng = null, level = 1) {
   const pack = stylePack(styleId);
@@ -102,6 +113,13 @@ export function formForStyle(styleId, bars, rng = null, level = 1) {
   const candidates = exact.length ? exact : eligible.length ? eligible : pack.forms;
   const selected = rng ? weightedPick(rng, candidates) : [...candidates].sort((a, b) => b.weight - a.weight)[0];
   const form = repeatToLength(selected, bars);
+  const advanced = pack.development.advanced_transforms || {};
+  const fallback = pack.development.fallback_transform;
+  form.units = form.units.map((unit) => (
+    advanced[unit.transform] && level < advanced[unit.transform]
+      ? { ...unit, transform: fallback, transform_value: 0 }
+      : unit
+  ));
   const plan = Array.from({ length: bars }, (_, measure) => {
     const unitIndex = form.units.findIndex((unit) => measure >= unit.bars[0] && measure <= unit.bars[1]);
     const unit = form.units[unitIndex];
@@ -110,7 +128,7 @@ export function formForStyle(styleId, bars, rng = null, level = 1) {
       section: String.fromCharCode(65 + (unitIndex % 26)),
       phraseFunction: unit.role, role: unit.role, transform: unit.transform,
       transformValue: unit.transform_value || 0,
-      cadenceStrength: unit.cadence ? (measure === bars - 1 ? 'strong' : 'weak') : 'none',
+      cadenceStrength: cadenceStrength(unit),
       cadenceType: measure === unit.bars[1] ? unit.cadence : null,
       cadence: measure === unit.bars[1] && Boolean(unit.cadence),
       motifKey: unitIndex === 0 ? 'motif' : `${unit.transform}:${unit.transform_value || 0}`,
@@ -127,7 +145,7 @@ export function formForStyle(styleId, bars, rng = null, level = 1) {
     function: unit.role,
     section: String.fromCharCode(65 + (index % 26)),
     energy: plan[unit.bars[0]].energy,
-    cadenceStrength: unit.cadence ? (unit.bars[1] === bars - 1 ? 'strong' : 'weak') : 'none',
+    cadenceStrength: cadenceStrength(unit),
   }));
   return {
     id: form.id, name: form.name,

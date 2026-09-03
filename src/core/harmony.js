@@ -4,7 +4,6 @@
 import { chordTones, spellChordTone, tonicLetter } from './theory.js';
 import { stylePack } from './stylePacks.js';
 
-const FUNCTION_OF = ['T', 'PD', 'T', 'PD', 'D', 'T', 'D'];
 const CADENCE_LABELS = {
   authentic: ['Authentic cadence', 'AC'], imperfect: ['Imperfect authentic cadence', 'IAC'],
   half: ['Half cadence', 'HC'], deceptive: ['Deceptive cadence', 'DC'],
@@ -32,9 +31,91 @@ function degreeFor(pack, roman) {
 }
 
 function inversionFor(roman) {
+  if (roman.endsWith('42') || roman.endsWith('2')) return 3;
+  if (roman.endsWith('43')) return 2;
+  if (roman.endsWith('65')) return 1;
   if (roman.endsWith('64')) return 2;
   if (roman.endsWith('6')) return 1;
   return 0;
+}
+
+function realisedRoman(roman, allowSevenths, allowInversions, pack) {
+  let value = allowInversions ? roman : roman.replace(/64|65|43|42|6|2$/g, '');
+  if (!allowSevenths && pack.harmony.require_labelled_sevenths !== true) {
+    value = value.replace(/7|65|43|42|2$/g, '');
+  }
+  return value;
+}
+
+function romanVariants(roman) {
+  const withoutInversion = roman.replace(/64|65|43|42|6|2$/g, '');
+  const withoutSeventh = withoutInversion.replace(/7$/g, '');
+  return [...new Set([roman, withoutInversion, withoutSeventh])];
+}
+
+function transitionAllowed(pack, left, right) {
+  if (!left || !right) return true;
+  for (const from of romanVariants(left)) {
+    for (const to of romanVariants(right)) {
+      if (pack.harmony.transitions[from]?.[to]) return true;
+      if ((pack.harmony.licensed_retrogressions || []).includes(`${from}>${to}`)) return true;
+    }
+  }
+  return false;
+}
+
+function transitionWeight(pack, left, right) {
+  if (!left) return degreeFor(pack, right) === 0 ? 1 : 0.2;
+  for (const from of romanVariants(left)) {
+    for (const to of romanVariants(right)) {
+      const weight = pack.harmony.transitions[from]?.[to];
+      if (weight) return weight;
+      if ((pack.harmony.licensed_retrogressions || []).includes(`${from}>${to}`)) return 0.04;
+    }
+  }
+  return 0;
+}
+
+/** Find an exact-length, pack-licensed bridge between two protected chords. */
+function bridgePath(pack, length, left, right, original, rng) {
+  if (!length) return transitionAllowed(pack, left, right) ? [] : null;
+  let states = new Map([[left || '', { score: 0, path: [] }]]);
+  for (let offset = 0; offset < length; offset++) {
+    const next = new Map();
+    for (const [previous, state] of states) {
+      for (const roman of pack.harmony.vocabulary) {
+        const weight = transitionWeight(pack, previous || null, roman);
+        if (!weight) continue;
+        const score = state.score + Math.log(weight) + (roman === original[offset] ? 0.2 : 0);
+        const incumbent = next.get(roman);
+        if (!incumbent || score > incumbent.score) next.set(roman, { score, path: [...state.path, roman] });
+      }
+    }
+    states = next;
+    if (!states.size) return null;
+  }
+  const complete = [...states.entries()]
+    .filter(([last]) => !right || transitionAllowed(pack, last, right))
+    .map(([, state]) => state)
+    .sort((a, b) => b.score - a.score);
+  if (!complete.length) return null;
+  const shortlist = complete.slice(0, Math.min(3, complete.length));
+  return rng.weighted(shortlist, shortlist.map((item, index) => 3 - index)).path;
+}
+
+function nextRoman(rng, pack, romans, mode) {
+  const current = romans.at(-1);
+  const trigram = romans.length > 1
+    ? pack.harmony.trigram_transitions?.[`${romans.at(-2)}|${current}`]
+    : null;
+  const row = trigram
+    || pack.harmony.transitions[current]
+    || pack.harmony.transitions[current.replace(/[0-9°ø+]/g, '')]
+    || pack.harmony.transitions[romans[0]];
+  const degreeWeights = pack.harmony.mode_degree_weights?.[mode] || Array(7).fill(1);
+  return pickObject(rng, Object.fromEntries(Object.entries(row).map(([candidate, weight]) => (
+    [candidate, weight * (degreeWeights[degreeFor(pack, candidate)] || 1)]
+  ))));
 }
 
 function cadenceChoice(rng, pack, requested, final) {
@@ -65,11 +146,7 @@ export function planProgression(rng, {
     || pack.harmony.vocabulary[0];
   const romans = [tonic];
   while (romans.length < slots) {
-    const current = romans.at(-1);
-    const row = pack.harmony.transitions[current]
-      || pack.harmony.transitions[current.replace(/[0-9°ø+]/g, '')]
-      || pack.harmony.transitions[tonic];
-    romans.push(pickObject(rng, row));
+    romans.push(nextRoman(rng, pack, romans, mode));
   }
 
   const cadenceEnds = form?.plan
@@ -83,15 +160,42 @@ export function planProgression(rng, {
     const planBar = form?.plan?.[measure];
     const id = cadenceChoice(rng, pack, planBar?.cadenceType, final);
     const formulas = pack.harmony.cadences[id];
-    const formula = structuredClone(rng.pick(formulas));
     const endSlot = Math.min(slots - 1, (measure + 1) * chordsPerMeasure - 1);
+    const scored = formulas.map((candidate) => {
+      const start = Math.max(0, endSlot - candidate.length + 1);
+      const appliedCandidate = candidate.slice(candidate.length - (endSlot - start + 1));
+      const before = start > 0 ? romans[start - 1] : null;
+      const after = endSlot + 1 < romans.length ? romans[endSlot + 1] : null;
+      return {
+        formula: candidate,
+        score: Number(transitionAllowed(pack, before, appliedCandidate[0]))
+          + Number(transitionAllowed(pack, appliedCandidate.at(-1), after)),
+      };
+    });
+    const bestScore = Math.max(...scored.map((item) => item.score));
+    const formula = structuredClone(rng.pick(scored.filter((item) => item.score === bestScore)).formula);
     const startSlot = Math.max(0, endSlot - formula.length + 1);
     const applied = formula.slice(formula.length - (endSlot - startSlot + 1));
+
+    // Cadence splicing must not create an arbitrary seam. If the random walk
+    // cannot enter the selected formula, replace the immediately preceding
+    // slot with a two-sided bridge from the pack's own transition model.
+    if (startSlot > 0 && !transitionAllowed(pack, romans[startSlot - 1], applied[0])) {
+      const previous = startSlot > 1 ? romans[startSlot - 2] : null;
+      const bridges = pack.harmony.vocabulary.filter((roman) => (
+        transitionAllowed(pack, previous, roman) && transitionAllowed(pack, roman, applied[0])
+      ));
+      if (bridges.length) romans[startSlot - 1] = rng.pick(bridges);
+    }
     applied.forEach((roman, index) => {
       const slot = startSlot + index;
       romans[slot] = roman;
       cadenceSlot.set(slot, { id, position: index === applied.length - 1 ? 'arrival' : 'approach' });
     });
+    if (endSlot + 1 < romans.length && !transitionAllowed(pack, applied.at(-1), romans[endSlot + 1])) {
+      const exits = Object.keys(pack.harmony.transitions[applied.at(-1)] || {});
+      if (exits.length) romans[endSlot + 1] = rng.pick(exits);
+    }
     const degrees = applied.map((roman) => degreeFor(pack, roman));
     const [name, short] = CADENCE_LABELS[id] || [id.replaceAll('_', ' '), id.toUpperCase()];
     cadences.push({
@@ -104,18 +208,40 @@ export function planProgression(rng, {
     });
   }
 
+  // Solve every mutable span between protected cadence chords as one path.
+  // This prevents a repair at one cadence from silently breaking another.
+  const fixed = new Set([0, ...cadenceSlot.keys()]);
+  let cursor = 0;
+  while (cursor < romans.length) {
+    if (fixed.has(cursor)) { cursor += 1; continue; }
+    const start = cursor;
+    while (cursor < romans.length && !fixed.has(cursor)) cursor += 1;
+    const end = cursor - 1;
+    const leftIndex = start - 1;
+    const rightIndex = cursor < romans.length ? cursor : null;
+    const bridge = bridgePath(
+      pack, end - start + 1,
+      leftIndex >= 0 ? romans[leftIndex] : null,
+      rightIndex == null ? null : romans[rightIndex],
+      romans.slice(start, end + 1), rng,
+    );
+    if (!bridge) throw new Error(`No licensed harmonic bridge into cadence at slot ${rightIndex ?? slots}`);
+    bridge.forEach((roman, offset) => { romans[start + offset] = roman; });
+  }
+
   const alteredSevenths = new Set(pack.harmony.altered_sevenths || []);
   const chords = romans.map((roman, index) => {
     const degree = degreeFor(pack, roman);
     const mark = cadenceSlot.get(index);
     const labelledSeventh = roman.includes('7');
-    let inversion = inversionFor(roman);
-    if (allowInversions && !mark && inversion === 0 && rng.chance(0.24)) inversion = 1;
+    let inversion = allowInversions ? inversionFor(roman) : 0;
+    if (allowInversions && !mark && inversion === 0 && rng.chance(pack.harmony.inversion_probability)) inversion = 1;
+    const outputRoman = realisedRoman(roman, allowSevenths, allowInversions, pack);
     return {
-      degree, plannedDegree: degree, plannedRoman: roman,
+      degree, plannedDegree: degree, plannedRoman: outputRoman, modelRoman: roman,
       seventh: labelledSeventh && (allowSevenths || pack.harmony.require_labelled_sevenths === true),
       inversion, inversionLocked: Boolean(mark) || inversionFor(roman) > 0,
-      fn: FUNCTION_OF[degree], index,
+      fn: pack.harmony.functions_by_degree[degree], index,
       source: mark ? 'cadence' : 'progression',
       cadence: mark || null,
       bluesDominant: mode === 'major' && alteredSevenths.has(degree) && labelledSeventh,
@@ -123,10 +249,13 @@ export function planProgression(rng, {
   });
 
   const degrees = chords.map((chord) => chord.degree);
+  for (const cadence of cadences) {
+    cadence.roman = cadence.slots.map((slot) => chords[slot].plannedRoman).join('–');
+  }
   const unitPlans = (form?.units || []).map((unit) => {
     const first = unit.bars[0] * chordsPerMeasure;
     const last = Math.min(chords.length, (unit.bars[1] + 1) * chordsPerMeasure);
-    return { phrase: unit.index, function: unit.role, roman: romans.slice(first, last).join('–') };
+    return { phrase: unit.index, function: unit.role, roman: chords.slice(first, last).map((chord) => chord.plannedRoman).join('–') };
   });
 
   return {
@@ -142,8 +271,7 @@ export function planProgression(rng, {
   };
 }
 
-/** Voice a chord with minimum movement and a fixed cadential bass when required. */
-export function voiceChord(key, chord, prevVoicing, { lowDia, highDia }) {
+function voicingCandidates(key, chord, { lowDia, highDia }) {
   const centre = Math.round((lowDia + highDia) / 2);
   const base = chordTones(key, chord, centre - 2);
   const candidates = [];
@@ -165,13 +293,70 @@ export function voiceChord(key, chord, prevVoicing, { lowDia, highDia }) {
     const desired = (chord.degree + chord.inversion * 2) % 7;
     const choices = Array.from({ length: highDia - lowDia + 1 }, (_, index) => lowDia + index)
       .filter((dia) => ((dia - tonicLetter(key)) % 7 + 7) % 7 === desired);
-    return [choices.sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre))[0] ?? lowDia];
+    return [[choices.sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre))[0] ?? lowDia]];
   }
+  return candidates;
+}
+
+/** Voice one chord, retained for callers that do not yet have phrase context. */
+export function voiceChord(key, chord, prevVoicing, range) {
+  const candidates = voicingCandidates(key, chord, range);
+  const centre = Math.round((range.lowDia + range.highDia) / 2);
   if (!prevVoicing) return candidates.sort((a, b) => Math.abs(a[0] - centre) - Math.abs(b[0] - centre))[0];
   const cost = (voicing) => voicing.reduce((sum, pitch, index) => (
     sum + Math.abs(pitch - prevVoicing[Math.min(index, prevVoicing.length - 1)])
   ), 0);
   return candidates.sort((a, b) => cost(a) - cost(b))[0];
+}
+
+function transitionCost(previous, current) {
+  const movement = current.reduce((sum, pitch, index) => (
+    sum + Math.abs(pitch - previous[Math.min(index, previous.length - 1)])
+  ), 0);
+  const previousClasses = new Set(previous.map((pitch) => ((pitch % 7) + 7) % 7));
+  const retained = current.filter((pitch) => previousClasses.has(((pitch % 7) + 7) % 7)).length;
+  return movement - retained * 1.35 + Math.abs(current[0] - previous[0]) * 0.35;
+}
+
+/**
+ * Choose all accompaniment voicings together. Dynamic programming lets a
+ * locally less-obvious inversion win when it produces a smoother phrase and
+ * avoids parallel perfect intervals against the realised melody.
+ */
+export function voiceChordSequence(key, chords, {
+  lowDia, highDia, upperStaff = [], slotTicks = 48, forbidOuterParallels = false,
+}) {
+  const layers = chords.map((chord) => voicingCandidates(key, chord, { lowDia, highDia }));
+  const topAt = (onset) => {
+    const pitches = upperStaff.filter((event) => (
+      !event.rest && event.onset <= onset && event.onset + event.duration > onset
+    )).flatMap((event) => event.pitches || []);
+    return pitches.length ? Math.max(...pitches.map((pitch) => pitch.dia)) : null;
+  };
+  let states = layers[0].map((voicing, index) => ({
+    cost: Math.abs(voicing[0] - (lowDia + highDia) / 2), path: [index], voicing,
+  }));
+  for (let slot = 1; slot < layers.length; slot++) {
+    const previousTop = topAt((slot - 1) * slotTicks);
+    const currentTop = topAt(slot * slotTicks);
+    states = layers[slot].map((voicing, index) => {
+      let best = null;
+      for (const state of states) {
+        let cost = state.cost + transitionCost(state.voicing, voicing);
+        if (forbidOuterParallels && previousTop != null && currentTop != null) {
+          const topMove = Math.sign(currentTop - previousTop);
+          const bassMove = Math.sign(voicing[0] - state.voicing[0]);
+          const before = ((previousTop - state.voicing[0]) % 7 + 7) % 7;
+          const after = ((currentTop - voicing[0]) % 7 + 7) % 7;
+          if (topMove && topMove === bassMove && [0, 4].includes(before) && before === after) cost += 18;
+        }
+        if (!best || cost < best.cost) best = { cost, path: [...state.path, index], voicing };
+      }
+      return best;
+    });
+  }
+  const winner = [...states].sort((a, b) => a.cost - b.cost)[0];
+  return winner.path.map((index, slot) => layers[slot][index]);
 }
 
 export function spellVoicing(key, chord, voicing) {

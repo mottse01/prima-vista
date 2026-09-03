@@ -24,6 +24,17 @@ style pack from preview to audited:
 5. Calibrate the pack's coherence thresholds against the corpus distribution,
    rerun the automated gate, and record the corpus snapshot in provenance.
 
+Prepare the blinded files, five separately randomised rater sheets, confidential
+answer key, and the 20-per-level teacher review set with:
+
+```bash
+npm run prepare:evaluation -- --references references.jsonl --style classical_early --out human-evaluation
+```
+
+The reference manifest is JSON Lines. Each row must contain `path`, `source_id`,
+`license`, `style`, and `level`; `meter` and `measures` are optional. The command
+rejects NonCommercial and ShareAlike rows before copying any reference.
+
 The difficulty crosswalk stored in `src/data/difficulty-levels.json` is a
 constraint model, not a claim that Prima Vista levels equal exam grades. It is
 anchored to the published ABRSM piano sight-reading parameters and the RCM piano

@@ -5,10 +5,10 @@
 // same music, which is what makes exact exercise links shareable and assignable.
 
 import {
-  TPQ, clamp, fromDia, isChordTone, spellInKey, spellChordTone, tonicLetter, KEY_NAMES,
+  TPQ, clamp, fromDia, isChordTone, keyAlterations, spellInKey, spellChordTone, tonicLetter, KEY_NAMES,
 } from './theory.js';
 import { getCell, metricWeight, resolveCells, timeSig } from './rhythm.js';
-import { planProgression, spellVoicing, voiceChord } from './harmony.js';
+import { planProgression, spellVoicing, voiceChordSequence } from './harmony.js';
 import { reviewMusicality } from './musicality.js';
 import { validateExercise } from './validator.js';
 import { makeRng } from './rng.js';
@@ -22,7 +22,9 @@ import { chooseFragment } from './fragments.js';
 // ---------------------------------------------------------------------------
 
 /** Fill one measure with rhythm cells drawn from the allowed vocabulary. */
-function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks, requiredTag = null }) {
+function fillMeasure(rng, ts, cellIds, {
+  restRate, offsetTicks, requiredTag = null, pack = null, primaryCellId = null,
+}) {
   const meter = ts.compound ? 'compound' : 'simple';
   const cells = cellIds.map(getCell).filter((c) => c && c.meter === meter);
   const fallback = getCell(ts.compound ? 'cdq' : 'q');
@@ -37,7 +39,8 @@ function fillMeasure(rng, ts, cellIds, { restRate, offsetTicks, requiredTag = nu
 
     const onBeat = pos % ts.beat === 0;
     const weights = usable.map((c) => {
-      let w = 1;
+      let w = pack?.rhythm_cells.find((item) => item.id === c.id)?.weight || 0.08;
+      if (c.id === primaryCellId) w *= 3.5;
       if (c.tags.includes('rest')) w *= restRate * 3;
       // Longer values open a bar naturally but clutter it mid-measure.
       if (c.ticks > ts.beat) w *= pos === 0 ? 1.1 : 0.45;
@@ -77,58 +80,54 @@ export function planMusicalForm(measures, styleId = 'classical_early', rng = nul
   return formForStyle(styleId, measures, rng, level);
 }
 
-function realiseCadenceAttack(events, arrivalOnset) {
-  const realised = [];
-  for (const event of events) {
-    const end = event.onset + event.duration;
-    if (event.onset < arrivalOnset && arrivalOnset < end) {
-      realised.push({ ...event, duration: arrivalOnset - event.onset });
-      realised.push({
-        ...event,
-        onset: arrivalOnset,
-        duration: end - arrivalOnset,
-        rest: false,
-        tags: [...event.tags, 'cadence-arrival'],
-        motifIndex: Number(event.motifIndex || 0) + 0.5,
-        cadenceArrival: true,
-      });
-    } else if (event.onset === arrivalOnset) {
-      realised.push({
-        ...event,
-        rest: false,
-        tags: [...event.tags, 'cadence-arrival'],
-        cadenceArrival: true,
-      });
-    } else {
-      realised.push(event);
-    }
-  }
-  return realised;
+function realiseCadenceAttack(events) {
+  if (!events.length) return events;
+  const last = events.length - 1;
+  return events.map((event, index) => index === last ? {
+    ...event,
+    rest: false,
+    tags: [...event.tags, 'cadence-arrival'],
+    cadenceArrival: true,
+  } : event);
 }
 
 /** Give continuation/chorus phrases perceptibly greater rhythmic momentum. */
-function transformRhythm(events, ts, spec, canSubdivide) {
-  if (!canSubdivide || !spec || spec.density < 3) return events;
-  const transformed = [];
-  for (const event of events) {
-    const maySplit = !event.rest
-      && event.duration >= ts.beat
-      && event.duration % 2 === 0;
-    if (!maySplit) {
-      transformed.push(event);
-      continue;
-    }
-    const half = event.duration / 2;
-    transformed.push({ ...event, duration: half, tags: [...event.tags, 'formal-fragment'] });
-    transformed.push({
-      ...event,
-      onset: event.onset + half,
-      duration: half,
-      motifIndex: Number(event.motifIndex || 0) + 0.5,
-      tags: [...event.tags, 'formal-fragment'],
-    });
+function transformRhythm(events, ts, spec, canSubdivide, minDuration = 1) {
+  if (!spec) return events;
+  const transform = spec.transform;
+  let source = events.map((event) => ({ ...event }));
+  let scale = 1;
+  if (transform === 'augment') scale = 2;
+  if (transform === 'diminish' && canSubdivide
+    && source.every((event) => event.duration / 2 >= minDuration)) scale = 0.5;
+  if (transform === 'fragment') {
+    const sounded = source.filter((event) => !event.rest);
+    const keep = new Set(sounded.slice(0, Math.max(1, Math.ceil(sounded.length / 2))));
+    const last = [...source].findLastIndex((event) => keep.has(event));
+    source = source.slice(0, Math.max(1, last + 1));
   }
-  return transformed;
+
+  const motifLength = Math.max(1, source.reduce((end, event) => Math.max(end, event.onset + event.duration), 0) * scale);
+  const transformed = [];
+  for (let cycle = 0, cursor = 0; cursor < ts.ticks && cycle < 32; cycle++, cursor += motifLength) {
+    for (const event of source) {
+      const onset = cursor + event.onset * scale;
+      if (onset >= ts.ticks) break;
+      const duration = Math.min(event.duration * scale, ts.ticks - onset);
+      if (!Number.isInteger(onset) || !Number.isInteger(duration) || duration <= 0) continue;
+      if (duration < minDuration) {
+        const previous = transformed.at(-1);
+        if (previous && previous.onset + previous.duration === onset) previous.duration += duration;
+        continue;
+      }
+      transformed.push({
+        ...event, onset, duration,
+        motifIndex: `${event.motifIndex}:${cycle}`,
+        tags: [...event.tags, `formal-${transform}`],
+      });
+    }
+  }
+  return transformed.length ? transformed : events;
 }
 
 /** Rhythm for the whole line, with motivic echoes and cadential arrivals. */
@@ -143,7 +142,12 @@ function buildRhythm(
   chordsPerMeasure = 1,
   fragment = null,
   fragmentShift = 0,
+  style = null,
+  minDuration = 1,
 ) {
+  if (!Number.isInteger(chordsPerMeasure) || chordsPerMeasure < 1) {
+    throw new Error('Harmonic slots per measure must be a positive integer');
+  }
   const out = [];
   const required = [...new Set(focusTags)].slice(0, Math.max(0, measures - 1));
   const firstUnit = form.units?.[0] || { bars: [0, Math.min(1, measures - 1)] };
@@ -152,6 +156,12 @@ function buildRhythm(
     const cell = getCell(id);
     return cell?.tags?.some((tag) => ['eighth', 'sixteenth', 'triplet'].includes(tag));
   });
+  const primaryPool = cellIds.filter((id) => getCell(id)?.meter === (ts.compound ? 'compound' : 'simple'));
+  const primaryCellId = primaryPool.length
+    ? rng.weighted(primaryPool, primaryPool.map((id) => (
+      style?.pack.rhythm_cells.find((cell) => cell.id === id)?.weight || 0.08
+    )))
+    : null;
   const prototypes = Array.from({ length: motifBars }, (_, index) => {
     const fragmentEvents = fragment?.events?.filter((event) => event.bar === index);
     if (fragmentEvents?.length) {
@@ -175,6 +185,7 @@ function buildRhythm(
     for (let draw = 0; draw < 5; draw++) {
       events = fillMeasure(rng, ts, cellIds, {
         restRate, offsetTicks: 0, requiredTag: required[index] || null,
+        pack: style?.pack, primaryCellId,
       });
       if (!canSubdivide || events.filter((event) => !event.rest).length >= 3) break;
     }
@@ -184,31 +195,11 @@ function buildRhythm(
   for (let m = 0; m < measures; m++) {
     const offsetTicks = m * ts.ticks;
     const spec = form.plan[m];
-    if (m === measures - 1) {
-      const slotTicks = ts.ticks / chordsPerMeasure;
-      for (let slot = 0; slot < chordsPerMeasure; slot++) {
-        out.push({
-          onset: offsetTicks + slot * slotTicks,
-          duration: slotTicks,
-          rest: false,
-          tags: ['final', 'cadence', slot === chordsPerMeasure - 1 ? 'cadence-arrival' : 'cadence-approach'],
-          cellId: 'final',
-          motifKey: null,
-          motifIndex: slot,
-          motifRole: 'cadence',
-          motifShift: 0,
-          cadenceArrival: slot === chordsPerMeasure - 1,
-          section: spec?.section || 'A',
-        });
-      }
-      continue;
-    }
-
     const unit = form.units?.[spec.unitIndex] || firstUnit;
     const barInUnit = m - unit.bars[0];
     const relative = prototypes[barInUnit % motifBars];
 
-    const shaped = transformRhythm(relative, ts, spec, canSubdivide);
+    const shaped = transformRhythm(relative, ts, spec, canSubdivide, minDuration);
     let measureEvents = shaped.map((event) => ({
       ...event,
       onset: event.onset + offsetTicks,
@@ -225,11 +216,22 @@ function buildRhythm(
       ],
     }));
     if (spec.cadence) {
-      const arrivalOnset = offsetTicks + ts.ticks - ts.ticks / chordsPerMeasure;
-      measureEvents = realiseCadenceAttack(measureEvents, arrivalOnset);
+      measureEvents = realiseCadenceAttack(measureEvents);
     }
     out.push(...measureEvents);
   }
+  Object.defineProperty(out, 'motifPlan', {
+    enumerable: false,
+    value: Object.freeze({
+      id: fragment?.id || `motif:${primaryCellId || 'derived'}`,
+      source: fragment ? 'fragment-library' : 'generated',
+      bars: [firstUnit.bars[0], firstUnit.bars[1]],
+      rhythmCellId: primaryCellId,
+      rhythm: prototypes.map((bar) => bar.map((event) => ({
+        onset: event.onset, duration: event.duration, rest: event.rest,
+      }))),
+    }),
+  });
   return out;
 }
 
@@ -238,11 +240,15 @@ function buildRhythm(
 // ---------------------------------------------------------------------------
 
 /** Phrase arch: rise toward the middle of the line, fall back at the cadence. */
-function archTarget(m, measures, lowDia, highDia) {
+function contourTarget(contour, m, measures, lowDia, highDia) {
   if (measures <= 1) return (lowDia + highDia) / 2;
   const x = m / (measures - 1);
-  const shape = Math.sin(Math.PI * x); // 0 -> 1 -> 0
-  return lowDia + (highDia - lowDia) * (0.3 + 0.5 * shape);
+  let shape;
+  if (contour === 'ascending') shape = 0.15 + x * 0.7;
+  else if (contour === 'descending') shape = 0.85 - x * 0.7;
+  else if (contour === 'wave') shape = 0.5 + Math.sin(2 * Math.PI * x) * 0.32;
+  else shape = 0.3 + 0.5 * Math.sin(Math.PI * x);
+  return lowDia + (highDia - lowDia) * shape;
 }
 
 function chordAt(chords, ts, chordsPerMeasure, onset) {
@@ -265,6 +271,7 @@ function assignPitches(rng, opts) {
     key, ts, chords, chordsPerMeasure, rhythm, measures,
     lowDia, highDia, maxLeap, stepwiseBias, nonChordRate, chromaticRate,
     focusIntervals = [], cadences = [], compositionStyle = null, form = null,
+    chromaticBudget = null,
   } = opts;
 
   const styledStepwiseBias = clamp(
@@ -288,6 +295,15 @@ function assignPitches(rng, opts) {
   const cadenceByMeasure = new Map(cadences.map((item) => [item.measure, item]));
   const lastSoundedByMeasure = new Map();
   sounded.forEach((event, i) => lastSoundedByMeasure.set(Math.floor(event.onset / ts.ticks), i));
+  const cadenceArrivals = cadences.map((cadence) => ({
+    cadence,
+    index: lastSoundedByMeasure.get(cadence.measure),
+    targets: Array.from({ length: highDia - lowDia + 1 }, (_, offset) => lowDia + offset)
+      .filter((dia) => scaleDegree(key, dia) === cadence.melodyDegree),
+  }));
+  if (cadenceArrivals.some((arrival) => !arrival.targets.length)) {
+    throw new Error('A planned cadence degree lies outside the melodic range');
+  }
   const phraseStartIndices = new Set();
   const firstByPhrase = new Map();
   sounded.forEach((event, i) => {
@@ -309,14 +325,52 @@ function assignPitches(rng, opts) {
     ));
   const climaxIndex = (climaxPool.length ? climaxPool : sounded.map((event, index) => ({ event, index })))
     .sort((a, b) => Math.abs(a.index - desiredClimax) - Math.abs(b.index - desiredClimax))[0]?.index ?? 0;
-  const climaxEvent = sounded[climaxIndex];
-  const climaxChord = climaxEvent ? chordAt(chords, ts, chordsPerMeasure, climaxEvent.onset) : chords[0];
-  const climaxCandidates = [];
-  for (let dia = lowDia; dia <= highDia; dia++) {
-    if (isChordTone(key, climaxChord, dia)) climaxCandidates.push(dia);
-  }
-  const climaxDia = climaxCandidates.at(-1) ?? highDia;
-
+  const chordForIndex = (index) => {
+    const event = sounded[index];
+    const arrival = cadenceArrivals.find((item) => item.index === index);
+    return arrival
+      ? chords[arrival.cadence.slots.at(-1)]
+      : chordAt(chords, ts, chordsPerMeasure, event.onset);
+  };
+  const structuralChordTone = (index) => {
+    const event = sounded[index];
+    const eventMeasure = Math.floor(event.onset / ts.ticks);
+    const eventWithin = event.onset - eventMeasure * ts.ticks;
+    return index === sounded.length - 1
+      || cadenceArrivals.some((item) => item.index === index)
+      || metricWeight(ts, eventWithin) === 2
+      || phraseStartIndices.has(index)
+      || index === climaxIndex;
+  };
+  const reachabilityMemo = new Map();
+  const canReachCadence = (index, dia, arrival) => {
+    const keyForMemo = `${index}:${dia}:${arrival.index}`;
+    if (reachabilityMemo.has(keyForMemo)) return reachabilityMemo.get(keyForMemo);
+    if (index === arrival.index) {
+      const result = arrival.targets.includes(dia) && isChordTone(key, chordForIndex(index), dia);
+      reachabilityMemo.set(keyForMemo, result);
+      return result;
+    }
+    if (index > arrival.index) return true;
+    const currentChordTone = isChordTone(key, chordForIndex(index), dia);
+    const nextIndex = index + 1;
+    const nextChord = chordForIndex(nextIndex);
+    let result = false;
+    for (let nextDia = lowDia; nextDia <= highDia; nextDia++) {
+      const distance = Math.abs(nextDia - dia);
+      if (distance > maxLeap) continue;
+      const nextChordTone = isChordTone(key, nextChord, nextDia);
+      if (structuralChordTone(nextIndex) && !nextChordTone) continue;
+      if (!currentChordTone && (!nextChordTone || distance !== 1)) continue;
+      if (!nextChordTone && distance !== 1) continue;
+      if (canReachCadence(nextIndex, nextDia, arrival)) {
+        result = true;
+        break;
+      }
+    }
+    reachabilityMemo.set(keyForMemo, result);
+    return result;
+  };
   for (let i = 0; i < sounded.length; i++) {
     const ev = sounded[i];
     const measure = Math.floor(ev.onset / ts.ticks);
@@ -330,7 +384,7 @@ function assignPitches(rng, opts) {
       : chordAt(chords, ts, chordsPerMeasure, ev.onset);
     const isLast = i === sounded.length - 1;
     const phraseSpec = form?.plan?.[measure] || null;
-    const target = archTarget(measure, measures, lowDia, highDia)
+    const target = contourTarget(compositionStyle?.melodyContour || 'arch', measure, measures, lowDia, highDia)
       + (phraseSpec?.registerShift || 0);
     const motifId = ev.motifKey ? `${ev.motifKey}:${ev.motifIndex}` : null;
     const remembered = motifId ? motifPitches.get(motifId) : null;
@@ -346,16 +400,64 @@ function assignPitches(rng, opts) {
     if (isLast || isCadenceArrival || weight === 2 || phraseStartIndices.has(i) || i === climaxIndex) requireChordTone = true;
     else if (weight === 1) requireChordTone = rng.chance(1 - styledNonChordRate * 0.5);
     else requireChordTone = rng.chance(1 - styledNonChordRate);
-    if (lastLeap >= 3) requireChordTone = false; // a leap wants a stepwise answer
+    if (lastLeap >= 3 && !isCadenceArrival && !isLast) {
+      requireChordTone = false; // a leap wants a stepwise answer
+    }
+    const resolvingNonChord = notes.at(-1)?.chordTone === false;
+    if (resolvingNonChord) requireChordTone = true;
+    if (cadenceArrivals.some((arrival) => arrival.index === i + 1)) requireChordTone = true;
 
     let candidates = [];
     for (let d = lowDia; d <= highDia; d++) {
-      if (i !== climaxIndex && highDia - lowDia >= 4 && d >= climaxDia) continue;
       if (requireChordTone && !isChordTone(key, chord, d)) continue;
+      if (prev && Math.abs(d - prev.dia) > maxLeap) continue;
+      if (resolvingNonChord && prev && Math.abs(d - prev.dia) !== 1) continue;
+      // Decorative tones are approached by step. Repeating a pitch over a
+      // changed chord creates an unplanned suspension/retardation, so it must
+      // be generated by a dedicated transform rather than slipping through
+      // this generic weak-beat path.
+      if (!requireChordTone && prev) {
+        const decorativeDistance = Math.abs(d - prev.dia);
+        if (decorativeDistance > 1) continue;
+        if (decorativeDistance === 0 && !isChordTone(key, chord, d)) continue;
+      }
+      if (!requireChordTone && sounded[i + 1]) {
+        const nextEvent = sounded[i + 1];
+        const nextMeasure = Math.floor(nextEvent.onset / ts.ticks);
+        const nextCadence = cadenceByMeasure.get(nextMeasure);
+        const nextIsArrival = Boolean(nextEvent.cadenceArrival);
+        const nextChord = nextIsArrival && nextCadence
+          ? chords[nextCadence.slots.at(-1)]
+          : chordAt(chords, ts, chordsPerMeasure, nextEvent.onset);
+        const hasResolution = Array.from({ length: highDia - lowDia + 1 }, (_, offset) => lowDia + offset)
+          .some((nextDia) => Math.abs(nextDia - d) === 1 && isChordTone(key, nextChord, nextDia)
+            && (!nextIsArrival || scaleDegree(key, nextDia) === nextCadence.melodyDegree));
+        if (!hasResolution) continue;
+      }
+      const nextCadence = cadenceArrivals.find((arrival) => arrival.index >= i);
+      if (nextCadence && i < nextCadence.index) {
+        if (!canReachCadence(i, d, nextCadence)) continue;
+      }
       candidates.push(d);
     }
+    // Leap recovery and decoration are preferences around the structural
+    // skeleton. If their local choice set is empty, fall back to a legal chord
+    // tone instead of letting an optional surface rule make the whole phrase
+    // unsatisfiable. A pending non-chord resolution is never bypassed.
+    if (!candidates.length && !resolvingNonChord && !isCadenceArrival) {
+      const nextCadence = cadenceArrivals.find((arrival) => arrival.index >= i);
+      for (let d = lowDia; d <= highDia; d++) {
+        if (!isChordTone(key, chord, d)) continue;
+        if (prev && Math.abs(d - prev.dia) > maxLeap) continue;
+        if (nextCadence && i < nextCadence.index) {
+          if (!canReachCadence(i, d, nextCadence)) continue;
+        }
+        candidates.push(d);
+      }
+      requireChordTone = true;
+    }
     if (!candidates.length) {
-      for (let d = lowDia; d <= highDia; d++) candidates.push(d);
+      throw new Error(`No legal melody pitch at measure ${measure + 1} (onset ${within}, previous ${prev?.dia ?? 'none'}, cadence ${isCadenceArrival ? cadence?.id : 'no'}, resolving ${resolvingNonChord})`);
     }
 
     let chosen;
@@ -363,13 +465,13 @@ function assignPitches(rng, opts) {
       ? (ev.fragmentDegree - 1 + (ev.fragmentShift || 0) + 70) % 7
       : null;
     if (i === climaxIndex) {
-      chosen = climaxDia;
+      chosen = candidates.at(-1);
     } else if (isCadenceArrival) {
       // The melodic arrival defines the cadence: tonic for PAC/plagal, the
       // third for IAC, dominant for half cadences, and vi/VI for deceptive ones.
       const targets = candidates.filter((d) => scaleDegree(key, d) === cadence.melodyDegree);
-      const pool = targets.length ? targets : candidates;
-      chosen = nearest(pool, prev ? prev.dia : target);
+      if (!targets.length) throw new Error(`Cadence ${cadence.id} has no reachable melody degree`);
+      chosen = nearest(targets, prev ? prev.dia : target);
     } else if (fragmentTarget != null && remembered == null) {
       const pool = candidates.filter((dia) => scaleDegree(key, dia) === fragmentTarget);
       chosen = nearest(pool.length ? pool : candidates, prev ? prev.dia : target);
@@ -398,10 +500,7 @@ function assignPitches(rng, opts) {
           if (focus === 'skip') return distance === 2;
           return focus === 'leap' && distance >= 3 && distance <= maxLeap;
         };
-        let focused = candidates.filter(matches);
-        if (!focused.length) {
-          focused = Array.from({ length: highDia - lowDia + 1 }, (_, j) => lowDia + j).filter(matches);
-        }
+        const focused = candidates.filter(matches);
         if (focused.length) {
           candidates = focused;
           focusIndex += 1;
@@ -474,12 +573,23 @@ function assignPitches(rng, opts) {
       p = spellChordTone(key, chord, chosen);
     }
 
+    const signature = keyAlterations(key.fifths);
+    let chromatic = p.alter !== signature[p.letter];
+    if (chromaticBudget && chromatic) {
+      const reserve = chromaticBudget.reservedForAccompaniment || 0;
+      if (chromaticBudget.remaining > reserve) chromaticBudget.remaining -= 1;
+      else {
+        p = spellInKey(key, chosen);
+        chromatic = false;
+      }
+    }
+
     notes.push({
       onset: ev.onset,
       duration: ev.duration,
       rest: false,
       pitches: [p],
-      tags: blueInflection ? [...ev.tags, 'blue-note'] : ev.tags,
+      tags: blueInflection && chromatic ? [...ev.tags, 'blue-note'] : ev.tags,
       cellId: ev.cellId,
       chordTone: isChordTone(key, chord, chosen),
       motifKey: ev.motifKey || null,
@@ -522,12 +632,18 @@ function annotateMelodicFunctions(notes, key, chords, ts, chordsPerMeasure) {
       const out = next ? next.pitches[0].dia - note.pitches[0].dia : null;
       if (into != null && out != null && Math.abs(into) === 1 && Math.abs(out) === 1) {
         if (Math.sign(into) === Math.sign(out)) note.nonChordKind = 'passing';
-        else if (prev.pitches[0].dia === next.pitches[0].dia) note.nonChordKind = 'neighbour';
-        else note.nonChordKind = 'embellishing';
-      } else if (next && note.pitches[0].dia === next.pitches[0].dia) {
-        note.nonChordKind = 'anticipation';
-      } else {
+        else if (prev.pitches[0].dia === next.pitches[0].dia) note.nonChordKind = 'neighbor';
+        else note.nonChordKind = 'escape';
+      } else if (prev && next && prev.pitches[0].dia === note.pitches[0].dia
+        && next.pitches[0].dia === note.pitches[0].dia - 1) {
+        note.nonChordKind = 'suspension';
+      } else if (into != null && out === -1 && Math.abs(into) > 1) {
         note.nonChordKind = 'appoggiatura';
+      } else if (into != null && out != null && Math.abs(into) === 1
+        && Math.abs(out) > 1 && Math.sign(into) !== Math.sign(out)) {
+        note.nonChordKind = 'escape';
+      } else {
+        note.nonChordKind = 'unlicensed';
       }
     } else {
       note.nonChordKind = null;
@@ -571,24 +687,27 @@ function pickUnit(slotTicks, candidates) {
 function buildLeftHand(rng, opts) {
   const {
     key, ts, chords, chordsPerMeasure, measures, style, lowDia, highDia, form, compositionStyle,
-    maxSimultaneous = 5,
+    maxSimultaneous = 5, upperStaff = [],
+    chromaticBudget = null,
   } = opts;
   const notes = [];
   const slotTicks = ts.ticks / chordsPerMeasure;
-  let prevVoicing = null;
   let spelledFallback = null;
+  const voicings = voiceChordSequence(key, chords, {
+    lowDia, highDia, upperStaff, slotTicks,
+    forbidOuterParallels: compositionStyle?.pack.validator.forbid_outer_parallels,
+  });
 
   for (let m = 0; m < measures; m++) {
     for (let s = 0; s < chordsPerMeasure; s++) {
       const chord = chords[Math.min(chords.length - 1, m * chordsPerMeasure + s)];
       const onset = m * ts.ticks + s * slotTicks;
-      const voicing = voiceChord(key, chord, prevVoicing, { lowDia, highDia });
-      prevVoicing = voicing;
+      const voicing = voicings[Math.min(voicings.length - 1, m * chordsPerMeasure + s)];
       const spelled = spellVoicing(key, chord, voicing).slice(0, maxSimultaneous);
       spelledFallback = spelled[0];
       const isFinal = m === measures - 1;
       const phraseSpec = form?.plan?.[m] || null;
-      const sectionLift = compositionStyle?.id === 'pop' && (phraseSpec?.energy || 1) >= 3;
+      const sectionLift = compositionStyle?.id === 'pop_contemporary' && (phraseSpec?.energy || 1) >= 3;
 
       if (isFinal || style === 'sustained') {
         notes.push(mk(onset, slotTicks, spelled, ['blocked']));
@@ -640,9 +759,18 @@ function buildLeftHand(rng, opts) {
   return notes.sort((a, b) => a.onset - b.onset);
 
   function mk(onset, duration, pitches, tags) {
+    const signature = keyAlterations(key.fifths);
+    const constrained = (pitches.length ? pitches : [spelledFallback]).map((pitch) => {
+      if (!chromaticBudget || pitch.alter === signature[pitch.letter]) return pitch;
+      if (chromaticBudget.remaining > 0) {
+        chromaticBudget.remaining -= 1;
+        return pitch;
+      }
+      return spellInKey(key, pitch.dia);
+    });
     return {
       onset, duration, rest: false, tags, cellId: 'lh',
-      pitches: pitches.length ? pitches : [spelledFallback],
+      pitches: constrained,
     };
   }
 
@@ -661,8 +789,17 @@ function buildLeftHand(rng, opts) {
 function buildLeftHandMelody(rng, opts) {
   const rhythm = buildRhythm(
     rng, opts.ts, opts.cellIds, opts.measures, opts.restRate, [], opts.form, opts.chordsPerMeasure,
+    null, 0, opts.compositionStyle, opts.minDuration,
   );
-  return assignPitches(rng, { ...opts, rhythm });
+  // The cadence plan specifies the soprano arrival. An independent bass line
+  // is governed by the cadence harmony instead of being forced onto the same
+  // scale degree as the soprano (which can be unreachable in a bass range).
+  const neutralRhythm = rhythm.map((event) => {
+    const copy = { ...event };
+    delete copy.cadenceArrival;
+    return copy;
+  });
+  return assignPitches(rng, { ...opts, rhythm: neutralRhythm, cadences: [] });
 }
 
 // ---------------------------------------------------------------------------
@@ -708,11 +845,13 @@ function addOrnaments(rng, notes, level, style) {
   }
 }
 
-function buildSlurs(rng, notes, ts, measures) {
+function buildSlurs(notes, ts, form) {
   const slurs = [];
-  for (let m = 0; m + 1 < measures; m += 2) {
-    const from = notes.find((n) => !n.rest && n.onset >= m * ts.ticks);
-    const within = notes.filter((n) => !n.rest && n.onset < (m + 2) * ts.ticks);
+  for (const unit of form.units || []) {
+    const start = unit.bars[0] * ts.ticks;
+    const end = (unit.bars[1] + 1) * ts.ticks;
+    const from = notes.find((n) => !n.rest && n.onset >= start);
+    const within = notes.filter((n) => !n.rest && n.onset >= start && n.onset < end);
     const to = within[within.length - 1];
     if (from && to && to.onset > from.onset) slurs.push({ hand: 'rh', from: from.onset, to: to.onset });
   }
@@ -775,7 +914,7 @@ export const DEFAULT_PARAMS = {
 
 const ORDINALS = ['No. 1', 'No. 2', 'No. 3', 'No. 4', 'No. 5', 'No. 6', 'No. 7', 'No. 8', 'No. 9', 'No. 10'];
 
-function composeCandidate(userParams = {}, attempt = 0) {
+export function composeCandidate(userParams = {}, attempt = 0) {
   const params = { ...DEFAULT_PARAMS, ...userParams };
   const seed = params.seed >>> 0;
   const candidateSeed = attempt === 0 ? seed : (seed + Math.imul(attempt, 0x9e3779b9)) >>> 0;
@@ -783,24 +922,41 @@ function composeCandidate(userParams = {}, attempt = 0) {
   const key = { fifths: params.keyFifths, mode: params.keyMode };
   const ts = timeSig(params.timeSignature);
   const measures = params.measures;
-  const style = resolveCompositionStyle(rng, params.compositionStyle, {
+  const resolvedStyle = resolveCompositionStyle(rng, params.compositionStyle, {
     timeSignature: params.timeSignature,
     measures,
     lhStyle: params.lhStyle,
     keyMode: params.keyMode,
     level: params.level || 10,
   });
+  const style = {
+    ...resolvedStyle,
+    melodyContour: rng.weighted(
+      resolvedStyle.pack.melody.contours.map((item) => item.id),
+      resolvedStyle.pack.melody.contours.map((item) => item.weight),
+    ),
+  };
   const level = params.level || 10;
   const constraints = params.level ? levelById(params.level).constraints : { simultaneous_notes: 5 };
   const form = planMusicalForm(measures, style.id, rng, level);
   const fragment = params.sourceMode === 'recombined'
-    ? chooseFragment(rng, { meter: params.timeSignature, level })
+    ? chooseFragment(rng, {
+      meter: params.timeSignature, level, genre: style.id, lhStyle: params.lhStyle,
+    })
     : null;
+  if (params.sourceMode === 'recombined' && !fragment) {
+    throw new Error(`No provenance-cleared ${style.id} fragment supports this level, meter, and texture`);
+  }
   const fragmentShift = fragment ? rng.pick([-2, -1, 1, 2]) : 0;
   // A harmonic rhythm only works if each chord slot is a whole number of beats.
-  const slot = ts.ticks / params.chordsPerMeasure;
+  const slotLevels = Object.entries(style.pack.harmony.harmonic_slots_by_level)
+    .filter(([minimum]) => Number(minimum) <= level)
+    .sort((a, b) => Number(b[0]) - Number(a[0]));
+  const styleSlots = slotLevels[0]?.[1] || 1;
+  const requestedSlots = Math.min(params.chordsPerMeasure, styleSlots);
+  const slot = ts.ticks / requestedSlots;
   const chordsPerMeasure = Number.isInteger(slot) && slot % ts.beat === 0
-    ? params.chordsPerMeasure : 1;
+    ? requestedSlots : 1;
   // Levels and the custom panel speak in rhythm tags; resolve to legal cells.
   const levelCells = params.cells && params.cells.length
     ? resolveCells(null, ts).concat(params.cells).filter((id, i, a) => a.indexOf(id) === i)
@@ -836,23 +992,33 @@ function composeCandidate(userParams = {}, attempt = 0) {
   const { chords } = harmonyPlan;
 
   const staves = { rh: [], lh: [] };
+  let motifPlan = null;
   const wantsRh = params.hands === 'both' || params.hands === 'rh';
   const wantsLh = params.hands === 'both' || params.hands === 'lh';
+  const accompanimentReserve = wantsRh && wantsLh && params.lhStyle !== 'melodic'
+    ? Math.min(constraints.chromatic_notes, Math.max(1, Math.ceil(measures / 4)))
+    : 0;
+  const chromaticBudget = {
+    remaining: constraints.chromatic_notes,
+    reservedForAccompaniment: accompanimentReserve,
+  };
 
   if (wantsRh) {
     const rhythm = buildRhythm(
       rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form, chordsPerMeasure,
-      fragment, fragmentShift,
+      fragment, fragmentShift, style, constraints.smallest_ticks,
     );
+    motifPlan = rhythm.motifPlan;
     staves.rh = assignPitches(rng, {
       key, ts, chords, chordsPerMeasure, rhythm, measures,
       lowDia: params.rhLow, highDia: params.rhHigh,
-      maxLeap: params.maxLeap, stepwiseBias: params.stepwiseBias,
+      maxLeap: Math.min(params.maxLeap, constraints.max_melodic_interval - 1), stepwiseBias: params.stepwiseBias,
       nonChordRate: params.nonChordRate, chromaticRate: params.chromaticRate,
       focusIntervals: params.focusIntervals,
       cadences: harmonyPlan.progression.cadences,
       compositionStyle: style,
       form,
+      chromaticBudget,
     });
   }
 
@@ -863,33 +1029,40 @@ function composeCandidate(userParams = {}, attempt = 0) {
         cellIds: params.lhCells || cells,
         restRate: params.restRate,
         lowDia: params.lhLow, highDia: params.lhHigh,
-        maxLeap: Math.min(params.maxLeap, 4), stepwiseBias: Math.min(0.85, params.stepwiseBias + 0.1),
+        maxLeap: Math.min(params.maxLeap, 4, constraints.max_melodic_interval - 1),
+        stepwiseBias: Math.min(0.85, params.stepwiseBias + 0.1),
         nonChordRate: params.nonChordRate * 0.7, chromaticRate: 0,
         cadences: harmonyPlan.progression.cadences,
         compositionStyle: style,
         form,
+        minDuration: constraints.smallest_ticks,
+        chromaticBudget,
       });
     } else if (params.hands === 'lh') {
       // Left hand alone gets the melody, not an accompaniment pattern.
       const rhythm = buildRhythm(
         rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form, chordsPerMeasure,
-        fragment, fragmentShift,
+        fragment, fragmentShift, style, constraints.smallest_ticks,
       );
+      motifPlan = rhythm.motifPlan;
       staves.lh = assignPitches(rng, {
         key, ts, chords, chordsPerMeasure, rhythm, measures,
         lowDia: params.lhLow, highDia: params.lhHigh,
-        maxLeap: params.maxLeap, stepwiseBias: params.stepwiseBias,
+        maxLeap: Math.min(params.maxLeap, constraints.max_melodic_interval - 1), stepwiseBias: params.stepwiseBias,
         nonChordRate: params.nonChordRate, chromaticRate: params.chromaticRate,
         focusIntervals: params.focusIntervals,
         cadences: harmonyPlan.progression.cadences,
         compositionStyle: style,
         form,
+        chromaticBudget,
       });
     } else {
       staves.lh = buildLeftHand(rng, {
         key, ts, chords, chordsPerMeasure, measures,
         style: params.lhStyle, lowDia: params.lhLow, highDia: params.lhHigh,
         form, compositionStyle: style, maxSimultaneous: constraints.simultaneous_notes,
+        upperStaff: staves.rh,
+        chromaticBudget,
       });
     }
   }
@@ -899,11 +1072,15 @@ function composeCandidate(userParams = {}, attempt = 0) {
   }
 
   const lead = staves.rh.length ? staves.rh : staves.lh;
+  const motifUnit = form.units[0];
+  const motifStart = motifUnit.bars[0] * ts.ticks;
+  const motifEnd = (motifUnit.bars[1] + 1) * ts.ticks;
+  const motifLead = lead.filter((note) => !note.rest && note.onset >= motifStart && note.onset < motifEnd);
   if (params.dynamics) addDynamics(rng, lead, ts, measures, style);
   if (params.articulations) addArticulations(rng, lead, ts, style);
   addOrnaments(rng, lead, level, style);
   if (params.fingerings && staves.rh.length) addFingerings(staves.rh);
-  const slurs = params.slurs && staves.rh.length ? buildSlurs(rng, staves.rh, ts, measures) : [];
+  const slurs = params.slurs && staves.rh.length ? buildSlurs(staves.rh, ts, form) : [];
 
   const keyName = KEY_NAMES[key.mode][String(key.fifths)];
   const title = `${style.title} in ${key.mode === 'minor' ? keyName.toUpperCase() : keyName} ${key.mode}, ${ORDINALS[seed % ORDINALS.length]}`;
@@ -940,7 +1117,15 @@ function composeCandidate(userParams = {}, attempt = 0) {
     generatorVersion: 2,
     stylePackVersion: style.version,
     development: {
-      motif: form.units[0],
+      motif: {
+        ...(motifPlan || { id: 'motif:derived', source: 'generated', bars: motifUnit.bars }),
+        contour: style.melodyContour,
+        seedPitches: motifLead.map((note) => ({
+          onset: note.onset - motifStart,
+          degree: scaleDegree(key, note.pitches[0].dia) + 1,
+          octaveOffset: Math.floor((note.pitches[0].dia - tonicLetter(key)) / 7),
+        })),
+      },
       transforms: form.units.slice(1).map((unit) => ({
         unit: unit.index, transform: unit.transform, value: unit.transform_value || 0,
       })),
@@ -983,25 +1168,45 @@ export function generateExercise(userParams = {}) {
   let bestReview = null;
   let bestValidation = null;
   let selectedAttempt = 0;
+  let attempted = 0;
   const hardFailures = new Map();
 
-  for (let attempt = 0; attempt < COMPOSITION_CANDIDATES; attempt++) {
-    const candidate = composeCandidate(userParams, attempt);
-    const relaxation = attempt < 10 ? 0 : Math.min(4, 1 + Math.floor((attempt - 10) / 3));
-    const validation = validateExercise(candidate, constraintsFor(candidate), { relaxation });
-    for (const error of validation.hardErrors) hardFailures.set(error, (hardFailures.get(error) || 0) + 1);
-    if (!validation.passed) continue;
-    const review = reviewMusicality(candidate);
-    const stronger = !best
-      || (review.passed && !bestReview.passed)
-      || (review.passed === bestReview.passed && review.score > bestReview.score);
-    if (stronger) {
-      best = candidate;
-      bestReview = review;
-      bestValidation = validation;
-      selectedAttempt = attempt;
+  function search(from, to, relaxed) {
+    for (let attempt = from; attempt < to; attempt++) {
+      attempted += 1;
+      let candidate;
+      try {
+        candidate = composeCandidate(userParams, attempt);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        hardFailures.set(message, (hardFailures.get(message) || 0) + 1);
+        continue;
+      }
+      const relaxation = relaxed ? Math.min(4, attempt - 9) : 0;
+      const validation = validateExercise(candidate, constraintsFor(candidate), { relaxation });
+      for (const error of validation.hardErrors) hardFailures.set(error, (hardFailures.get(error) || 0) + 1);
+      if (!validation.passed) continue;
+      const review = reviewMusicality(candidate);
+      if (!review.passed) {
+        for (const error of review.errors.length ? review.errors : review.issues) {
+          hardFailures.set(`critic: ${error}`, (hardFailures.get(`critic: ${error}`) || 0) + 1);
+        }
+        continue;
+      }
+      if (!best || review.score > bestReview.score
+        || (review.score === bestReview.score && validation.softErrors.length < bestValidation.softErrors.length)) {
+        best = candidate;
+        bestReview = review;
+        bestValidation = validation;
+        selectedAttempt = attempt;
+      }
     }
   }
+
+  // Relaxation is a true fallback phase: a softer candidate can never displace
+  // a fully compliant one merely because its critic score is a point higher.
+  search(0, 10, false);
+  if (!best) search(10, COMPOSITION_CANDIDATES, true);
 
   if (!best) {
     const detail = [...hardFailures.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
@@ -1011,7 +1216,7 @@ export function generateExercise(userParams = {}) {
 
   best.compositionReview = {
     ...bestReview,
-    candidates: COMPOSITION_CANDIDATES,
+    candidates: attempted,
     selectedAttempt,
     validation: bestValidation,
   };
