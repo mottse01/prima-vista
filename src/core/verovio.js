@@ -57,6 +57,11 @@ const OPTIONS = {
   pageMarginTop: 30,
   pageMarginBottom: 10,
   adjustPageHeight: true,
+  // Crop the page to the music as well. Line breaking still happens against
+  // PAGE_WIDTH, so it stays deterministic, but a short exercise no longer
+  // engraves into the left half of a wide sheet and then gets scaled down to
+  // fit it — it fills the width it is given.
+  adjustPageWidth: true,
   breaks: 'auto',
   header: 'none',
   footer: 'none',

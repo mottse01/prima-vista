@@ -21,7 +21,11 @@ export default function TimingStrip({ result }) {
   const { timeline, window: matchWindow, goodTiming, totalTicks, barTicks } = result;
   const timed = timeline.filter((t) => t.delta !== null);
   if (!timed.length) {
-    return <p className="sr-hint">No notes landed close enough to time. Try again at a slower tempo.</p>;
+    return (
+      <p className="sr-hint sr-timingstrip">
+        No notes landed close enough to time. Try again at a slower tempo.
+      </p>
+    );
   }
 
   const x = (onset) => LEFT + (totalTicks ? (onset / totalTicks) : 0) * (RIGHT - LEFT);

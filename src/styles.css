@@ -17,6 +17,14 @@
   --good: #5dd7a7;
   --warn: #efb362;
   --bad: #f27782;
+  /* Note colouring is painted onto the engraved glyphs, which sit on the white
+     page rather than on the dark chrome. The interface's own good/warn/bad are
+     tuned to read against near-black and wash out on paper, so the score gets
+     its own darker set. */
+  --paper-good: #1d7a51;
+  --paper-warn: #9d6a12;
+  --paper-bad: #b23b3f;
+  --paper-missed: #b8b3a6;
   --radius: 16px;
   --shadow: 0 18px 56px rgba(0, 0, 0, 0.34);
   color-scheme: dark;

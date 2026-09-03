@@ -98,6 +98,13 @@ src/
 - **We choose the element ids.** `xmlNoteId(hand, onset, midi)` goes into the
   MusicXML and survives into the rendered SVG, so live colouring is a lookup
   rather than a guess, and the grader keys its state by the same id.
+- **The interface is dark; the page is not.** Anything painted onto the
+  engraved score — note colouring above all — needs colours chosen for white
+  paper, not for the near-black chrome. That is what the `--paper-*` tokens in
+  `styles.css` are: `--good`/`--warn`/`--bad` are tuned to read against the
+  dark interface and wash out on the page, so `Score.jsx` reaches for
+  `--paper-good`, `--paper-warn`, `--paper-bad` and `--paper-missed` instead.
+  Add a new score-glyph colour to that set, not to the interface set.
 - **The score overlay is imperative on purpose.** The playhead moves every
   animation frame; reconciling a React tree sixty times a second to slide one
   rectangle would be waste. Positions are measured as fractions of the
