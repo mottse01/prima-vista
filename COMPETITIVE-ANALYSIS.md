@@ -1,118 +1,108 @@
-# Sight-reading apps: where the gap is
+# Sight-reading apps: Prima Vista's position
 
-Research notes behind **Prima Vista**, the piano sight-reading trainer in
-`src/sightread/`. Sources are listed at the bottom; both competitors' own sites
-were unreachable from this environment, so product detail comes from their
-public marketing copy as reported in search results, plus practitioner reviews
-and forum threads.
+Feature review updated from the products' official public pages in September
+2026. This replaces the original analysis, which had become inaccurate after
+Sight Reading Factory added Auto Assessment and Piano Tree expanded its
+read-ahead, focus, teacher and import features.
 
-## Sight Reading Factory
+## The market now
 
-**What it does well**
+### Sight Reading Factory
 
-- Generates unlimited exercises on demand — you can never memorise the material.
-- Very fine-grained teacher control: exact rhythm patterns, key and time
-  signature, pitch range, leaps, accidentals, dynamics and articulations, with
-  saved parameter sets to return to.
-- Broad instrument coverage — many instruments, voice, and full ensembles.
-- Strong classroom tooling: student accounts, assessment, and a Live Practice
-  mode that casts transposed parts to every student's device at once.
-- Print-first, which is what band and choir directors actually need.
+Sight Reading Factory is the broadest generator and classroom product of the
+three. Its official site describes:
 
-**Where it falls down for pianists**
+- unlimited generated exercises across piano, voice, ensembles and more than
+  60 instrument/voice types;
+- deep customization of rhythm, range, leaps, accidentals, dynamics,
+  articulations, metre and key;
+- Auto Assessment with pitch and timing feedback, including MIDI-enabled piano
+  assessment;
+- assignments, practice logs, Live Practice and school integrations; and
+- audio playback, printing, countdowns, a note cursor and disappearing
+  measures.
 
-- *It never hears you.* It renders notes and stops. There is no measurement of
-  what you played, so there is no diagnosis and no adaptation.
-- *The piano writing sounds computer-made.* This is the most consistent
-  complaint from pianists: odd chord progressions that "don't make sense", a
-  thin left hand, and none of the accompaniment variety real piano music has.
-  Reviewers who rate it highly for other instruments single out piano as the
-  weak case.
-- *Range is hard to control usefully* — reviewers report no convenient way to
-  push exercises above and below the staff, which is exactly the reading skill
-  most adult learners are missing.
-- Subscription-gated, with reported crashes and download trouble in the app.
+Its strength is breadth: it serves individual practice, assessment and whole
+music programs. Prima Vista should not claim that SRF merely displays notation
+or offers no feedback; that is no longer true.
 
-## Piano Tree
+### Piano Tree
 
-**What it does well**
+Piano Tree is a piano-specific reading and repertoire environment. Its official
+site describes:
 
-- Real-time feedback on both pitch and rhythm, over MIDI or the device
-  microphone, and it shows exactly what you played without interrupting you.
-- A "keep going" philosophy: the music does not stop when you make a mistake,
-  because stopping is the habit sight-reading has to unlearn.
-- Real repertoire — thousands of pieces, graded from single melodic lines up to
-  four-voice chorales and Bach-style writing.
-- Practical practice tools: slow down without changing pitch, loop sections,
-  transpose to any key, lock to one key.
-- Piano-only focus, so nothing is compromised for other instruments.
+- a library of thousands of graded pieces and focus packs;
+- MIDI and microphone input with real-time feedback;
+- continuous play that does not stop after mistakes;
+- a read-ahead mode that hides the current bar;
+- tempo, looping, transposition and key-locking controls;
+- a structured learning path and teacher use; and
+- MusicXML import on paid plans.
 
-**Where it falls down**
+Its strength is practicing real and imported music with mature performance
+tools. Prima Vista should not claim to be the only product that listens, keeps
+the pulse moving or trains reading ahead.
 
-- *The library is finite.* Graded real repertoire is its strength, but a fixed
-  set of pieces can be learned rather than read. Sight-reading is the one skill
-  where familiarity with the material destroys the measurement.
-- *It progresses by level, not by diagnosis.* It shows you where you went
-  wrong in a piece; it does not tell you that your problem is specifically
-  ledger lines above the treble staff, or dotted rhythms, and then write you
-  material aimed at that.
-- No way to specify an exercise: you pick from what exists.
-- Subscription after a trial.
+## Prima Vista's defensible difference
 
-## The gap
+Prima Vista is strongest as an adaptive generative loop:
 
-Unlimited generation and real-time listening have never been in the same
-product. That combination is not just additive — it unlocks a third thing
-neither can do:
+1. Generate a piano-specific study the learner has never seen.
+2. Distinguish a genuine first read from a replay, preview, guided attempt or
+   look-ahead drill.
+3. Measure pitch, attack timing, continuity, timing bias and recovery.
+4. Attribute errors to concrete note, interval, rhythm and coordination skills.
+5. Generate the next study with one measured weakness deliberately emphasized.
 
-> Attribute every played note to a *skill*, then generate the next exercise
-> around whichever skills are failing.
+That loop is materially different from selecting another library piece or
+asking the learner/teacher to configure the next generated exercise manually.
+It is the product's clearest positioning and should remain the center of the
+practice screen, progress page and marketing copy.
 
-A fixed-library app can only choose a different piece. A generator that cannot
-hear you can only apply the parameters you already knew to set. Doing both means
-the app can find the weakness you did not know you had, and write material for
-it that you have never seen.
+## Where Prima Vista is currently better
 
-## What Prima Vista does about it
+- **Adaptive generation:** the next unseen study is shaped by measured
+  performance, while keeping only one diagnostic variable in focus.
+- **First-read integrity:** replays, reference playback, guide keys and curtain
+  drills are separated from qualifying reads instead of being mixed into level
+  advancement.
+- **Local-first use:** no account or subscription is required, and practice data
+  remains in browser storage with export/import.
+- **Reproducible studies:** an exact link carries both the seed and complete
+  generator recipe.
+- **Piano texture control:** per-hand range, functional harmony and multiple
+  accompaniment patterns are first-class generator parameters.
+- **Recovery feedback:** the app reports how quickly the line steadies after a
+  wrong or dropped note, not only aggregate accuracy.
 
-| Problem observed | What was built |
-| --- | --- |
-| Generated piano harmony sounds wrong | A functional-harmony engine: weighted tonic / pre-dominant / dominant progressions with planned authentic and half cadences, chords voiced by minimising motion from the previous voicing, and real accompaniment textures (blocked, Alberti, broken, waltz, sustained, independent counterpoint) |
-| Generated melodies wander | Chord tones on strong beats, passing and neighbour tones on weak ones, bounded leaps that resolve by step in the opposite direction, and a phrase arch that rises to the middle of the line and falls to the cadence |
-| No feedback loop at all | A grader that matches every MIDI (or on-screen keyboard) note-on against the score, classifying correct / wrong pitch / rushed / dragged / missed / extra, with a timing tolerance that scales with tempo |
-| A single average hides where you drifted | A per-note timing strip: every note's timing error plotted against its place in the piece, with barlines, an on-time band, and separate marks for wrong and dropped notes. The drift is almost never even — it is the bar after a leap, or the first bar of a new line |
-| Nothing measures whether a slip derails you | Recovery: how many notes a wrong or dropped note costs you before the line steadies again. Arguably the truest measure of sight-reading, and invisible in a raw accuracy score |
-| Feedback that does not say *what* to fix | Fifteen tracked skills — treble notes, bass notes, ledger lines, accidentals, steps, skips, leaps, six rhythm families, hands-together — each note tagged with the skills it exercises, and a per-note-name accuracy heatmap |
-| Levels that ignore diagnosis | Weak skills bend the generator: ledger-line trouble widens the tessitura, dotted-rhythm trouble guarantees dotted cells, accidental trouble biases toward keys with more of them |
-| Range control that does not work | Explicit per-hand range sliders in staff steps, so ledger lines can be dialled in deliberately |
-| Nothing forces the eye ahead of the hands | A look-ahead curtain: an opaque card follows the playhead and hides the music as you reach it, adjustable from "no looking back" to "a full bar ahead". It has its own progression, separate from the skill map, because it measures reading fluency rather than note knowledge |
-| A replay flatters the measurement | Only a first read of new music can advance a level; replays are detected across reloads and shared links, and count at half weight |
-| Assignments need accounts | Every exercise is a seed. A six-character code (also in the URL) reproduces the exact same music for anyone, with no account on either end |
-| Notation that looks hand-rolled | Engraving by Verovio, the engine behind scholarly and commercial editions, rendered with Bravura. Exercises also export as MusicXML, so any of them opens in MuseScore, Finale or Sibelius |
-| Paywalls | Runs entirely in the browser; progress lives in `localStorage` and exports to JSON |
+## Where the established products are better
 
-## What it deliberately does not do
+- Sight Reading Factory has classroom rosters, assignments, assessment records,
+  standards, ensemble work and broad instrument coverage.
+- Piano Tree has microphone input, a large repertoire library, backing and
+  practice tools, native apps, synced progress and MusicXML import.
+- Both have account-backed continuity across devices; Prima Vista is deliberately
+  local to one browser unless the learner exports their data.
+- Prima Vista's synthesized reference voice is functional, not a sampled concert
+  piano, and its feedback currently evaluates note attacks rather than key-release
+  duration, articulation quality or dynamics.
 
-These are real advantages the incumbents keep, and the comparison page in the
-app says so:
+## Product priorities
 
-- **No instruments other than piano.** Sight Reading Factory's band, orchestra
-  and choral coverage — and its Live Practice ensemble casting — is a different
-  product.
-- **No real repertoire.** Piano Tree's graded library of actual pieces teaches
-  things generated studies cannot.
-- **No classroom management.** There are no rosters, no assessment records, no
-  teacher dashboard — only exercise codes and printing.
+1. Make browser audio unmistakably reliable and recoverable.
+2. Preserve fresh-read validity while offering a clear repair-then-transfer
+   workflow after every result.
+3. Keep skill attribution musically valid: do not count vertical chord tones as
+   melodic intervals or one-hand chords as hands-together coordination.
+4. Add acoustic-piano input only when pitch detection can meet a trustworthy
+   latency and polyphony standard.
+5. Consider optional account sync or teacher workflows only after the solo
+   adaptive loop is excellent.
 
-## Sources
+## Primary sources
 
-- [SRF review — one year later (Piano World forums)](https://forums.pianoworld.com/ubbthreads.php/topics/2547928/re-srf-review-one-year-later.html)
-- [Any experience with Sight Reading Factory? (Piano World forums)](https://forum.pianoworld.com/ubbthreads.php/topics/2150525/Any_experience_with_Sight_Read.html)
-- [Sight-Reading Factory review — any good for pianists?](https://www.pianosightreading.com.au/sight-reading-factory/)
-- [Sight Reading Factory pricing](https://www.sightreadingfactory.com/pricing)
-- [Flat for Education vs Sight Reading Factory](https://blog.flat.io/flat-for-education-vs-sight-reading-factory/)
-- [Piano Tree](https://piano-tree.com/) and [its sight-reading page](https://piano-tree.com/piano-sight-reading-app)
-- [Best sight-reading apps for piano (MasterPiano)](https://www.masterpiano.com/sight-reading/best-apps)
-- [The best sight-reading apps for piano (SightReader)](https://sightreader.app/best-sight-reading-apps)
-- [Sight-reading app recommendations (tonebase piano community)](https://piano-community.tonebase.co/t/q6yq0f7/sight-reading-app-recommendations)
-- [Best apps for sight reading practice (PianoMode)](https://pianomode.com/explore/piano-accessories-setup/piano-apps-tools/best-apps-for-sight-reading-practice/)
+- [Sight Reading Factory homepage](https://www.sightreadingfactory.com/)
+- [Sight Reading Factory pricing and features](https://www.sightreadingfactory.com/pricing)
+- [Sight Reading Factory group piano and Auto Assessment](https://www.sightreadingfactory.com/blog/grouppiano)
+- [Piano Tree homepage and pricing](https://piano-tree.com/)
+- [Piano Tree sight-reading feature page](https://piano-tree.com/piano-sight-reading-app)

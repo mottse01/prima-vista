@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { renderScoreSvg } from '../core/verovio.js';
+import { pageWidthForViewport, renderScoreSvg } from '../core/verovio.js';
 import { xmlNoteId, xmlRestId } from '../core/musicxml.js';
 
 // Renders the engraved score and everything drawn on top of it: the playhead,
@@ -104,6 +104,7 @@ export default function Score({
   const overlayRef = useRef(null);
   const geomRef = useRef(null);
   const paintedRef = useRef(new Set());
+  const [pageWidth, setPageWidth] = useState(pageWidthForViewport);
   // The engraved result is tagged with the score it came from, so a stale
   // render is simply ignored rather than having to be cleared synchronously.
   const [result, setResult] = useState({ score: null, svg: null, error: null });
@@ -113,14 +114,23 @@ export default function Score({
   // Engrave. Verovio is async and lazily loaded, so this settles a moment
   // after the exercise changes.
   useEffect(() => {
+    const resize = () => setPageWidth((current) => {
+      const next = pageWidthForViewport();
+      return next === current ? current : next;
+    });
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
-    renderScoreSvg(score, { showFingerings })
+    renderScoreSvg(score, { showFingerings, pageWidth })
       .then((markup) => { if (!cancelled) setResult({ score, svg: markup, error: null }); })
       .catch((err) => {
         if (!cancelled) setResult({ score, svg: null, error: err.message || String(err) });
       });
     return () => { cancelled = true; };
-  }, [score, showFingerings]);
+  }, [pageWidth, score, showFingerings]);
 
   const remeasure = useCallback(() => {
     if (!hostRef.current || !svg) return;
@@ -200,8 +210,8 @@ export default function Score({
   }, [tick, curtainTick, svg]);
 
   return (
-    <div className={`sr-score ${className || ''}`}>
-      <div ref={hostRef} className="sr-score-host" aria-label="Engraved exercise" role="img" />
+    <div className={`sr-score ${className || ''}`} aria-busy={!svg && !error}>
+      <div ref={hostRef} className="sr-score-host" aria-label={scoreDescription(score)} role="img" />
       <svg
         ref={overlayRef}
         className="sr-score-overlay"
@@ -209,8 +219,32 @@ export default function Score({
         preserveAspectRatio="none"
         aria-hidden="true"
       />
-      {!svg && !error && <div className="sr-score-loading">Engraving…</div>}
+      {!svg && !error && (
+        <div className="sr-score-loading" role="status">
+          <div className="sr-staff-skeleton" aria-hidden="true">
+            {Array.from({ length: 4 }, (_, system) => (
+              <div className="sr-staff-skeleton-system" key={system}>
+                {Array.from({ length: 5 }, (_, line) => <span key={line} />)}
+              </div>
+            ))}
+          </div>
+          <span>Preparing notation</span>
+        </div>
+      )}
       {error && <div className="sr-score-error">{error}</div>}
     </div>
   );
+}
+
+function scoreDescription(score) {
+  const cadences = score.harmony?.cadences?.map((item) => item.short).join(', ');
+  return [
+    score.title,
+    `${score.key.mode} key with ${score.key.fifths} fifths`,
+    score.ts.name,
+    `${score.measures} bars`,
+    score.style?.label,
+    score.form?.name,
+    cadences ? `cadences ${cadences}` : null,
+  ].filter(Boolean).join('. ');
 }

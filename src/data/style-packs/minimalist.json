@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "classical_early",
+  "id": "minimalist",
+  "display_name": "Minimalist",
+  "description": "Audible cells, gradual process, restrained harmony, and controlled phase-like variation.",
+  "title": "Pattern Study",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "4/4",
+      "weight": 0.62
+    },
+    {
+      "value": "3/4",
+      "weight": 0.13
+    },
+    {
+      "value": "6/8",
+      "weight": 0.25
+    }
+  ],
+  "tempo_range": [
+    68,
+    152
+  ],
+  "forms": [
+    {
+      "id": "process_8",
+      "name": "Additive process",
+      "weight": 1,
+      "min_level": 2,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "cell",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "shift",
+          "transform": "transpose_diatonic",
+          "transform_value": 1,
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "return",
+          "transform": "exact",
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "liquidation",
+          "transform": "fragment",
+          "cadence": "authentic"
+        }
+      ]
+    }
+  ],
+  "harmony": {
+    "vocabulary": [
+      "I",
+      "IV",
+      "V",
+      "vi"
+    ],
+    "roman_degrees": {
+      "I": 0,
+      "IV": 3,
+      "V": 4,
+      "vi": 5
+    },
+    "transitions": {
+      "I": {
+        "I": 0.42,
+        "IV": 0.18,
+        "V": 0.18,
+        "vi": 0.22
+      },
+      "IV": {
+        "IV": 0.32,
+        "I": 0.32,
+        "V": 0.24,
+        "vi": 0.12
+      },
+      "V": {
+        "V": 0.28,
+        "I": 0.42,
+        "vi": 0.2,
+        "IV": 0.1
+      },
+      "vi": {
+        "vi": 0.28,
+        "IV": 0.32,
+        "I": 0.28,
+        "V": 0.12
+      }
+    },
+    "cadences": {
+      "half": [
+        [
+          "I",
+          "V"
+        ]
+      ],
+      "authentic": [
+        [
+          "V",
+          "I"
+        ]
+      ],
+      "deceptive": [
+        [
+          "V",
+          "vi"
+        ]
+      ],
+      "plagal": [
+        [
+          "IV",
+          "I"
+        ]
+      ]
+    },
+    "cadence_weights": {
+      "internal": {
+        "half": 0.5,
+        "deceptive": 0.5
+      },
+      "final": {
+        "authentic": 0.55,
+        "plagal": 0.45
+      }
+    },
+    "licensed_retrogressions": [
+      "V>IV"
+    ]
+  },
+  "lh_textures": [
+    {
+      "id": "root_fifth",
+      "weight": 0.25,
+      "min_level": 1
+    },
+    {
+      "id": "alberti",
+      "weight": 0.45,
+      "min_level": 3
+    },
+    {
+      "id": "broken_octave",
+      "weight": 0.3,
+      "min_level": 5
+    }
+  ],
+  "rhythm_cells": [
+    {
+      "id": "q",
+      "meter": "simple",
+      "min_level": 1,
+      "weight": 0.5
+    },
+    {
+      "id": "ee",
+      "meter": "simple",
+      "min_level": 2,
+      "weight": 1.4
+    },
+    {
+      "id": "ssss",
+      "meter": "simple",
+      "min_level": 7,
+      "weight": 1.2
+    },
+    {
+      "id": "cdq",
+      "meter": "compound",
+      "min_level": 4,
+      "weight": 0.5
+    },
+    {
+      "id": "ceee",
+      "meter": "compound",
+      "min_level": 4,
+      "weight": 1.4
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.74,
+    "step_ratio_tolerance": 0.13,
+    "max_leap_semitones": 12,
+    "leap_recovery": true,
+    "contours": [
+      {
+        "id": "wave",
+        "weight": 0.5
+      },
+      {
+        "id": "ascending",
+        "weight": 0.25
+      },
+      {
+        "id": "descending",
+        "weight": 0.25
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor"
+    ]
+  },
+  "expression": {
+    "dynamics": [
+      "p",
+      "mp",
+      "mf",
+      "f"
+    ],
+    "articulations": [
+      "legato",
+      "staccato"
+    ],
+    "hairpin": true,
+    "ornaments": {
+      "allowed": [],
+      "min_level": 10,
+      "density": 0
+    }
+  },
+  "validator": {
+    "coherence_min": 0.5,
+    "coherence_max": 0.98,
+    "forbid_outer_parallels": false
+  },
+  "provenance": {
+    "model": "bootstrap-awaiting-corpus",
+    "corpus_snapshot": null
+  }
+}

@@ -49,8 +49,8 @@ export const FLAT_ORDER = [6, 2, 5, 1, 4, 0, 3]; //  B E A D G C F
 
 // fifths -> tonic letter/alter for major and its relative minor.
 const MAJOR_TONICS = {
-  '-7': [1, -1], '-6': [4, -1], '-5': [0, -1], '-4': [3, -1],
-  '-3': [6, -1], '-2': [2, -1], '-1': [5, -1], 0: [0, 0],
+  '-7': [0, -1], '-6': [4, -1], '-5': [1, -1], '-4': [5, -1],
+  '-3': [2, -1], '-2': [6, -1], '-1': [3, 0], 0: [0, 0],
   1: [4, 0], 2: [1, 0], 3: [5, 0], 4: [2, 0], 5: [6, 0], 6: [3, 1], 7: [0, 1],
 };
 
@@ -129,7 +129,14 @@ export function chordTones(key, chord, nearDia) {
 export function spellChordTone(key, chord, dia) {
   const needsLeadingTone =
     key.mode === 'minor' && (chord.degree === 4 || chord.degree === 6);
-  return spellInKey(key, dia, { raisedSeventh: needsLeadingTone });
+  const spelled = spellInKey(key, dia, { raisedSeventh: needsLeadingTone });
+  const tl = tonicLetter(key);
+  const degree = (((dia - tl) % 7) + 7) % 7;
+  const chordMember = ((degree - chord.degree) % 7 + 7) % 7;
+  if (chord.bluesDominant && chordMember === 6) {
+    return fromDia(dia, clamp(spelled.alter - 1, -2, 2));
+  }
+  return spelled;
 }
 
 /** True when `dia` is a member of `chord` (octave-agnostic). */

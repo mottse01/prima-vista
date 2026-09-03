@@ -1,0 +1,534 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "id": "classical_early",
+  "display_name": "Classical (early period)",
+  "description": "Balanced periods, clear functional harmony, sequences, and economical accompaniment.",
+  "title": "Classical Study",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "4/4",
+      "weight": 0.5
+    },
+    {
+      "value": "3/4",
+      "weight": 0.3
+    },
+    {
+      "value": "2/4",
+      "weight": 0.2
+    },
+    {
+      "value": "6/8",
+      "weight": 0.12
+    },
+    {
+      "value": "9/8",
+      "weight": 0.04
+    }
+  ],
+  "modes": [
+    {
+      "value": "major",
+      "weight": 0.78
+    },
+    {
+      "value": "minor",
+      "weight": 0.22
+    }
+  ],
+  "tempo_range": [
+    72,
+    120
+  ],
+  "forms": [
+    {
+      "id": "phrase_4",
+      "name": "Four-bar phrase",
+      "weight": 0.2,
+      "min_level": 1,
+      "bars": 4,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "presentation",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "cadential",
+          "transform": "reharmonize",
+          "cadence": "authentic"
+        }
+      ]
+    },
+    {
+      "id": "period_8",
+      "name": "Parallel period",
+      "weight": 0.55,
+      "min_level": 1,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "presentation",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "antecedent",
+          "transform": "reharmonize",
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "return",
+          "transform": "exact",
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "cadential",
+          "transform": "fragment",
+          "cadence": "authentic"
+        }
+      ]
+    },
+    {
+      "id": "sentence_8",
+      "name": "Eight-bar sentence",
+      "weight": 0.3,
+      "min_level": 3,
+      "bars": 8,
+      "units": [
+        {
+          "bars": [
+            0,
+            1
+          ],
+          "role": "presentation",
+          "transform": "motif",
+          "cadence": null
+        },
+        {
+          "bars": [
+            2,
+            3
+          ],
+          "role": "repetition",
+          "transform": "transpose_diatonic",
+          "transform_value": 1,
+          "cadence": null
+        },
+        {
+          "bars": [
+            4,
+            5
+          ],
+          "role": "continuation",
+          "transform": "fragment",
+          "cadence": null
+        },
+        {
+          "bars": [
+            6,
+            7
+          ],
+          "role": "cadential",
+          "transform": "diminish",
+          "cadence": "authentic"
+        }
+      ]
+    },
+    {
+      "id": "period_16",
+      "name": "Rounded binary",
+      "weight": 0.15,
+      "min_level": 5,
+      "bars": 16,
+      "units": [
+        {
+          "bars": [
+            0,
+            3
+          ],
+          "role": "presentation",
+          "transform": "motif",
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            4,
+            7
+          ],
+          "role": "continuation",
+          "transform": "transpose_diatonic",
+          "transform_value": 1,
+          "cadence": "authentic"
+        },
+        {
+          "bars": [
+            8,
+            11
+          ],
+          "role": "development",
+          "transform": "fragment",
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            12,
+            15
+          ],
+          "role": "return",
+          "transform": "exact",
+          "cadence": "authentic"
+        }
+      ]
+    }
+  ],
+  "harmony": {
+    "vocabulary": [
+      "I",
+      "I6",
+      "ii",
+      "ii6",
+      "IV",
+      "V",
+      "V6",
+      "V7",
+      "vi",
+      "viio6"
+    ],
+    "roman_degrees": {
+      "I": 0,
+      "I6": 0,
+      "ii": 1,
+      "ii6": 1,
+      "iii": 2,
+      "IV": 3,
+      "V": 4,
+      "V6": 4,
+      "V7": 4,
+      "vi": 5,
+      "viio6": 6
+    },
+    "transitions": {
+      "I": {
+        "I6": 0.14,
+        "ii": 0.16,
+        "IV": 0.22,
+        "V": 0.24,
+        "vi": 0.16,
+        "iii": 0.08
+      },
+      "I6": {
+        "ii6": 0.25,
+        "IV": 0.28,
+        "V": 0.27,
+        "vi": 0.2
+      },
+      "ii": {
+        "V": 0.7,
+        "V7": 0.25,
+        "viio6": 0.05
+      },
+      "ii6": {
+        "V": 0.58,
+        "V7": 0.35,
+        "viio6": 0.07
+      },
+      "iii": {
+        "vi": 0.55,
+        "IV": 0.25,
+        "ii": 0.2
+      },
+      "IV": {
+        "I": 0.12,
+        "ii": 0.18,
+        "V": 0.45,
+        "V7": 0.25
+      },
+      "V": {
+        "I": 0.7,
+        "vi": 0.18,
+        "I6": 0.12
+      },
+      "V6": {
+        "I": 0.72,
+        "vi": 0.18,
+        "I6": 0.1
+      },
+      "V7": {
+        "I": 0.78,
+        "vi": 0.22
+      },
+      "vi": {
+        "ii": 0.32,
+        "IV": 0.36,
+        "V": 0.22,
+        "I6": 0.1
+      },
+      "viio6": {
+        "I": 0.8,
+        "I6": 0.2
+      }
+    },
+    "cadences": {
+      "half": [
+        [
+          "ii6",
+          "V"
+        ],
+        [
+          "IV",
+          "V"
+        ],
+        [
+          "I6",
+          "V"
+        ]
+      ],
+      "authentic": [
+        [
+          "ii6",
+          "V7",
+          "I"
+        ],
+        [
+          "IV",
+          "V",
+          "I"
+        ],
+        [
+          "V7",
+          "I"
+        ]
+      ],
+      "imperfect": [
+        [
+          "ii6",
+          "V7",
+          "I6"
+        ],
+        [
+          "IV",
+          "V",
+          "I6"
+        ]
+      ],
+      "deceptive": [
+        [
+          "V7",
+          "vi"
+        ]
+      ],
+      "plagal": [
+        [
+          "IV",
+          "I"
+        ]
+      ]
+    },
+    "cadence_weights": {
+      "internal": {
+        "half": 0.65,
+        "deceptive": 0.2,
+        "imperfect": 0.15
+      },
+      "final": {
+        "authentic": 0.72,
+        "imperfect": 0.18,
+        "plagal": 0.1
+      }
+    },
+    "harmonic_slots_by_level": {
+      "1": 1,
+      "5": 1,
+      "7": 2
+    },
+    "functions_by_degree": [
+      "T",
+      "PD",
+      "T",
+      "PD",
+      "D",
+      "T",
+      "D"
+    ],
+    "mode_degree_weights": {
+      "major": [1.0, 1.0, 0.9, 1.0, 1.0, 1.0, 1.0],
+      "minor": [1.0, 1.05, 0.55, 0.9, 1.2, 0.72, 1.1]
+    },
+    "inversion_probability": 0.24,
+    "licensed_retrogressions": []
+  },
+  "lh_textures": [
+    {
+      "id": "block_chord",
+      "weight": 0.32,
+      "min_level": 1
+    },
+    {
+      "id": "root_fifth",
+      "weight": 0.2,
+      "min_level": 1
+    },
+    {
+      "id": "alberti",
+      "weight": 0.32,
+      "min_level": 3
+    },
+    {
+      "id": "broken_octave",
+      "weight": 0.16,
+      "min_level": 6
+    }
+  ],
+  "rhythm_cells": [
+    {
+      "id": "q",
+      "meter": "simple",
+      "min_level": 1,
+      "weight": 1.2
+    },
+    {
+      "id": "h",
+      "meter": "simple",
+      "min_level": 1,
+      "weight": 0.8
+    },
+    {
+      "id": "ee",
+      "meter": "simple",
+      "min_level": 2,
+      "weight": 1.1
+    },
+    {
+      "id": "dqe",
+      "meter": "simple",
+      "min_level": 4,
+      "weight": 0.65
+    },
+    {
+      "id": "ssss",
+      "meter": "simple",
+      "min_level": 7,
+      "weight": 0.45
+    },
+    {
+      "id": "trip",
+      "meter": "simple",
+      "min_level": 9,
+      "weight": 0.3
+    },
+    {
+      "id": "cdq",
+      "meter": "compound",
+      "min_level": 4,
+      "weight": 1
+    },
+    {
+      "id": "ceee",
+      "meter": "compound",
+      "min_level": 4,
+      "weight": 0.8
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.78,
+    "step_ratio_tolerance": 0.12,
+    "max_leap_semitones": 12,
+    "leap_recovery": true,
+    "motif_strength": 18,
+    "climax_position": 0.64,
+    "contours": [
+      {
+        "id": "arch",
+        "weight": 0.52
+      },
+      {
+        "id": "ascending",
+        "weight": 0.16
+      },
+      {
+        "id": "descending",
+        "weight": 0.16
+      },
+      {
+        "id": "wave",
+        "weight": 0.16
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "appoggiatura",
+      "suspension",
+      "escape"
+    ]
+  },
+  "development": {
+    "recognizable_min_ratio": 0.5,
+    "fallback_transform": "reharmonize",
+    "advanced_transforms": {
+      "invert": 5,
+      "augment": 5,
+      "diminish": 5,
+      "expand_intervals": 6
+    }
+  },
+  "expression": {
+    "dynamics": [
+      "p",
+      "mp",
+      "mf",
+      "f"
+    ],
+    "articulations": [
+      "legato",
+      "staccato",
+      "tenuto"
+    ],
+    "hairpin": true,
+    "ornaments": {
+      "allowed": [
+        "appoggiatura",
+        "turn"
+      ],
+      "min_level": 6,
+      "density": 0.08
+    }
+  },
+  "validator": {
+    "coherence_min": 0.25,
+    "coherence_max": 0.93,
+    "forbid_outer_parallels": true
+  },
+  "provenance": {
+    "model": "bootstrap-hand-audited",
+    "corpus_snapshot": null,
+    "notes": "Seed pack; replace probabilities through the corpus-mining pipeline before claiming corpus calibration."
+  }
+}

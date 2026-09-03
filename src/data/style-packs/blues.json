@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "extends": "folk",
+  "id": "blues",
+  "display_name": "Blues",
+  "description": "Twelve-bar form, call-and-response riffs, blue-note inflection, and idiomatic turnarounds.",
+  "title": "Blues Study",
+  "enabled": true,
+  "meters": [
+    {
+      "value": "4/4",
+      "weight": 1
+    }
+  ],
+  "modes": [
+    {
+      "value": "major",
+      "weight": 0.72
+    },
+    {
+      "value": "minor",
+      "weight": 0.28
+    }
+  ],
+  "tempo_range": [
+    60,
+    144
+  ],
+  "forms": [
+    {
+      "id": "blues_12",
+      "name": "Twelve-bar blues",
+      "weight": 1,
+      "min_level": 3,
+      "bars": 12,
+      "units": [
+        {
+          "bars": [
+            0,
+            3
+          ],
+          "role": "call",
+          "transform": "motif",
+          "cadence": "subdominant_turn"
+        },
+        {
+          "bars": [
+            4,
+            7
+          ],
+          "role": "response",
+          "transform": "reharmonize",
+          "cadence": "half"
+        },
+        {
+          "bars": [
+            8,
+            11
+          ],
+          "role": "turnaround",
+          "transform": "fragment",
+          "cadence": "blues_turnaround"
+        }
+      ]
+    }
+  ],
+  "harmony": {
+    "vocabulary": [
+      "I7",
+      "IV7",
+      "V7"
+    ],
+    "roman_degrees": {
+      "I7": 0,
+      "IV7": 3,
+      "V7": 4
+    },
+    "altered_sevenths": [
+      0,
+      3
+    ],
+    "require_labelled_sevenths": true,
+    "transitions": {
+      "I7": {
+        "I7": 0.58,
+        "IV7": 0.32,
+        "V7": 0.1
+      },
+      "IV7": {
+        "IV7": 0.35,
+        "I7": 0.55,
+        "V7": 0.1
+      },
+      "V7": {
+        "IV7": 0.42,
+        "I7": 0.58
+      }
+    },
+    "cadences": {
+      "half": [
+        [
+          "I7",
+          "V7"
+        ]
+      ],
+      "authentic": [
+        [
+          "V7",
+          "I7"
+        ]
+      ],
+      "subdominant_turn": [
+        [
+          "I7",
+          "IV7"
+        ]
+      ],
+      "blues_turnaround": [
+        [
+          "IV7",
+          "I7"
+        ],
+        [
+          "I7",
+          "V7"
+        ]
+      ]
+    },
+    "cadence_weights": {
+      "internal": {
+        "subdominant_turn": 0.55,
+        "half": 0.45
+      },
+      "final": {
+        "blues_turnaround": 0.6,
+        "authentic": 0.4
+      }
+    },
+    "harmonic_slots_by_level": {
+      "1": 1,
+      "5": 1,
+      "8": 2
+    },
+    "licensed_retrogressions": [
+      "V7>IV7"
+    ]
+  },
+  "lh_textures": [
+    {
+      "id": "root_fifth",
+      "weight": 0.45,
+      "min_level": 1
+    },
+    {
+      "id": "broken_octave",
+      "weight": 0.35,
+      "min_level": 4
+    },
+    {
+      "id": "walking",
+      "weight": 0.2,
+      "min_level": 7
+    }
+  ],
+  "rhythm_cells": [
+    {
+      "id": "q",
+      "meter": "simple",
+      "min_level": 1,
+      "weight": 0.5
+    },
+    {
+      "id": "ee",
+      "meter": "simple",
+      "min_level": 2,
+      "weight": 1
+    },
+    {
+      "id": "eqe",
+      "meter": "simple",
+      "min_level": 4,
+      "weight": 1.1
+    },
+    {
+      "id": "trip",
+      "meter": "simple",
+      "min_level": 6,
+      "weight": 1.25
+    },
+    {
+      "id": "ssss",
+      "meter": "simple",
+      "min_level": 7,
+      "weight": 0.45
+    }
+  ],
+  "melody": {
+    "step_ratio_target": 0.58,
+    "step_ratio_tolerance": 0.18,
+    "max_leap_semitones": 12,
+    "leap_recovery": true,
+    "blue_degrees": [
+      2,
+      4,
+      6
+    ],
+    "blue_note_density": 0.22,
+    "contours": [
+      {
+        "id": "wave",
+        "weight": 0.5
+      },
+      {
+        "id": "descending",
+        "weight": 0.3
+      },
+      {
+        "id": "arch",
+        "weight": 0.2
+      }
+    ],
+    "non_chord_tones": [
+      "passing",
+      "neighbor",
+      "escape"
+    ]
+  },
+  "validator": {
+    "coherence_min": 0.5,
+    "coherence_max": 0.95,
+    "forbid_outer_parallels": false
+  },
+  "provenance": {
+    "model": "bootstrap-awaiting-corpus",
+    "corpus_snapshot": null
+  }
+}

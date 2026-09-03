@@ -39,12 +39,12 @@ export const SIMPLE_CELLS = [
 
 /** Compound-metre cells. One "beat" here is a dotted quarter. */
 export const COMPOUND_CELLS = [
-  { id: 'cdq', label: 'dotted quarter', beats: 1, events: [n(3 * E)], tags: ['quarter'] },
+  { id: 'cdq', label: 'dotted quarter', beats: 1, events: [n(3 * E)], tags: ['quarter', 'dotted'] },
   { id: 'ceee', label: 'three eighths', beats: 1, events: [n(E), n(E), n(E)], tags: ['eighth'] },
   { id: 'cqe', label: 'quarter + eighth', beats: 1, events: [n(2 * E), n(E)], tags: ['eighth'] },
   { id: 'ceq', label: 'eighth + quarter', beats: 1, events: [n(E), n(2 * E)], tags: ['eighth', 'syncopation'] },
   { id: 'cer', label: 'eighth rest + two eighths', beats: 1, events: [r(E), n(E), n(E)], tags: ['rest', 'offbeat'] },
-  { id: 'cdh', label: 'dotted half', beats: 2, events: [n(6 * E)], tags: ['half'] },
+  { id: 'cdh', label: 'dotted half', beats: 2, events: [n(6 * E)], tags: ['half', 'dotted'] },
   { id: 'cssee', label: 'two sixteenths + two eighths', beats: 1, events: [n(S), n(S), n(E), n(E)], tags: ['sixteenth'] },
 ];
 
@@ -91,7 +91,9 @@ export const ALL_RHYTHM_TAGS = [
 // ---------------------------------------------------------------------------
 
 export const TIME_SIGNATURES = {
-  '4/4': { num: 4, den: 4, compound: false, beat: Q, beats: 4, beamGroup: 2 * Q, strong: [0, 2 * Q] },
+  // In common time, short values beam by quarter-note beat. This keeps the
+  // pulse legible and prevents long, ambiguous runs across beats two and three.
+  '4/4': { num: 4, den: 4, compound: false, beat: Q, beats: 4, beamGroup: Q, strong: [0, 2 * Q] },
   '3/4': { num: 3, den: 4, compound: false, beat: Q, beats: 3, beamGroup: Q, strong: [0] },
   '2/4': { num: 2, den: 4, compound: false, beat: Q, beats: 2, beamGroup: Q, strong: [0] },
   '5/4': { num: 5, den: 4, compound: false, beat: Q, beats: 5, beamGroup: Q, strong: [0, 3 * Q] },

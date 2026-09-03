@@ -1,0 +1,902 @@
+[
+  {
+    "id": 1,
+    "name": "Five-finger melody",
+    "stage": "Foundations",
+    "blurb": "A four-bar melody in a fixed five-finger position, using quarters and halves.",
+    "exam_reference": {
+      "abrsm": "Initial",
+      "rcm": "Preparatory A–B"
+    },
+    "constraints": {
+      "key_signature_accidentals": 0,
+      "hand_shifts": 0,
+      "max_melodic_interval": 3,
+      "smallest_ticks": 48,
+      "ledger_lines": 0,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord"
+      ],
+      "simultaneous_notes": 1,
+      "chromatic_notes": 0,
+      "tempo": [
+        60,
+        80
+      ],
+      "meters": [
+        "4/4",
+        "3/4"
+      ],
+      "hand_span": 6
+    },
+    "params": {
+      "measures": 4,
+      "tempo": 68,
+      "hands": "rh",
+      "rhythmTags": [],
+      "maxLeap": 2,
+      "stepwiseBias": 0.86,
+      "nonChordRate": 0.08,
+      "chromaticRate": 0,
+      "restRate": 0.04,
+      "lhStyle": "roots",
+      "chordsPerMeasure": 1,
+      "allowSevenths": false,
+      "allowInversions": false,
+      "dynamics": true,
+      "articulations": false,
+      "slurs": true,
+      "fingerings": true,
+      "meters": [
+        "4/4",
+        "3/4"
+      ],
+      "fifths": [
+        0
+      ],
+      "modes": [
+        "major"
+      ],
+      "rhLow": 35,
+      "rhHigh": 39,
+      "lhLow": 18,
+      "lhHigh": 22
+    },
+    "focus": [
+      "notes.treble",
+      "intervals.step",
+      "rhythm.quarter"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Two hands, steady pulse",
+    "stage": "Foundations",
+    "blurb": "Both hands read together with single bass notes and occasional paired eighths.",
+    "exam_reference": {
+      "abrsm": "Grade 1",
+      "rcm": "Level 1"
+    },
+    "constraints": {
+      "key_signature_accidentals": 1,
+      "hand_shifts": 0,
+      "max_melodic_interval": 3,
+      "smallest_ticks": 24,
+      "ledger_lines": 0,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord"
+      ],
+      "simultaneous_notes": 1,
+      "chromatic_notes": 0,
+      "tempo": [
+        60,
+        88
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4"
+      ],
+      "hand_span": 6
+    },
+    "params": {
+      "measures": 4,
+      "tempo": 72,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth"
+      ],
+      "maxLeap": 2,
+      "stepwiseBias": 0.84,
+      "nonChordRate": 0.1,
+      "chromaticRate": 0,
+      "restRate": 0.06,
+      "lhStyle": "roots",
+      "chordsPerMeasure": 1,
+      "allowSevenths": false,
+      "allowInversions": false,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": true,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4"
+      ],
+      "fifths": [
+        -1,
+        0,
+        1
+      ],
+      "modes": [
+        "major"
+      ],
+      "rhLow": 35,
+      "rhHigh": 39,
+      "lhLow": 17,
+      "lhHigh": 23
+    },
+    "focus": [
+      "coordination.together",
+      "notes.bass",
+      "rhythm.eighth"
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Phrases and position changes",
+    "stage": "Phrase reading",
+    "blurb": "Eight-bar periods introduce one hand-position change and simple accompaniment.",
+    "exam_reference": {
+      "abrsm": "Grade 2",
+      "rcm": "Levels 2–3"
+    },
+    "constraints": {
+      "key_signature_accidentals": 2,
+      "hand_shifts": 1,
+      "max_melodic_interval": 4,
+      "smallest_ticks": 24,
+      "ledger_lines": 1,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti"
+      ],
+      "simultaneous_notes": 2,
+      "chromatic_notes": 1,
+      "tempo": [
+        66,
+        96
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4"
+      ],
+      "hand_span": 7
+    },
+    "params": {
+      "measures": 8,
+      "tempo": 78,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest"
+      ],
+      "maxLeap": 3,
+      "stepwiseBias": 0.82,
+      "nonChordRate": 0.14,
+      "chromaticRate": 0,
+      "restRate": 0.12,
+      "lhStyle": "roots",
+      "chordsPerMeasure": 1,
+      "allowSevenths": false,
+      "allowInversions": true,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4"
+      ],
+      "fifths": [
+        -2,
+        -1,
+        0,
+        1,
+        2
+      ],
+      "modes": [
+        "major",
+        "minor"
+      ],
+      "rhLow": 27,
+      "rhHigh": 35,
+      "lhLow": 17,
+      "lhHigh": 25
+    },
+    "focus": [
+      "intervals.skip",
+      "rhythm.rest",
+      "notes.accidental"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Compound metre and chords",
+    "stage": "Phrase reading",
+    "blurb": "Six-eight, two-note harmonies, dotted figures, and simple sixteenth patterns.",
+    "exam_reference": {
+      "abrsm": "Grades 3–4",
+      "rcm": "Level 4"
+    },
+    "constraints": {
+      "key_signature_accidentals": 2,
+      "hand_shifts": 1,
+      "max_melodic_interval": 5,
+      "smallest_ticks": 12,
+      "ledger_lines": 1,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti"
+      ],
+      "simultaneous_notes": 2,
+      "chromatic_notes": 1,
+      "tempo": [
+        70,
+        108
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8"
+      ],
+      "hand_span": 8
+    },
+    "params": {
+      "measures": 8,
+      "tempo": 84,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest",
+        "dotted",
+        "sixteenth"
+      ],
+      "maxLeap": 4,
+      "stepwiseBias": 0.8,
+      "nonChordRate": 0.18,
+      "chromaticRate": 0.05,
+      "restRate": 0.12,
+      "lhStyle": "blocked",
+      "chordsPerMeasure": 1,
+      "allowSevenths": false,
+      "allowInversions": true,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8"
+      ],
+      "fifths": [
+        -2,
+        -1,
+        0,
+        1,
+        2
+      ],
+      "modes": [
+        "major",
+        "minor"
+      ],
+      "rhLow": 27,
+      "rhHigh": 36,
+      "lhLow": 16,
+      "lhHigh": 26
+    },
+    "focus": [
+      "rhythm.dotted",
+      "rhythm.sixteenth",
+      "coordination.together"
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Independent musical textures",
+    "stage": "Intermediate",
+    "blurb": "Alberti and broken-chord textures with one or two shifts and broader melody.",
+    "exam_reference": {
+      "abrsm": "Grade 5",
+      "rcm": "Levels 5–6"
+    },
+    "constraints": {
+      "key_signature_accidentals": 2,
+      "hand_shifts": 2,
+      "max_melodic_interval": 6,
+      "smallest_ticks": 24,
+      "ledger_lines": 2,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti",
+        "broken_octave"
+      ],
+      "simultaneous_notes": 3,
+      "chromatic_notes": 2,
+      "tempo": [
+        80,
+        120
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8"
+      ],
+      "hand_span": 8
+    },
+    "params": {
+      "measures": 12,
+      "tempo": 96,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest",
+        "dotted",
+        "syncopation"
+      ],
+      "maxLeap": 5,
+      "stepwiseBias": 0.76,
+      "nonChordRate": 0.22,
+      "chromaticRate": 0.08,
+      "restRate": 0.13,
+      "lhStyle": "alberti",
+      "chordsPerMeasure": 1,
+      "allowSevenths": true,
+      "allowInversions": true,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8"
+      ],
+      "fifths": [
+        -2,
+        -1,
+        0,
+        1,
+        2
+      ],
+      "modes": [
+        "major",
+        "minor"
+      ],
+      "rhLow": 28,
+      "rhHigh": 38,
+      "lhLow": 15,
+      "lhHigh": 27
+    },
+    "focus": [
+      "rhythm.syncopation",
+      "intervals.leap",
+      "notes.ledger"
+    ]
+  },
+  {
+    "id": 6,
+    "name": "Triplets and harmonic motion",
+    "stage": "Intermediate",
+    "blurb": "Triplets, seventh chords, and two harmonies per bar appear in longer phrases.",
+    "exam_reference": {
+      "abrsm": "Grade 6",
+      "rcm": "Level 7"
+    },
+    "constraints": {
+      "key_signature_accidentals": 3,
+      "hand_shifts": 3,
+      "max_melodic_interval": 7,
+      "smallest_ticks": 16,
+      "ledger_lines": 2,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti",
+        "broken_octave",
+        "walking"
+      ],
+      "simultaneous_notes": 3,
+      "chromatic_notes": 3,
+      "tempo": [
+        72,
+        132
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "5/4"
+      ],
+      "hand_span": 9
+    },
+    "params": {
+      "measures": 12,
+      "tempo": 100,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest",
+        "dotted",
+        "syncopation",
+        "triplet"
+      ],
+      "maxLeap": 6,
+      "stepwiseBias": 0.74,
+      "nonChordRate": 0.24,
+      "chromaticRate": 0.1,
+      "restRate": 0.14,
+      "lhStyle": "broken",
+      "chordsPerMeasure": 2,
+      "allowSevenths": true,
+      "allowInversions": true,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "5/4"
+      ],
+      "fifths": [
+        -3,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3
+      ],
+      "modes": [
+        "major",
+        "minor"
+      ],
+      "rhLow": 28,
+      "rhHigh": 39,
+      "lhLow": 14,
+      "lhHigh": 27
+    },
+    "focus": [
+      "rhythm.triplet",
+      "notes.accidental",
+      "coordination.together"
+    ]
+  },
+  {
+    "id": 7,
+    "name": "Sixteenth-note fluency",
+    "stage": "Advanced",
+    "blurb": "Sixteenths, compound metre, and contrapuntal options demand faster pattern recognition.",
+    "exam_reference": {
+      "abrsm": "Grade 6–7",
+      "rcm": "Level 8"
+    },
+    "constraints": {
+      "key_signature_accidentals": 3,
+      "hand_shifts": 4,
+      "max_melodic_interval": 8,
+      "smallest_ticks": 12,
+      "ledger_lines": 3,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti",
+        "broken_octave",
+        "contrapuntal",
+        "walking",
+        "stride"
+      ],
+      "simultaneous_notes": 4,
+      "chromatic_notes": 4,
+      "tempo": [
+        68,
+        140
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "5/4",
+        "5/8"
+      ],
+      "hand_span": 10
+    },
+    "params": {
+      "measures": 16,
+      "tempo": 104,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest",
+        "dotted",
+        "syncopation",
+        "sixteenth",
+        "triplet"
+      ],
+      "maxLeap": 7,
+      "stepwiseBias": 0.72,
+      "nonChordRate": 0.26,
+      "chromaticRate": 0.12,
+      "restRate": 0.14,
+      "lhStyle": "broken",
+      "chordsPerMeasure": 2,
+      "allowSevenths": true,
+      "allowInversions": true,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "5/4"
+      ],
+      "fifths": [
+        -3,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3
+      ],
+      "modes": [
+        "major",
+        "minor"
+      ],
+      "rhLow": 28,
+      "rhHigh": 40,
+      "lhLow": 13,
+      "lhHigh": 27
+    },
+    "focus": [
+      "rhythm.sixteenth",
+      "rhythm.triplet",
+      "notes.ledger"
+    ]
+  },
+  {
+    "id": 8,
+    "name": "Mixed metre and contrapuntal reading",
+    "stage": "Advanced",
+    "blurb": "Irregular metres and independent lines expand the reading field without abandoning form.",
+    "exam_reference": {
+      "abrsm": "Grade 7",
+      "rcm": "Level 9"
+    },
+    "constraints": {
+      "key_signature_accidentals": 4,
+      "hand_shifts": 6,
+      "max_melodic_interval": 9,
+      "smallest_ticks": 12,
+      "ledger_lines": 3,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti",
+        "broken_octave",
+        "contrapuntal",
+        "walking",
+        "stride"
+      ],
+      "simultaneous_notes": 4,
+      "chromatic_notes": 6,
+      "tempo": [
+        64,
+        148
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "12/8",
+        "5/4",
+        "5/8",
+        "7/8"
+      ],
+      "hand_span": 10
+    },
+    "params": {
+      "measures": 16,
+      "tempo": 108,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest",
+        "dotted",
+        "syncopation",
+        "sixteenth",
+        "triplet"
+      ],
+      "maxLeap": 8,
+      "stepwiseBias": 0.7,
+      "nonChordRate": 0.28,
+      "chromaticRate": 0.16,
+      "restRate": 0.15,
+      "lhStyle": "melodic",
+      "chordsPerMeasure": 2,
+      "allowSevenths": true,
+      "allowInversions": true,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "12/8",
+        "5/4"
+      ],
+      "fifths": [
+        -4,
+        -3,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "modes": [
+        "major",
+        "minor"
+      ],
+      "rhLow": 28,
+      "rhHigh": 41,
+      "lhLow": 12,
+      "lhHigh": 27
+    },
+    "focus": [
+      "coordination.together",
+      "rhythm.syncopation",
+      "notes.accidental"
+    ]
+  },
+  {
+    "id": 9,
+    "name": "Extended style reading",
+    "stage": "Mastery",
+    "blurb": "Longer forms, richer chromaticism, wide textures, and style-specific articulation.",
+    "exam_reference": {
+      "abrsm": "Grade 8",
+      "rcm": "Level 10"
+    },
+    "constraints": {
+      "key_signature_accidentals": 5,
+      "hand_shifts": 8,
+      "max_melodic_interval": 10,
+      "smallest_ticks": 12,
+      "ledger_lines": 4,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti",
+        "broken_octave",
+        "contrapuntal",
+        "walking",
+        "stride"
+      ],
+      "simultaneous_notes": 5,
+      "chromatic_notes": 10,
+      "tempo": [
+        60,
+        156
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "12/8",
+        "5/4"
+      ],
+      "hand_span": 11
+    },
+    "params": {
+      "measures": 16,
+      "tempo": 112,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest",
+        "dotted",
+        "syncopation",
+        "sixteenth",
+        "triplet"
+      ],
+      "maxLeap": 9,
+      "stepwiseBias": 0.68,
+      "nonChordRate": 0.3,
+      "chromaticRate": 0.2,
+      "restRate": 0.15,
+      "lhStyle": "melodic",
+      "chordsPerMeasure": 2,
+      "allowSevenths": true,
+      "allowInversions": true,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "12/8",
+        "5/4"
+      ],
+      "fifths": [
+        -5,
+        -4,
+        -3,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "modes": [
+        "major",
+        "minor"
+      ],
+      "rhLow": 28,
+      "rhHigh": 42,
+      "lhLow": 11,
+      "lhHigh": 27
+    },
+    "focus": [
+      "notes.ledger",
+      "intervals.leap",
+      "coordination.together"
+    ]
+  },
+  {
+    "id": 10,
+    "name": "Unrestricted concert reading",
+    "stage": "Mastery",
+    "blurb": "The complete vocabulary: wide intervals, mixed subdivisions, advanced textures, and every common key.",
+    "exam_reference": {
+      "abrsm": "Post-Grade 8 extension",
+      "rcm": "Post-Level 10 extension"
+    },
+    "constraints": {
+      "key_signature_accidentals": 5,
+      "hand_shifts": 99,
+      "max_melodic_interval": 12,
+      "smallest_ticks": 12,
+      "ledger_lines": 4,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti",
+        "broken_octave",
+        "contrapuntal",
+        "walking",
+        "stride"
+      ],
+      "simultaneous_notes": 5,
+      "chromatic_notes": 99,
+      "tempo": [
+        60,
+        160
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "12/8",
+        "5/4"
+      ],
+      "hand_span": 12
+    },
+    "params": {
+      "measures": 24,
+      "tempo": 116,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest",
+        "dotted",
+        "syncopation",
+        "sixteenth",
+        "triplet"
+      ],
+      "maxLeap": 11,
+      "stepwiseBias": 0.66,
+      "nonChordRate": 0.32,
+      "chromaticRate": 0.24,
+      "restRate": 0.16,
+      "lhStyle": "melodic",
+      "chordsPerMeasure": 2,
+      "allowSevenths": true,
+      "allowInversions": true,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4",
+        "6/8",
+        "9/8",
+        "12/8",
+        "5/4"
+      ],
+      "fifths": [
+        -5,
+        -4,
+        -3,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "modes": [
+        "major",
+        "minor"
+      ],
+      "rhLow": 28,
+      "rhHigh": 43,
+      "lhLow": 10,
+      "lhHigh": 27
+    },
+    "focus": [
+      "rhythm.sixteenth",
+      "rhythm.triplet",
+      "notes.accidental",
+      "notes.ledger"
+    ]
+  }
+]

@@ -1,0 +1,25 @@
+[
+  {
+    "id": "beethoven-ode-to-joy-theme",
+    "title": "Ode to Joy",
+    "subtitle": "Theme from Symphony No. 9 — sight-reading arrangement",
+    "composer": "Ludwig van Beethoven",
+    "work": "Symphony No. 9 in D minor, Op. 125, movement IV",
+    "provenance": "Public-domain composition; this pedagogical C-major arrangement is encoded for Prima Vista.",
+    "license": "Public domain",
+    "key": {"fifths": 0, "mode": "major"},
+    "meter": "4/4",
+    "tempo": 80,
+    "harmony": [0, 4, 0, 4, 0, 4, 4, 0],
+    "melody": [
+      [[3,1],[3,1],[4,1],[5,1]],
+      [[5,1],[4,1],[3,1],[2,1]],
+      [[1,1],[1,1],[2,1],[3,1]],
+      [[3,1.5],[2,0.5],[2,2]],
+      [[3,1],[3,1],[4,1],[5,1]],
+      [[5,1],[4,1],[3,1],[2,1]],
+      [[1,1],[1,1],[2,1],[3,1]],
+      [[2,1.5],[1,0.5],[1,2]]
+    ]
+  }
+]
