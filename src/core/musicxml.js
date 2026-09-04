@@ -188,6 +188,7 @@ function notationsXml(w, { slurStart, slurStop, fingering }) {
   if (art && !w.tieFrom) {
     const tag = { staccato: 'staccato', accent: 'accent', tenuto: 'tenuto' }[art];
     if (tag) bits.push(`<articulations><${tag}/></articulations>`);
+    if (art === 'marcato') bits.push('<articulations><strong-accent type="up"/></articulations>');
   }
   const ornament = { turn: 'turn', mordent: 'mordent' }[w.source.ornament];
   if (ornament && !w.tieFrom) bits.push(`<ornaments><${ornament}/></ornaments>`);

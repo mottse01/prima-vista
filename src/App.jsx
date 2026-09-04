@@ -305,7 +305,7 @@ export default function App() {
           <span className="sr-logo" aria-hidden="true">𝄞</span>
           <div>
             <h1>Prima Vista</h1>
-            <p>Sight-reading that reads you back</p>
+            <p>Build confidence, one fresh score at a time</p>
           </div>
         </div>
         <nav className="sr-tabs" aria-label="Sections">

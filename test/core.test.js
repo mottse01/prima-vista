@@ -131,6 +131,35 @@ test('generated studies use a clear phrase form and repeat their rhythmic idea',
   assert.ok(['arch', 'ascending', 'descending', 'wave'].includes(score.development.motif.contour));
 });
 
+test('articulations express repeated gestures and phrase structure', () => {
+  let staccatoCount = 0;
+  let tenutoCount = 0;
+  for (let seed = 1; seed <= 24; seed++) {
+    const score = generateExercise({
+      ...paramsForLevel(5, emptyProfile(), { seed: seed * 104729 }),
+      compositionStyle: 'classical_early', timeSignature: '4/4', measures: 12,
+      articulations: true,
+    });
+    const sounded = score.staves.rh.filter((note) => !note.rest);
+    const staccatos = sounded.filter((note) => note.articulation === 'staccato');
+    const tenutos = sounded.filter((note) => note.articulation === 'tenuto');
+    staccatoCount += staccatos.length;
+    tenutoCount += tenutos.length;
+
+    assert.ok(staccatos.every((note) => !note.cadence && !note.tags.includes('phrase-end')));
+    assert.ok(tenutos.every((note) => note.duration >= score.ts.beat));
+
+    const slotCounts = new Map();
+    for (const note of staccatos) {
+      const slot = String(note.motifIndex).split(':').slice(0, 2).join(':');
+      slotCounts.set(slot, (slotCounts.get(slot) || 0) + 1);
+    }
+    assert.ok([...slotCounts.values()].every((count) => count >= 2));
+  }
+  assert.ok(staccatoCount > 0);
+  assert.ok(tenutoCount > 0);
+});
+
 test('Auto never escapes to a meter-incompatible style pack', () => {
   const params = {
     ...paramsForLevel(8, emptyProfile(), { seed: 808080 }),

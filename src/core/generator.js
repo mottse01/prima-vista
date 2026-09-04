@@ -593,6 +593,7 @@ function assignPitches(rng, opts) {
       cellId: ev.cellId,
       chordTone: isChordTone(key, chord, chosen),
       motifKey: ev.motifKey || null,
+      motifIndex: ev.motifIndex || null,
       motifRole: ev.motifRole || null,
       section: ev.section || null,
       phraseFunction: ev.phraseFunction || phraseSpec?.function || null,
@@ -614,7 +615,8 @@ function assignPitches(rng, opts) {
   // Re-interleave rests so the engraver sees a continuous stream.
   const rests = rhythm.filter((e) => e.rest).map((e) => ({
     onset: e.onset, duration: e.duration, rest: true, pitches: [], tags: e.tags, cellId: e.cellId,
-    motifKey: e.motifKey || null, motifRole: e.motifRole || null, section: e.section || null,
+    motifKey: e.motifKey || null, motifIndex: e.motifIndex || null,
+    motifRole: e.motifRole || null, section: e.section || null,
     phraseFunction: e.phraseFunction || null, formalTransform: e.formalTransform || null,
   }));
   return [...notes, ...rests].sort((a, b) => a.onset - b.onset);
@@ -821,18 +823,87 @@ function addDynamics(rng, notes, ts, measures, style) {
   }
 }
 
-function addArticulations(rng, notes, ts, style) {
-  const allowed = style.pack.expression.articulations;
-  for (const n of notes) {
-    if (n.rest) continue;
-    const within = n.onset % ts.ticks;
-    const candidates = allowed.filter((item) => (
-      item === 'staccato' ? n.duration <= TPQ
-        : item === 'tenuto' ? n.duration >= TPQ
-          : item === 'accent' ? within === 0
-            : false
-    ));
-    if (candidates.length && rng.chance(0.12)) n.articulation = rng.pick(candidates);
+function motifSlot(note) {
+  if (note.motifIndex == null) return null;
+  return String(note.motifIndex).split(':').slice(0, 2).join(':');
+}
+
+function addArticulations(notes, ts, style, form) {
+  const allowed = new Set(style.pack.expression.articulations);
+  const sounded = notes.filter((note) => !note.rest);
+  if (!sounded.length) return;
+
+  // Staccato is a recognisable rhythmic gesture, not confetti. Find the first
+  // useful run in the stated motif, then repeat that articulation pattern when
+  // the motif returns. Cadential arrivals stay clear.
+  if (allowed.has('staccato')) {
+    const motifBars = form.units?.[0]?.bars || [0, 0];
+    const motifNotes = sounded.filter((note) => {
+      const measure = Math.floor(note.onset / ts.ticks);
+      return measure >= motifBars[0] && measure <= motifBars[1]
+        && note.duration <= ts.beat
+        && !note.cadence
+        && !note.tags?.includes('phrase-end');
+    });
+    const runs = [];
+    let run = [];
+    for (const note of motifNotes) {
+      const previous = run.at(-1);
+      const sameMeasure = previous && Math.floor(previous.onset / ts.ticks) === Math.floor(note.onset / ts.ticks);
+      const continues = previous && sameMeasure
+        && previous.onset + previous.duration === note.onset
+        && previous.cellId === note.cellId;
+      if (!continues) {
+        if (run.length >= 2) runs.push(run);
+        run = [];
+      }
+      run.push(note);
+    }
+    if (run.length >= 2) runs.push(run);
+
+    const gesture = [...runs]
+      .sort((a, b) => b.length - a.length || a[0].onset - b[0].onset)[0]
+      ?.slice(0, 2);
+    const slots = new Set((gesture || []).map(motifSlot).filter(Boolean));
+    for (const note of sounded) {
+      if (slots.has(motifSlot(note))
+        && note.duration <= ts.beat
+        && !note.cadence
+        && !note.tags?.includes('phrase-end')) {
+        note.articulation = 'staccato';
+      }
+    }
+  }
+
+  // Tenuto clarifies a strong phrase goal. Open-ended phrases remain unmarked,
+  // and stronger structural marks take precedence below.
+  if (allowed.has('tenuto')) {
+    for (const unit of form.units || []) {
+      if (unit.cadenceStrength !== 'strong') continue;
+      const start = unit.bars[0] * ts.ticks;
+      const end = (unit.bars[1] + 1) * ts.ticks;
+      const within = sounded.filter((note) => note.onset >= start && note.onset < end);
+      const arrival = [...within].reverse().find((note) => note.duration >= ts.beat);
+      if (arrival) arrival.articulation = 'tenuto';
+    }
+  }
+
+  // Accents and marcato marks belong to formal emphasis: the melodic climax,
+  // or the opening downbeat of a higher-energy section when there is no marked
+  // climax. This keeps them sparse and explainable.
+  const emphasis = allowed.has('marcato') ? 'marcato' : allowed.has('accent') ? 'accent' : null;
+  if (emphasis) {
+    const climax = sounded.find((note) => note.structural === 'climax');
+    if (climax && !climax.cadence) {
+      climax.articulation = emphasis;
+    } else {
+      const sectionStarts = sounded.filter((note) => (
+        note.structural === 'phrase-start'
+        && note.onset % ts.ticks === 0
+        && (note.energy || 1) > 1
+      ));
+      for (const note of sectionStarts) note.articulation = emphasis;
+    }
   }
 }
 
@@ -1077,7 +1148,7 @@ export function composeCandidate(userParams = {}, attempt = 0) {
   const motifEnd = (motifUnit.bars[1] + 1) * ts.ticks;
   const motifLead = lead.filter((note) => !note.rest && note.onset >= motifStart && note.onset < motifEnd);
   if (params.dynamics) addDynamics(rng, lead, ts, measures, style);
-  if (params.articulations) addArticulations(rng, lead, ts, style);
+  if (params.articulations) addArticulations(lead, ts, style, form);
   addOrnaments(rng, lead, level, style);
   if (params.fingerings && staves.rh.length) addFingerings(staves.rh);
   const slurs = params.slurs && staves.rh.length ? buildSlurs(staves.rh, ts, form) : [];
