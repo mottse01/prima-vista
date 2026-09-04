@@ -143,6 +143,45 @@ test('generated studies use a clear phrase form and repeat their rhythmic idea',
   assert.ok(['arch', 'ascending', 'descending', 'wave'].includes(score.development.motif.contour));
 });
 
+test('rests occur sometimes, support phrasing, and never interrupt a cadence', () => {
+  let scoresWithRests = 0;
+  let scoresWithoutRests = 0;
+  let phraseBreaths = 0;
+  let motivicRests = 0;
+  for (let seed = 1; seed <= 48; seed++) {
+    const score = generateExercise(paramsForLevel(5, emptyProfile(), { seed: 510000 + seed }));
+    const rests = score.staves.rh.filter((event) => event.rest);
+    if (rests.length) scoresWithRests += 1;
+    else scoresWithoutRests += 1;
+    for (const rest of rests) {
+      assert.equal(Boolean(rest.cadence), false);
+      assert.equal(rest.tags.includes('cadence-arrival'), false);
+      assert.equal(rest.tags.includes('phrase-end'), false);
+      phraseBreaths += Number(rest.tags.includes('phrase-breath'));
+      motivicRests += Number(rest.tags.includes('motivic-rest'));
+    }
+    for (const slur of score.slurs) {
+      assert.equal(rests.some((rest) => rest.onset > slur.from && rest.onset < slur.to), false);
+    }
+  }
+  assert.ok(scoresWithRests >= 8, `only ${scoresWithRests} of 48 scores contained rests`);
+  assert.ok(scoresWithoutRests >= 8, `only ${scoresWithoutRests} of 48 scores omitted rests`);
+  assert.ok(phraseBreaths > 0);
+  assert.ok(motivicRests > 0);
+});
+
+test('a targeted rest drill always contains a musically placed rest', () => {
+  for (let seed = 1; seed <= 12; seed++) {
+    const score = generateExercise(paramsForLevel(5, emptyProfile(), {
+      seed: 520000 + seed,
+      targetSkill: 'rhythm.rest',
+    }));
+    const rests = score.staves.rh.filter((event) => event.rest);
+    assert.ok(rests.length > 0);
+    assert.ok(rests.every((rest) => rest.tags.includes('phrase-breath') || rest.tags.includes('motivic-rest')));
+  }
+});
+
 test('articulations express repeated gestures and phrase structure', () => {
   let staccatoCount = 0;
   let tenutoCount = 0;

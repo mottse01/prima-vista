@@ -23,10 +23,12 @@ import { chooseFragment } from './fragments.js';
 
 /** Fill one measure with rhythm cells drawn from the allowed vocabulary. */
 function fillMeasure(rng, ts, cellIds, {
-  restRate, offsetTicks, requiredTag = null, pack = null, primaryCellId = null,
+  offsetTicks, requiredTag = null, pack = null, primaryCellId = null,
 }) {
   const meter = ts.compound ? 'compound' : 'simple';
-  const cells = cellIds.map(getCell).filter((c) => c && c.meter === meter);
+  // Silence is shaped after the motif and phrase plan are known. Keeping rest
+  // cells out of this blind draw prevents arbitrary holes on structural beats.
+  const cells = cellIds.map(getCell).filter((c) => c && c.meter === meter && !c.tags.includes('rest'));
   const fallback = getCell(ts.compound ? 'cdq' : 'q');
   const events = [];
   let pos = 0;
@@ -41,7 +43,6 @@ function fillMeasure(rng, ts, cellIds, {
     const weights = usable.map((c) => {
       let w = pack?.rhythm_cells.find((item) => item.id === c.id)?.weight || 0.08;
       if (c.id === primaryCellId) w *= 3.5;
-      if (c.tags.includes('rest')) w *= restRate * 3;
       // Longer values open a bar naturally but clutter it mid-measure.
       if (c.ticks > ts.beat) w *= pos === 0 ? 1.1 : 0.45;
       // Keep plain beats common enough that lines stay readable.
@@ -52,8 +53,9 @@ function fillMeasure(rng, ts, cellIds, {
     });
 
     // Adaptive drills promise to put the diagnosed rhythm into the music, not
-    // merely make it one of many possibilities. Put one legal focus cell at
-    // the opening of an assigned bar; the rest of the line remains varied.
+    // merely make it one of many possibilities. Put one legal sounding focus
+    // cell at the opening of an assigned bar; rests are guaranteed later once
+    // their musical location is known.
     const focused = pos === 0 && requiredTag
       ? usable.filter((c) => c.tags.includes(requiredTag))
       : [];
@@ -66,6 +68,160 @@ function fillMeasure(rng, ts, cellIds, {
     pos += cell.ticks;
   }
   return events;
+}
+
+const REST_POLICIES = {
+  classical_early: { boundary: 0.72, frequency: 1 },
+  romantic: { boundary: 0.72, frequency: 0.9 },
+  baroque: { boundary: 0.5, frequency: 0.78 },
+  hymn_chorale: { boundary: 0.82, frequency: 0.68 },
+  folk: { boundary: 0.58, frequency: 1.05 },
+  pop_contemporary: { boundary: 0.34, frequency: 1.12 },
+  blues: { boundary: 0.28, frequency: 1.08 },
+  jazz_lead: { boundary: 0.28, frequency: 1.12 },
+  ragtime: { boundary: 0.22, frequency: 0.92 },
+  minimalist: { boundary: 0.38, frequency: 0.72 },
+};
+
+const rhythmMotifSlot = (event) => event.motifIndex == null
+  ? null
+  : String(event.motifIndex).split(':').slice(0, 2).join(':');
+
+/**
+ * Turn existing note values into measured silences only after formal function
+ * is known. Tonal/lyrical styles prefer a breath after a cadence; groove-led
+ * styles prefer a repeated weak-beat gap inside the motif. Cadence arrivals,
+ * opening attacks, and lone notes in a bar are protected.
+ */
+function shapeMusicalRests(rng, events, {
+  ts, form, restRate, styleId, enabled, forced = false, minDuration = 1,
+}) {
+  if (!enabled || !events.length) return events;
+  const policy = REST_POLICIES[styleId] || { boundary: 0.5, frequency: 1 };
+  const appearance = clamp(restRate * 3.4 * policy.frequency, 0.24, 0.68);
+  if (!forced && !rng.chance(appearance)) return events;
+
+  const soundedPerMeasure = new Map();
+  for (const event of events) {
+    if (event.rest) continue;
+    const measure = Math.floor(event.onset / ts.ticks);
+    soundedPerMeasure.set(measure, (soundedPerMeasure.get(measure) || 0) + 1);
+  }
+  const eligible = (event) => {
+    const measure = Math.floor(event.onset / ts.ticks);
+    return !event.rest
+      && event.duration <= ts.beat
+      && !event.cadenceArrival
+      && !event.tags?.includes('phrase-end')
+      && (soundedPerMeasure.get(measure) || 0) > 1;
+  };
+
+  // A breath belongs just after an actual cadence, at the opening of the next
+  // phrase—not before the cadence has completed.
+  const boundaryCandidates = [];
+  for (const unit of form.units || []) {
+    const nextMeasure = unit.bars[1] + 1;
+    if (!unit.cadence || nextMeasure >= form.plan.length) continue;
+    const onset = nextMeasure * ts.ticks;
+    const candidate = events.find((event) => event.onset === onset && eligible(event));
+    if (candidate) boundaryCandidates.push(candidate);
+  }
+
+  // A motivic rest is selected from a weak position in the stated idea, then
+  // echoed once per formal unit. That makes silence part of the rhythm rather
+  // than random damage to otherwise repeated material.
+  const motifBars = form.units?.[0]?.bars || [0, Math.min(1, form.plan.length - 1)];
+  const motifCandidates = events.filter((event) => {
+    const measure = Math.floor(event.onset / ts.ticks);
+    const within = event.onset - measure * ts.ticks;
+    return eligible(event)
+      && rhythmMotifSlot(event)
+      && event.onset > 0
+      && measure >= motifBars[0]
+      && measure <= motifBars[1]
+      && metricWeight(ts, within) < 2;
+  });
+
+  const chooseMotivic = () => {
+    if (!motifCandidates.length) return [];
+    const chosen = rng.weighted(motifCandidates, motifCandidates.map((event) => {
+      const within = event.onset % ts.ticks;
+      const offbeat = within % ts.beat !== 0;
+      return (offbeat ? 3 : 1) * (event.duration <= ts.beat / 2 ? 1.8 : 1);
+    }));
+    const slot = rhythmMotifSlot(chosen);
+    const onePerUnit = new Map();
+    for (const event of events) {
+      if (!eligible(event) || rhythmMotifSlot(event) !== slot) continue;
+      const measure = Math.floor(event.onset / ts.ticks);
+      const unit = form.plan[measure]?.unitIndex ?? 0;
+      if (!onePerUnit.has(unit)) onePerUnit.set(unit, event);
+    }
+    return [...onePerUnit.values()];
+  };
+
+  let selected = [];
+  let kind = 'motivic-rest';
+  if (boundaryCandidates.length && rng.chance(policy.boundary)) {
+    selected = [rng.pick(boundaryCandidates)];
+    kind = 'phrase-breath';
+  } else {
+    selected = chooseMotivic();
+    if (!selected.length && boundaryCandidates.length) {
+      selected = [rng.pick(boundaryCandidates)];
+      kind = 'phrase-breath';
+    }
+  }
+  // Sustained textures may have no short event that can become a rest without
+  // erasing an entire bar. In that case, release a long note early and use its
+  // tail as the breath—a common written articulation that preserves the attack.
+  if (!selected.length) {
+    const longCandidates = events.filter((event) => (
+      !event.rest
+      && event.onset > 0
+      && event.duration >= minDuration * 2
+      && !event.cadenceArrival
+      && !event.tags?.includes('phrase-end')
+      && rhythmMotifSlot(event)
+    ));
+    if (!longCandidates.length) return events;
+    const chosenLong = rng.pick(longCandidates);
+    const slot = rhythmMotifSlot(chosenLong);
+    const onePerUnit = new Map();
+    for (const event of events) {
+      if (rhythmMotifSlot(event) !== slot
+        || event.duration < minDuration * 2
+        || event.cadenceArrival
+        || event.tags?.includes('phrase-end')) continue;
+      const measure = Math.floor(event.onset / ts.ticks);
+      const unit = form.plan[measure]?.unitIndex ?? 0;
+      if (!onePerUnit.has(unit)) onePerUnit.set(unit, event);
+    }
+    const split = new Set(onePerUnit.values());
+    return events.flatMap((event) => {
+      if (!split.has(event)) return [event];
+      const restDuration = Math.min(ts.beat, event.duration - minDuration);
+      const noteDuration = event.duration - restDuration;
+      return [
+        { ...event, duration: noteDuration },
+        {
+          ...event,
+          onset: event.onset + noteDuration,
+          duration: restDuration,
+          rest: true,
+          cadenceArrival: false,
+          motifIndex: `${event.motifIndex}:breath`,
+          tags: [...new Set([...(event.tags || []), 'rest', 'motivic-rest'])],
+        },
+      ];
+    });
+  }
+  const chosen = new Set(selected);
+  return events.map((event) => chosen.has(event) ? {
+    ...event,
+    rest: true,
+    tags: [...new Set([...(event.tags || []), 'rest', kind])],
+  } : event);
 }
 
 /**
@@ -156,7 +312,10 @@ function buildRhythm(
     const cell = getCell(id);
     return cell?.tags?.some((tag) => ['eighth', 'sixteenth', 'triplet'].includes(tag));
   });
-  const primaryPool = cellIds.filter((id) => getCell(id)?.meter === (ts.compound ? 'compound' : 'simple'));
+  const primaryPool = cellIds.filter((id) => {
+    const cell = getCell(id);
+    return cell?.meter === (ts.compound ? 'compound' : 'simple') && !cell.tags.includes('rest');
+  });
   const primaryCellId = primaryPool.length
     ? rng.weighted(primaryPool, primaryPool.map((id) => (
       style?.pack.rhythm_cells.find((cell) => cell.id === id)?.weight || 0.08
@@ -184,7 +343,7 @@ function buildRhythm(
     // remain genuinely distinct.
     for (let draw = 0; draw < 5; draw++) {
       events = fillMeasure(rng, ts, cellIds, {
-        restRate, offsetTicks: 0, requiredTag: required[index] || null,
+        offsetTicks: 0, requiredTag: required[index] || null,
         pack: style?.pack, primaryCellId,
       });
       if (!canSubdivide || events.filter((event) => !event.rest).length >= 3) break;
@@ -220,7 +379,16 @@ function buildRhythm(
     }
     out.push(...measureEvents);
   }
-  Object.defineProperty(out, 'motifPlan', {
+  const withRests = shapeMusicalRests(rng, out, {
+    ts,
+    form,
+    restRate,
+    styleId: style?.id,
+    enabled: cellIds.some((id) => getCell(id)?.tags.includes('rest')),
+    forced: focusTags.includes('rest'),
+    minDuration,
+  });
+  Object.defineProperty(withRests, 'motifPlan', {
     enumerable: false,
     value: Object.freeze({
       id: fragment?.id || `motif:${primaryCellId || 'derived'}`,
@@ -232,7 +400,7 @@ function buildRhythm(
       }))),
     }),
   });
-  return out;
+  return withRests;
 }
 
 // ---------------------------------------------------------------------------
@@ -921,10 +1089,20 @@ function buildSlurs(notes, ts, form) {
   for (const unit of form.units || []) {
     const start = unit.bars[0] * ts.ticks;
     const end = (unit.bars[1] + 1) * ts.ticks;
-    const from = notes.find((n) => !n.rest && n.onset >= start);
-    const within = notes.filter((n) => !n.rest && n.onset >= start && n.onset < end);
-    const to = within[within.length - 1];
-    if (from && to && to.onset > from.onset) slurs.push({ hand: 'rh', from: from.onset, to: to.onset });
+    const within = notes.filter((note) => note.onset >= start && note.onset < end);
+    let run = [];
+    const finishRun = () => {
+      if (run.length > 1) slurs.push({ hand: 'rh', from: run[0].onset, to: run.at(-1).onset });
+      run = [];
+    };
+    for (const event of within) {
+      if (event.rest) {
+        finishRun();
+      } else {
+        run.push(event);
+      }
+    }
+    finishRun();
   }
   return slurs;
 }
@@ -1035,7 +1213,10 @@ export function composeCandidate(userParams = {}, attempt = 0) {
   const packCells = new Set(style.pack.rhythm_cells
     .filter((cell) => cell.min_level <= level && cell.meter === (ts.compound ? 'compound' : 'simple'))
     .map((cell) => cell.id));
-  const cells = levelCells.filter((id) => packCells.has(id));
+  // Style packs govern sounding rhythm, while the level/custom vocabulary
+  // governs whether rests are pedagogically available. Phrase-aware shaping
+  // below decides where those rests belong.
+  const cells = levelCells.filter((id) => packCells.has(id) || getCell(id)?.tags.includes('rest'));
   for (const tag of params.focusRhythmTags || []) {
     for (const id of levelCells) {
       if (getCell(id)?.tags?.includes(tag) && !cells.includes(id)) cells.push(id);
