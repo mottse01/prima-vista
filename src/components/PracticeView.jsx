@@ -17,6 +17,13 @@ import { LEVELS } from '../core/levels.js';
 
 const LOOK_AHEAD_MODES = CURTAIN_MODES.filter((mode) => !mode.legacy);
 const PREPARATION_SECONDS = 30;
+const FOCUS_PACKS = [
+  { id: 'rhythm.rest', label: 'Rests' },
+  { id: 'rhythm.eighth', label: 'Rhythm' },
+  { id: 'intervals.leap', label: 'Intervals' },
+  { id: 'notes.ledger', label: 'Ledger notes' },
+  { id: 'coordination.together', label: 'Hands together' },
+];
 
 /**
  * One take of one exercise. App remounts this whenever the exercise changes,
@@ -25,9 +32,9 @@ const PREPARATION_SECONDS = 30;
 export default function PracticeView({
   score, settings, onSettings, onResult, onRegenerate, level,
   onDifficultyChange,
-  midi, onConnectMidi, showKeyboard, onToggleKeyboard,
+  midi, onConnectMidi, microphone, onConnectMicrophone, showKeyboard, onToggleKeyboard,
   freshRead, strongReads = 0, onPreview, onReflect, onNotify,
-  session, onSessionStart,
+  session, onSessionStart, placement, onFocus, onRecheckLevel, repairHand, onRepairHand,
 }) {
   const [phase, setPhase] = useState('idle'); // idle | countin | playing | done
   const [noteStates, setNoteStates] = useState({});
@@ -178,7 +185,7 @@ export default function PracticeView({
     setPulseTap({ times: [], message: 'Tap four beats at the written tempo.' });
     setDueNow(new Set());
     takeCountRef.current += 1;
-    assistedRef.current = Boolean(previewed || settings.guideKeys);
+    assistedRef.current = Boolean(previewed || settings.guideKeys || repairHand);
     freshAtStartRef.current = Boolean(freshRead);
 
     const armTake = (startTime) => {
@@ -219,7 +226,7 @@ export default function PracticeView({
     playbackRef.current = startPlayback({
       score, startTime, metronome: settings.metronome, playScore: false, onEnd: () => {},
     });
-  }, [finish, freshRead, onSessionStart, prepareSound, previewed, score, settings.countInBeats, settings.guideKeys, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
+  }, [finish, freshRead, onSessionStart, prepareSound, previewed, repairHand, score, settings.countInBeats, settings.guideKeys, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
 
   const beginPreparation = useCallback(() => {
     setPreparation({ phase: 'active', remaining: PREPARATION_SECONDS, checks: [] });
@@ -330,6 +337,12 @@ export default function PracticeView({
   }, [onPreview, prepareSound, score, settings.metronome, startLoop, stopEverything]);
 
   useEffect(() => () => stopEverything(), [stopEverything]);
+
+  useEffect(() => {
+    const active = phase === 'playing' || phase === 'countin';
+    document.documentElement.classList.toggle('sr-practice-running', active);
+    return () => document.documentElement.classList.remove('sr-practice-running');
+  }, [phase]);
 
   useEffect(() => () => {
     document.documentElement.classList.remove('sr-stand-mode');
@@ -514,6 +527,8 @@ export default function PracticeView({
     : session.complete
       ? `${session.takes} ${session.takes === 1 ? 'read' : 'reads'} complete`
       : `${formatClock(session.remaining)} · ${session.takes} ${session.takes === 1 ? 'read' : 'reads'}`;
+  const journeyPhase = result ? 'review' : phase === 'playing' || phase === 'countin' ? 'play' : 'prepare';
+  const dailyStep = session?.minutes ? Math.min(2, session.takes % 3) : null;
 
   const copyLink = async () => {
     const ok = await copyText(window.location.href);
@@ -528,6 +543,17 @@ export default function PracticeView({
 
   return (
     <div className="sr-practice">
+      <nav className="sr-flowsteps" aria-label="Practice stages">
+        {[
+          ['prepare', placement?.active ? `Level check ${placement.total - placement.remaining + 1}/${placement.total}` : 'Prepare'],
+          ['play', 'Play'],
+          ['review', 'Review'],
+        ].map(([id, label], index) => (
+          <span key={id} className={journeyPhase === id ? 'is-current' : ''} aria-current={journeyPhase === id ? 'step' : undefined}>
+            <b>{index + 1}</b>{label}
+          </span>
+        ))}
+      </nav>
       <section className={`sr-practice-dock is-compact${level ? '' : ' is-custom'}`} aria-label="Practice controls">
         <div className="sr-practice-dock-current">
           <span>{level ? `Level ${level.id}` : 'Custom exercise'}</span>
@@ -583,6 +609,16 @@ export default function PracticeView({
           </div>
           <p>{settings.curtain === 'off' ? 'Optional fluency drill' : `${curtainMode(settings.curtain).blurb} Results stay separate from level progress.`}</p>
         </fieldset>
+        <fieldset className="sr-focus-packs" disabled={busy || !level}>
+          <legend>Practice focus</legend>
+          <p>Ask the next fresh study to emphasize one reading skill.</p>
+          <div>
+            {FOCUS_PACKS.map((pack) => (
+              <button key={pack.id} type="button" onClick={() => onFocus?.(pack.id)}>{pack.label}</button>
+            ))}
+            <button type="button" className="sr-recheck-level" onClick={onRecheckLevel}>Recheck my level</button>
+          </div>
+        </fieldset>
           </div>
         </details>
       </section>
@@ -590,7 +626,12 @@ export default function PracticeView({
       <section className="sr-practice-summary" aria-label="Practice plan">
         <div className="sr-practice-summary-main">
           <span className={`sr-statuspill${qualifies ? ' is-fresh' : ' is-practice'}`}>
-            {settings.curtain !== 'off' ? 'Reading-ahead drill' : qualifies ? 'Fresh read' : 'Practice take'}
+            {repairHand ? `${repairHand === 'rh' ? 'Right' : 'Left'}-hand repair`
+              : placement?.active ? `Level check · ${placement.remaining} left`
+              : dailyStep === 0 ? 'Warm-up read'
+                : dailyStep === 1 ? 'Fresh read'
+                  : dailyStep === 2 ? 'Read-ahead finish'
+                    : settings.curtain !== 'off' ? 'Reading-ahead drill' : qualifies ? 'Fresh read' : 'Practice take'}
           </span>
           <span>Focus: <strong>{focusLabels.length ? focusLabels.join(' · ') : 'clean baseline'}</strong></span>
           {level && <span>{strongReads}/3 strong fresh reads</span>}
@@ -603,13 +644,23 @@ export default function PracticeView({
               disabled={busy}
             >
               <option value={0}>Open practice</option>
-              <option value={5}>5-minute set</option>
-              <option value={10}>10-minute set</option>
+              <option value={5}>Daily 5-minute practice</option>
+              <option value={10}>Daily 10-minute practice</option>
             </select>
           </label>
           <strong>{sessionLabel}</strong>
         </div>
       </section>
+
+      {session?.minutes > 0 && !placement?.active && (
+        <ol className="sr-daily-plan" aria-label="Daily practice plan">
+          {['Warm up the pulse', 'Read something fresh', 'Finish by reading ahead'].map((label, index) => (
+            <li key={label} className={index === dailyStep ? 'is-current' : index < dailyStep ? 'is-done' : ''}>
+              <span>{index < dailyStep ? '✓' : index + 1}</span>{label}
+            </li>
+          ))}
+        </ol>
+      )}
 
       {freshRead && !result && (
         <section className={`sr-preparation is-${preparation.phase}`} aria-label="Silent preparation">
@@ -656,6 +707,13 @@ export default function PracticeView({
             </div>
           )}
         </section>
+      )}
+
+      {settings.scoreLayout !== 'scroll' && (
+        <aside className="sr-landscape-tip">
+          <div><strong>Turn this into a music stand</strong><span>Scrolling view keeps the next notes in sight on a landscape phone.</span></div>
+          <button type="button" className="sr-btn sr-btn--primary" onClick={() => { onSettings({ scoreLayout: 'scroll' }); toggleStandMode(); }}>Use scrolling stand</button>
+        </aside>
       )}
 
       <div className="sr-scorecard">
@@ -894,6 +952,23 @@ export default function PracticeView({
               {showKeyboard ? 'Hide keyboard' : 'Show keyboard'}
             </button>
           </div>
+          <div className={`sr-microphone sr-microphone--${microphone?.status || 'idle'}`}>
+            <div>
+              <strong>Acoustic piano</strong>
+              <span>{microphone?.status === 'listening'
+                ? `Listening${microphone.midi != null ? ` · heard ${midiLabel(microphone.midi)}` : ' · play one note at a time'}`
+                : microphone?.status === 'connecting' ? 'Requesting microphone access…'
+                  : microphone?.status === 'error' ? microphone.error
+                    : 'Use your microphone for single-note feedback'}</span>
+            </div>
+            <div className="sr-mic-meter" aria-label={`Pitch confidence ${Math.round((microphone?.confidence || 0) * 100)} percent`}>
+              <span style={{ width: `${Math.round((microphone?.confidence || 0) * 100)}%` }} />
+            </div>
+            <button
+              type="button" className="sr-btn sr-btn--small"
+              onClick={onConnectMicrophone} disabled={microphone?.status === 'connecting' || busy}
+            >{microphone?.status === 'listening' ? 'Stop listening' : 'Use microphone'}</button>
+          </div>
         </div>
       </details>
 
@@ -919,6 +994,9 @@ export default function PracticeView({
             score={score}
             focusIds={focusIds}
             reflection={reflection}
+            placement={placement}
+            repairHand={repairHand}
+            onRepairHand={onRepairHand}
             onReflect={(choice) => {
               setReflection(choice.label);
               onReflect?.(choice);
@@ -931,7 +1009,7 @@ export default function PracticeView({
 
 function ResultPanel({
   result, onAgain, onNext, onRepair, tempo, repeat, assisted, curtain,
-  score, focusIds, reflection, onReflect,
+  score, focusIds, reflection, onReflect, placement, repairHand, onRepairHand,
 }) {
   if (result.invalid) {
     return (
@@ -1005,7 +1083,14 @@ function ResultPanel({
         </fieldset>
       </div>
       <div className="sr-result-actions">
-        {shouldRepair ? (
+        {placement?.active ? (
+          <>
+            <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>Next level-check read</button>
+            <button type="button" className="sr-btn" onClick={onAgain}>Repeat for confidence</button>
+          </>
+        ) : placement?.complete ? (
+          <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>Start at level {placement.recommended}</button>
+        ) : shouldRepair ? (
           <>
             <button
               type="button" className="sr-btn sr-btn--primary"
@@ -1020,9 +1105,18 @@ function ResultPanel({
           </>
         )}
       </div>
-      {(repeat || assisted || curtain.beats !== null) && (
+      {!placement?.active && !placement?.complete && !repairHand && score.staves.rh?.length > 0 && score.staves.lh?.length > 0 && (
+        <div className="sr-hand-repair">
+          <span>Isolate the coordination before returning to the full score:</span>
+          <button type="button" onClick={() => onRepairHand?.('rh', repairTempo)}>Right hand only</button>
+          <button type="button" onClick={() => onRepairHand?.('lh', repairTempo)}>Left hand only</button>
+        </div>
+      )}
+      {(placement?.active || placement?.complete || repeat || assisted || curtain.beats !== null) && (
         <p className="sr-result-note">
-          {curtain.beats !== null
+          {placement?.active || placement?.complete
+            ? 'Level-check read — used to recommend a comfortable starting point, not to advance the learning path.'
+            : curtain.beats !== null
             ? `Flexible look-ahead take (${curtain.label}) — tracked under reading ahead, and it does not move your skill map or level.`
             : assisted
               ? 'Assisted practice — hearing the exercise first or using guide keys counts at half weight and cannot advance your level.'
@@ -1075,6 +1169,11 @@ function soundLabel(state) {
   if (state === 'unavailable') return 'Audio unavailable in this browser';
   if (state === 'suspended' || state === 'interrupted') return 'Sound paused — tap to resume';
   return 'Sound starts on your first tap';
+}
+
+function midiLabel(midi) {
+  const names = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+  return `${names[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
 }
 
 /** Keep the same notation, but lower the tempo enough to preserve continuity. */

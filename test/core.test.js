@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { applyResult, emptyProfile, paramsForLevel } from '../src/core/adaptive.js';
+import { applyResult, emptyProfile, paramsForLevel, placementRecommendation } from '../src/core/adaptive.js';
 import {
   renderReferenceWav, startPracticePlayback, startReferencePlayback,
 } from '../src/core/audio.js';
@@ -17,6 +17,7 @@ import { toMusicXml, xmlSlurId } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { timeSig } from '../src/core/rhythm.js';
 import { scoreLayoutOptions } from '../src/core/verovio.js';
+import { detectPitch, frequencyToMidi } from '../src/core/microphone.js';
 import { eventShouldVanish } from '../src/core/curtain.js';
 import { fromDia, keyAlterations, tonicLetter } from '../src/core/theory.js';
 import {
@@ -32,6 +33,23 @@ test('new variation seeds are six characters and validation is strict', () => {
   }
   assert.equal(codeToSeed('ABC123!'), null);
   assert.equal(codeToSeed(''), null);
+});
+
+test('microphone pitch detection maps a clean piano tone to the expected MIDI note', () => {
+  const sampleRate = 48000;
+  const tone = Float32Array.from({ length: 2048 }, (_, index) => Math.sin(2 * Math.PI * 440 * index / sampleRate) * 0.4);
+  const detected = detectPitch(tone, sampleRate);
+  assert.ok(detected);
+  assert.ok(detected.clarity > 0.8);
+  assert.ok(Math.abs(frequencyToMidi(detected.frequency) - 69) < 0.3);
+});
+
+test('the three-read placement check makes a conservative one-level recommendation', () => {
+  assert.equal(placementRecommendation(5, [92, 94, 91]), 6);
+  assert.equal(placementRecommendation(5, [79, 81, 76]), 5);
+  assert.equal(placementRecommendation(5, [52, 57, 59]), 4);
+  assert.equal(placementRecommendation(10, [100, 100, 100]), 10);
+  assert.equal(placementRecommendation(1, [20, 30, 40]), 1);
 });
 
 test('all circle-of-fifths tonics map to the correct staff letter', () => {

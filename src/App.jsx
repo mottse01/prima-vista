@@ -6,9 +6,10 @@ import PathView from './components/PathView.jsx';
 import CompareView from './components/CompareView.jsx';
 import OnboardingModal from './components/OnboardingModal.jsx';
 import { generateExercise } from './core/generator.js';
-import { applyResult, markExerciseSeen, paramsForLevel } from './core/adaptive.js';
+import { applyResult, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
 import { levelById } from './core/levels.js';
 import { connectMidi } from './core/midi.js';
+import { connectMicrophone } from './core/microphone.js';
 import { codeToSeed, randomSeed } from './core/rng.js';
 import { decodeExerciseParams, exactExerciseUrl, exerciseFingerprint } from './core/share.js';
 import { pageWidthForViewport, primeScoreRender } from './core/verovio.js';
@@ -56,6 +57,8 @@ export default function App() {
   const [presets, setPresets] = useState(loadPresets);
   const [tab, setTab] = useState('practice');
   const [showKeyboard, setShowKeyboard] = useState(false);
+  const [repairHand, setRepairHand] = useState(null);
+  const [placement, setPlacement] = useState(null);
   const [toast, setToast] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     const shared = exerciseFromUrl();
@@ -81,6 +84,17 @@ export default function App() {
   });
 
   const score = useMemo(() => generateExercise(params), [params]);
+  const practiceScore = useMemo(() => {
+    if (!repairHand) return score;
+    return {
+      ...score,
+      staves: {
+        rh: repairHand === 'rh' ? score.staves.rh : [],
+        lh: repairHand === 'lh' ? score.staves.lh : [],
+      },
+      slurs: (score.slurs || []).filter((slur) => slur.hand === repairHand),
+    };
+  }, [repairHand, score]);
   const scoreId = useMemo(() => exerciseFingerprint(score.params, score.seed), [score]);
   const level = params.level ? levelById(params.level) : null;
   const seenBefore = (profile.seenExercises || []).includes(scoreId)
@@ -102,6 +116,10 @@ export default function App() {
   useEffect(() => { saveProfile(profile); }, [profile]);
   useEffect(() => { saveSettings(settings); }, [settings]);
   useEffect(() => { savePresets(presets); }, [presets]);
+  useEffect(() => {
+    document.documentElement.classList.toggle('sr-comfort', Boolean(settings.comfortView));
+    return () => document.documentElement.classList.remove('sr-comfort');
+  }, [settings.comfortView]);
 
   useEffect(() => {
     if (!session.startedAt || !session.minutes) return undefined;
@@ -118,7 +136,9 @@ export default function App() {
   // --- MIDI ---------------------------------------------------------------
   const subsRef = useRef(new Set());
   const midiConnectionRef = useRef(null);
+  const microphoneConnectionRef = useRef(null);
   const [midiState, setMidiState] = useState({ status: 'idle', inputs: [], error: null });
+  const [microphoneState, setMicrophoneState] = useState({ status: 'idle', confidence: 0, midi: null, error: null });
 
   const subscribe = useCallback((fn) => {
     subsRef.current.add(fn);
@@ -140,12 +160,35 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => () => midiConnectionRef.current?.close(), []);
+  const handleConnectMicrophone = useCallback(async () => {
+    if (microphoneConnectionRef.current) {
+      microphoneConnectionRef.current.close();
+      microphoneConnectionRef.current = null;
+      setMicrophoneState({ status: 'idle', confidence: 0, midi: null, error: null });
+      return;
+    }
+    setMicrophoneState({ status: 'connecting', confidence: 0, midi: null, error: null });
+    try {
+      const connection = await connectMicrophone(
+        (event) => { for (const fn of subsRef.current) fn(event); },
+        (state) => setMicrophoneState((current) => ({ ...current, ...state, error: null })),
+      );
+      microphoneConnectionRef.current = connection;
+    } catch (err) {
+      setMicrophoneState({ status: 'error', confidence: 0, midi: null, error: err.message || 'Could not reach the microphone.' });
+    }
+  }, []);
+
+  useEffect(() => () => {
+    midiConnectionRef.current?.close();
+    microphoneConnectionRef.current?.close();
+  }, []);
 
   const midi = useMemo(() => ({ ...midiState, subscribe }), [midiState, subscribe]);
 
   // --- Exercise flow ------------------------------------------------------
   const nextFromLevel = useCallback((levelId = profile.level, opts = {}) => {
+    setRepairHand(null);
     nextPathLevelRef.current = null;
     const prepared = preparedExerciseRef.current;
     const canUsePrepared = prepared && prepared.level === levelId && Object.keys(opts).length === 0;
@@ -157,15 +200,25 @@ export default function App() {
   }, [profile]);
 
   const regenerate = useCallback(() => {
+    setRepairHand(null);
+    if (!placement?.active && session.startedAt && session.minutes) {
+      const nextDailyStep = session.takes % 3;
+      setSettings((current) => ({ ...current, curtain: nextDailyStep === 2 ? 'played' : 'off' }));
+    }
     if (params.level) {
       const targetSkill = learnerTargetRef.current;
       learnerTargetRef.current = null;
       nextFromLevel(nextPathLevelRef.current ?? params.level, targetSkill ? { targetSkill } : {});
     }
     else setParams({ ...params, seed: randomSeed() });
-  }, [nextFromLevel, params]);
+  }, [nextFromLevel, params, placement?.active, session.minutes, session.startedAt, session.takes]);
 
   const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain, assisted }) => {
+    const placementScores = placement?.active ? [...placement.scores, summary.score] : null;
+    const placementComplete = Boolean(placementScores && placementScores.length >= placement.total);
+    const placementLevel = placementComplete
+      ? placementRecommendation(placement.startLevel, placementScores)
+      : null;
     setSession((current) => current.startedAt ? { ...current, takes: current.takes + 1 } : current);
     setProfile((prev) => {
       const { profile: next, promoted, demoted } = applyResult(prev, {
@@ -176,8 +229,9 @@ export default function App() {
         elapsedSec,
         takeIndex,
         curtain,
-        assisted,
+        assisted: assisted || Boolean(placement?.active),
         meta: {
+          placement: Boolean(placement?.active),
           pitches: summary.pitches,
           pitchLocations: summary.pitchLocations,
           recovery: summary.recovery,
@@ -191,7 +245,10 @@ export default function App() {
           },
         },
       });
-      if (promoted) {
+      if (placementComplete) {
+        next.level = placementLevel;
+        nextPathLevelRef.current = placementLevel;
+      } else if (promoted) {
         nextPathLevelRef.current = next.level;
         setToast({ kind: 'up', text: `Level ${next.level} unlocked — ${levelById(next.level).name}` });
       } else if (demoted) {
@@ -200,7 +257,16 @@ export default function App() {
       }
       return next;
     });
-  }, [params.level, score, scoreId]);
+    if (placement?.active) {
+      if (placementComplete) {
+        const recommended = levelById(placementLevel);
+        setPlacement({ ...placement, active: false, complete: true, scores: placementScores, recommended: placementLevel });
+        setToast({ kind: 'up', text: `Level check complete — start at Level ${placementLevel}, ${recommended.name}` });
+      } else {
+        setPlacement({ ...placement, scores: placementScores, remaining: placement.total - placementScores.length });
+      }
+    }
+  }, [params.level, placement, score, scoreId]);
 
   const handleReflection = useCallback(({ label, skillId }) => {
     learnerTargetRef.current = skillId || null;
@@ -255,6 +321,7 @@ export default function App() {
   }, [toast]);
 
   const drillSkill = useCallback((skillId) => {
+    setRepairHand(null);
     setParams(paramsForLevel(profile.level, profile, { seed: randomSeed(), targetSkill: skillId }));
     setTab('practice');
   }, [profile]);
@@ -272,20 +339,33 @@ export default function App() {
     setSettings((s) => ({ ...s, ...patch }));
   }, []);
 
-  const chooseStartingLevel = useCallback((levelId) => {
+  const chooseStartingLevel = useCallback((levelId, preferences = {}) => {
     const nextProfile = { ...profile, level: levelId };
     setProfile(nextProfile);
     setParams(paramsForLevel(levelId, nextProfile, { seed: randomSeed(), targeting: false }));
-    setSettings((current) => ({ ...current, onboardingComplete: true }));
+    setSettings((current) => ({
+      ...current,
+      onboardingComplete: true,
+      sessionMinutes: 5,
+      inputMode: preferences.inputMode || 'screen',
+      comfortView: Boolean(preferences.comfortView),
+    }));
+    setSession({ minutes: 5, startedAt: null, takes: 0 });
+    setSessionNow(Date.now());
+    setPlacement({ active: true, complete: false, startLevel: levelId, total: 3, remaining: 3, scores: [] });
+    if (preferences.inputMode === 'screen') setShowKeyboard(true);
+    if (preferences.inputMode === 'midi') void handleConnectMidi();
+    if (preferences.inputMode === 'microphone') void handleConnectMicrophone();
     setShowOnboarding(false);
     setTab('practice');
-  }, [profile]);
+  }, [handleConnectMicrophone, handleConnectMidi, profile]);
 
   const changeDifficulty = useCallback((levelId) => {
     const chosen = levelById(levelId);
     const nextProfile = { ...profile, level: chosen.id };
     nextPathLevelRef.current = null;
     preparedExerciseRef.current = null;
+    setRepairHand(null);
     setProfile(nextProfile);
     setParams(paramsForLevel(chosen.id, nextProfile, { seed: randomSeed(), targeting: false }));
     setToast({ kind: 'info', text: `Level ${chosen.id} · ${chosen.name}` });
@@ -344,6 +424,11 @@ export default function App() {
           ))}
         </nav>
         <div className="sr-headerstat">
+          <button
+            type="button" className="sr-comfort-toggle"
+            aria-pressed={Boolean(settings.comfortView)}
+            onClick={() => setSettings((current) => ({ ...current, comfortView: !current.comfortView }))}
+          >Aa <span>Comfort</span></button>
           <span className="sr-level-badge">Level {profile.level}</span>
           {profile.streak.count > 0 && <span className="sr-streak">{profile.streak.count}-day streak</span>}
         </div>
@@ -352,8 +437,8 @@ export default function App() {
       <main className="sr-main" id="practice-main">
         {tab === 'practice' && (
           <PracticeView
-            key={`${score.seed}:${score.tempo}`}
-            score={score}
+            key={`${score.seed}:${score.tempo}:${repairHand || 'both'}`}
+            score={practiceScore}
             settings={settings}
             onSettings={practiceSettings}
             onResult={handleResult}
@@ -362,6 +447,8 @@ export default function App() {
             level={level}
             midi={midi}
             onConnectMidi={handleConnectMidi}
+            microphone={microphoneState}
+            onConnectMicrophone={handleConnectMicrophone}
             showKeyboard={showKeyboard}
             onToggleKeyboard={() => setShowKeyboard((v) => !v)}
             freshRead={!seenBefore}
@@ -371,6 +458,15 @@ export default function App() {
             onNotify={notify}
             session={sessionInfo}
             onSessionStart={startSession}
+            placement={placement}
+            onFocus={drillSkill}
+            onRecheckLevel={() => setShowOnboarding(true)}
+            repairHand={repairHand}
+            onRepairHand={(hand, tempo) => {
+              setRepairHand(hand);
+              setParams((current) => ({ ...current, tempo }));
+              setTab('practice');
+            }}
           />
         )}
 

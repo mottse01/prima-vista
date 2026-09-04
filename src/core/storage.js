@@ -73,6 +73,8 @@ export const DEFAULT_SETTINGS = {
   sessionMinutes: 0,
   inputLatencyMs: 0,
   onboardingComplete: false,
+  inputMode: 'screen',
+  comfortView: false,
 };
 
 export function loadSettings() {

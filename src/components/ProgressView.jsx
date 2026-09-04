@@ -25,7 +25,6 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
 
   const pitchTally = useMemo(() => aggregatePitches(profile), [profile]);
   const pitchLocations = useMemo(() => aggregatePitchLocations(profile), [profile]);
-  const recovery = useMemo(() => aggregateRecovery(profile), [profile]);
   const strands = useMemo(() => STRANDS.map((strand) => ({ ...strand, ...strandEvidence(profile, strand.skills) })), [profile]);
   // Replays, assisted practice, and curtain takes are not clean first reads;
   // charting them together would flatter or distort the sight-reading trend.
@@ -44,16 +43,10 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
       <section className="sr-stats">
         <Stat label="Current level" value={profile.level} detail={level.name} />
         <Stat label="Fresh-read average" value={avg == null ? '—' : avg} detail={avg == null ? 'no qualifying reads yet' : 'last 10 qualifying reads'} />
-        <Stat label="Day streak" value={profile.streak.count || 0} detail={profile.streak.count ? 'keep it going' : 'start today'} />
-        <Stat label="Notes read" value={profile.totals.notes.toLocaleString()} detail={`${Math.round(profile.totals.minutes)} minutes`} />
         <Stat
-          label="Recovery"
-          value={recovery.mean == null ? '—' : `${Math.round(recovery.mean * 10) / 10}`}
-          detail={recovery.mean == null
-            ? (recovery.takes ? 'no slips recovered from yet' : 'notes to get back on track')
-            : `notes after a wrong note${recovery.unrecovered
-              ? ` · ${recovery.unrecovered} ${recovery.unrecovered === 1 ? 'take' : 'takes'} never recovered`
-              : ''}`}
+          label="Practice consistency"
+          value={profile.streak.count ? `${profile.streak.count} day${profile.streak.count === 1 ? '' : 's'}` : 'Start today'}
+          detail={`${profile.totals.notes.toLocaleString()} notes · ${Math.round(profile.totals.minutes)} minutes`}
         />
       </section>
 
@@ -68,6 +61,12 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
         {weak[0] && <button type="button" className="sr-btn sr-btn--primary" onClick={() => onDrill(weak[0].id)}>Start focused read</button>}
       </section>
 
+      <details className="sr-progress-more">
+        <summary>
+          <span><strong>More detail</strong><small>Learning strands, skill maps, history, and your data</small></span>
+          <span aria-hidden="true">⌄</span>
+        </summary>
+        <div className="sr-progress-more-body">
       <section className="sr-panel">
         <h3>Learning strands</h3>
         <p className="sr-hint">A balanced reader grows several abilities together. Scores appear only after enough evidence.</p>
@@ -258,6 +257,8 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
           >Reset progress</button>
         </div>
       </section>
+        </div>
+      </details>
     </div>
   );
 }
@@ -297,20 +298,6 @@ function strandEvidence(profile, skillIds) {
   return {
     rating: observed.reduce((sum, skill) => sum + skill.rating * skill.attempts, 0) / attempts,
     attempts,
-  };
-}
-
-/**
- * Recovery across takes. Only genuine first reads count: a replay is not a
- * sight-read, and a curtain take is expected to derail you more often.
- */
-function aggregateRecovery(profile) {
-  const takes = profile.history.filter((h) => !h.repeat && !h.assisted && !h.curtain && h.meta?.recovery);
-  const means = takes.map((h) => h.meta.recovery.meanNotes).filter((n) => n != null);
-  return {
-    takes: takes.length,
-    mean: means.length ? means.reduce((a, b) => a + b, 0) / means.length : null,
-    unrecovered: takes.filter((h) => h.meta.recovery.unrecovered > 0).length,
   };
 }
 

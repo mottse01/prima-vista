@@ -23,6 +23,14 @@ const MIN_FOCUS_OBSERVATIONS = 3;
 // shared link cannot launder a repeat into a fresh first read.
 const SEEN_SEEDS_KEPT = 300;
 
+/** A short placement check moves at most one rung from the conservative start. */
+export function placementRecommendation(startLevel, scores) {
+  if (!scores?.length) return Math.max(1, Math.min(LEVELS.length, Number(startLevel) || 1));
+  const mean = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  const adjustment = mean >= 90 ? 1 : mean < 60 ? -1 : 0;
+  return Math.max(1, Math.min(LEVELS.length, Number(startLevel) + adjustment));
+}
+
 export function emptyProfile() {
   const skills = {};
   for (const s of SKILLS) skills[s.id] = { rating: 0.5, attempts: 0 };
