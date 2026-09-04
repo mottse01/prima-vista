@@ -95,8 +95,9 @@ function positionAt(geom, tick) {
 }
 
 export default function Score({
-  score, showFingerings, noteStates, tick, curtainTick, className,
+  score, showFingerings, noteStates, tick, curtainTick, layout = 'page', className,
 }) {
+  const viewportRef = useRef(null);
   const hostRef = useRef(null);
   const overlayRef = useRef(null);
   const geomRef = useRef(null);
@@ -121,13 +122,17 @@ export default function Score({
 
   useEffect(() => {
     let cancelled = false;
-    renderScoreSvg(score, { showFingerings, pageWidth })
+    renderScoreSvg(score, { showFingerings, pageWidth, layout })
       .then((markup) => { if (!cancelled) setResult({ score, svg: markup, error: null }); })
       .catch((err) => {
         if (!cancelled) setResult({ score, svg: null, error: err.message || String(err) });
       });
     return () => { cancelled = true; };
-  }, [pageWidth, score, showFingerings]);
+  }, [layout, pageWidth, score, showFingerings]);
+
+  useEffect(() => {
+    if (viewportRef.current) viewportRef.current.scrollLeft = 0;
+  }, [layout, score]);
 
   const remeasure = useCallback(() => {
     if (!hostRef.current || !svg) return;
@@ -201,34 +206,45 @@ export default function Score({
         if (sys) {
           parts.push(`<rect class="sr-playhead-rect" x="${head.x * 100 - 0.18}" y="${sys.top * 100}" width="0.36" height="${(sys.bottom - sys.top) * 100}"/>`);
         }
+        if (layout === 'scroll' && viewportRef.current && hostRef.current) {
+          const target = head.x * hostRef.current.scrollWidth - viewportRef.current.clientWidth * 0.32;
+          viewportRef.current.scrollLeft = Math.max(0, target);
+        }
       }
     }
     overlay.innerHTML = parts.join('');
-  }, [tick, curtainTick, svg]);
+  }, [tick, curtainTick, layout, svg]);
 
   return (
-    <div className={`sr-score ${className || ''}`} aria-busy={!svg && !error}>
-      <div ref={hostRef} className="sr-score-host" aria-label={scoreDescription(score)} role="img" />
-      <svg
-        ref={overlayRef}
-        className="sr-score-overlay"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      />
-      {!svg && !error && (
-        <div className="sr-score-loading" role="status">
-          <div className="sr-staff-skeleton" aria-hidden="true">
-            {Array.from({ length: 4 }, (_, system) => (
-              <div className="sr-staff-skeleton-system" key={system}>
-                {Array.from({ length: 5 }, (_, line) => <span key={line} />)}
-              </div>
-            ))}
+    <div
+      ref={viewportRef}
+      className={`sr-score-viewport is-${layout}`}
+      tabIndex={layout === 'scroll' ? 0 : undefined}
+      aria-label={layout === 'scroll' ? 'Horizontally scrolling music score' : undefined}
+    >
+      <div className={`sr-score sr-score--${layout} ${className || ''}`} aria-busy={!svg && !error}>
+        <div ref={hostRef} className="sr-score-host" aria-label={scoreDescription(score)} role="img" />
+        <svg
+          ref={overlayRef}
+          className="sr-score-overlay"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        />
+        {!svg && !error && (
+          <div className="sr-score-loading" role="status">
+            <div className="sr-staff-skeleton" aria-hidden="true">
+              {Array.from({ length: 4 }, (_, system) => (
+                <div className="sr-staff-skeleton-system" key={system}>
+                  {Array.from({ length: 5 }, (_, line) => <span key={line} />)}
+                </div>
+              ))}
+            </div>
+            <span>Preparing notation</span>
           </div>
-          <span>Preparing notation</span>
-        </div>
-      )}
-      {error && <div className="sr-score-error">{error}</div>}
+        )}
+        {error && <div className="sr-score-error">{error}</div>}
+      </div>
     </div>
   );
 }

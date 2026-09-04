@@ -66,19 +66,32 @@ const OPTIONS = {
   spacingSystem: 10,
 };
 
+export function scoreLayoutOptions(layout, pageWidth) {
+  if (layout === 'scroll') {
+    return {
+      ...OPTIONS,
+      pageWidth,
+      breaks: 'none',
+      adjustPageWidth: true,
+      adjustPageHeight: true,
+    };
+  }
+  return { ...OPTIONS, pageWidth, breaks: 'auto', adjustPageWidth: false };
+}
+
 /**
  * Engrave a generated score.
  * @returns {Promise<string>} SVG markup
  */
 export async function renderScoreSvg(score, opts = {}) {
-  const { pageWidth = PAGE_WIDTH, ...musicXmlOptions } = opts;
+  const { pageWidth = PAGE_WIDTH, layout = 'page', ...musicXmlOptions } = opts;
   const xml = toMusicXml(score, musicXmlOptions);
-  const key = `${pageWidth}:${musicXmlOptions.showFingerings ? 1 : 0}:${hashText(xml)}`;
+  const key = `${layout}:${pageWidth}:${musicXmlOptions.showFingerings ? 1 : 0}:${hashText(xml)}`;
   if (renderCache.has(key)) return renderCache.get(key);
 
   const job = renderQueue.then(async () => {
     const toolkit = await loadToolkit();
-    toolkit.setOptions({ ...OPTIONS, pageWidth });
+    toolkit.setOptions(scoreLayoutOptions(layout, pageWidth));
     if (!toolkit.loadData(xml)) {
       throw new Error(toolkit.getLog() || 'The engraver could not read this exercise.');
     }

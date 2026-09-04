@@ -53,6 +53,8 @@ export const DEFAULT_SETTINGS = {
   colourNotes: true,
   toleranceScale: 1,
   scale: 9,
+  // Page shows a conventional multi-system score; scroll keeps one continuous system.
+  scoreLayout: 'page',
   // Look-ahead curtain: see CURTAIN_MODES in PracticeView.
   curtain: 'off',
   guideKeys: false,

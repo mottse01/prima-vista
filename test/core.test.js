@@ -16,6 +16,7 @@ import { ledgerLines, validateExercise } from '../src/core/validator.js';
 import { toMusicXml } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { timeSig } from '../src/core/rhythm.js';
+import { scoreLayoutOptions } from '../src/core/verovio.js';
 import { fromDia, keyAlterations, tonicLetter } from '../src/core/theory.js';
 import {
   decodeExerciseParams, encodeExerciseParams, exerciseFingerprint, exactExerciseUrl,
@@ -438,6 +439,17 @@ test('primary beams stop at quarter-note beats in common time', () => {
 
   assert.equal(occurrences(xml, '<beam number="1">begin</beam>'), 2);
   assert.equal(occurrences(xml, '<beam number="1">end</beam>'), 2);
+});
+
+test('score layout offers a conventional page and one continuous scrolling system', () => {
+  const page = scoreLayoutOptions('page', 1200);
+  const scroll = scoreLayoutOptions('scroll', 1200);
+
+  assert.equal(page.breaks, 'auto');
+  assert.equal(page.adjustPageWidth, false);
+  assert.equal(scroll.breaks, 'none');
+  assert.equal(scroll.adjustPageWidth, true);
+  assert.equal(scroll.adjustPageHeight, true);
 });
 
 test('reference playback renders a non-empty browser-safe WAV', () => {

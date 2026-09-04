@@ -383,6 +383,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 }
 .sr-copybtn:hover { background: #f2f3f5; color: #111318; }
 
+.sr-score-actions { display: flex; align-items: center; gap: 8px; }
+.sr-layout-switch {
+  display: flex; gap: 3px; margin: 0; padding: 3px; border: 1px solid #d4dce5;
+  border-radius: 9px; background: #f1f4f7;
+}
+.sr-layout-switch legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr-layout-switch label { cursor: pointer; }
+.sr-layout-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.sr-layout-switch span {
+  display: block; min-width: 58px; padding: 5px 9px; border-radius: 6px;
+  color: #59677b; font-size: 12px; font-weight: 700; text-align: center;
+}
+.sr-layout-switch input:checked + span { background: #ffffff; color: #28558f; box-shadow: 0 2px 7px rgba(48,72,96,.13), inset 0 0 0 1px #bac9d7; }
+.sr-layout-switch label:has(input:focus-visible) span { outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent); outline-offset: 1px; }
+
 .sr-scorearea { position: relative; min-height: 250px; margin-top: 11px; }
 .sr-scorearea.is-countin { opacity: 0.55; }
 
@@ -392,8 +407,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   pointer-events: none;
 }
 
+.sr-score-viewport { position: relative; }
+.sr-score-viewport.is-scroll {
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
+  scrollbar-color: #9db1c4 #edf3f7; scrollbar-width: thin;
+}
+.sr-score-viewport.is-scroll:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent); outline-offset: 4px; border-radius: 6px; }
 .sr-score { position: relative; }
+.sr-score--scroll { width: max-content; min-width: 100%; }
 .sr-score-host svg { width: 100%; height: auto; display: block; }
+.sr-score--scroll .sr-score-host svg { width: auto; max-width: none; height: clamp(190px, 31vw, 300px); }
 .sr-score-host { color: #14161c; }
 
 /* Verovio paints with `currentColor` where it can; pin the rest to ink. */
@@ -914,10 +937,13 @@ html.sr-stand-mode .sr-transport { position: sticky; z-index: 10; bottom: 12px; 
   .sr-structure { margin-top: 5px; }
   .sr-structure-grid { grid-template-columns: 1fr; }
   .sr-seed { width: auto; flex: none; display: block; text-align: right; }
+  .sr-score-actions { flex-direction: column-reverse; align-items: flex-end; }
+  .sr-layout-switch span { min-width: 52px; padding-inline: 7px; }
   .sr-seed-label { display: none; }
   .sr-seed code { font-size: 12px; letter-spacing: 0.08em; }
   .sr-seed-row { justify-content: flex-end; gap: 5px; }
   .sr-scorearea { min-height: 180px; margin-top: 4px; }
+  .sr-score--scroll .sr-score-host svg { height: clamp(175px, 43vw, 235px); }
   .sr-transport { flex-direction: column; align-items: stretch; padding: 9px; }
   .sr-transport-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sr-transport-main .sr-btn:first-child { grid-column: span 2; }

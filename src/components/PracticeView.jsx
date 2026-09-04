@@ -560,10 +560,28 @@ export default function PracticeView({
               </div>
             </details>
           </div>
-          <div className="sr-seed" title={`Exercise ${seedToCode(score.seed)}`}>
+          <div className="sr-score-actions">
+            <fieldset className="sr-layout-switch" disabled={busy}>
+              <legend>Score view</legend>
+              {[
+                { id: 'page', label: 'Page', title: 'Show the whole score in conventional systems' },
+                { id: 'scroll', label: 'Scroll', title: 'Keep the score on one line and follow the playhead' },
+              ].map((option) => (
+                <label key={option.id} title={option.title}>
+                  <input
+                    type="radio" name="score-layout" value={option.id}
+                    checked={(settings.scoreLayout || 'page') === option.id}
+                    onChange={() => onSettings({ scoreLayout: option.id })}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </fieldset>
+            <div className="sr-seed" title={`Exercise ${seedToCode(score.seed)}`}>
             <button type="button" className="sr-copybtn" onClick={copyLink} title="Copy an exact exercise link">
               {copied ? 'Copied' : 'Share'}
             </button>
+            </div>
           </div>
         </div>
 
@@ -574,6 +592,7 @@ export default function PracticeView({
             noteStates={settings.colourNotes ? noteStates : null}
             tick={playheadTick}
             curtainTick={curtainTick}
+            layout={settings.scoreLayout || 'page'}
           />
           {countdown != null && (
             <div className="sr-countin" aria-live="polite">{countdown}</div>
