@@ -13,7 +13,7 @@ import { reviewMusicality } from '../src/core/musicality.js';
 import { STYLE_OPTIONS, styleSetupPatch } from '../src/core/compositionStyles.js';
 import { STYLE_PACK_LIST, stylePack } from '../src/core/stylePacks.js';
 import { ledgerLines, validateExercise } from '../src/core/validator.js';
-import { toMusicXml } from '../src/core/musicxml.js';
+import { toMusicXml, xmlSlurId } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { timeSig } from '../src/core/rhythm.js';
 import { scoreLayoutOptions } from '../src/core/verovio.js';
@@ -209,6 +209,17 @@ test('rests occur sometimes, support phrasing, and never interrupt a cadence', (
   assert.ok(scoresWithoutRests >= 8, `only ${scoresWithoutRests} of 48 scores omitted rests`);
   assert.ok(phraseBreaths > 0);
   assert.ok(motivicRests > 0);
+});
+
+test('slurs have stable MusicXML ids for synchronized expression fading', () => {
+  let score;
+  for (let seed = 1; seed <= 24 && !score; seed++) {
+    const candidate = generateExercise(paramsForLevel(6, emptyProfile(), { seed: 612000 + seed }));
+    if (candidate.slurs.length) score = candidate;
+  }
+  assert.ok(score?.slurs.length);
+  const slur = score.slurs[0];
+  assert.ok(toMusicXml(score).includes(`id="${xmlSlurId(slur.hand, slur.from, slur.to)}"`));
 });
 
 test('repeat barlines occasionally repeat one complete phrase and playback follows them', () => {

@@ -56,6 +56,9 @@ export const xmlNoteId = (hand, onset, midi) => `n${hand}-${onset}-${midi}`;
 /** Rests are identified too, so the playhead can glide through silence. */
 export const xmlRestId = (hand, onset) => `r${hand}-${onset}`;
 
+/** Stable slur ids let the live score associate phrasing with its first note. */
+export const xmlSlurId = (hand, from, to) => `s${hand}-${from}-${to}`;
+
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Per-measure accidental memory, seeded from the key signature. */
@@ -183,7 +186,7 @@ function notationsXml(w, { slurStart, slurStop, fingering }) {
   if (w.tieTo) bits.push('<tied type="start"/>');
   if (w.tieFrom) bits.push('<tied type="stop"/>');
   if (slurStop) bits.push('<slur number="1" type="stop"/>');
-  if (slurStart) bits.push('<slur number="1" type="start"/>');
+  if (slurStart) bits.push(`<slur id="${slurStart}" number="1" type="start"/>`);
   const art = w.source.articulation;
   if (art && !w.tieFrom) {
     const tag = { staccato: 'staccato', accent: 'accent', tenuto: 'tenuto' }[art];
@@ -259,7 +262,10 @@ export function toMusicXml(score, opts = {}) {
   const accidentals = {};
   for (const h of hands) accidentals[h.hand] = accidentalTracker(key.fifths);
 
-  const slurStarts = new Set((score.slurs || []).map((s) => `${s.hand}:${s.from}`));
+  const slurStarts = new Map((score.slurs || []).map((s) => [
+    `${s.hand}:${s.from}`,
+    xmlSlurId(s.hand, s.from, s.to),
+  ]));
   const slurStops = new Set((score.slurs || []).map((s) => `${s.hand}:${s.to}`));
 
   const measures = [];
@@ -302,7 +308,7 @@ export function toMusicXml(score, opts = {}) {
           voice: h.voice,
           hand: h.hand,
           accidentals: accs,
-          slurStart: slurStarts.has(`${h.hand}:${w.onset}`) && !w.tieFrom,
+          slurStart: !w.tieFrom ? slurStarts.get(`${h.hand}:${w.onset}`) : null,
           slurStop: slurStops.has(`${h.hand}:${w.onset}`) && !w.tieFrom,
           fingering: opts.showFingerings && !w.rest && !w.tieFrom ? w.source.fingering : null,
         }));

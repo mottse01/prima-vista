@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { pageWidthForViewport, renderScoreSvg } from '../core/verovio.js';
-import { xmlNoteId, xmlRestId } from '../core/musicxml.js';
+import { xmlNoteId, xmlRestId, xmlSlurId } from '../core/musicxml.js';
 import { eventShouldVanish } from '../core/curtain.js';
 import { notationTickAtPlaybackTick } from '../core/playback.js';
 
@@ -96,6 +96,81 @@ function positionAt(geom, tick) {
   return { ...ticks[ticks.length - 1] };
 }
 
+/** Recover the generated event represented by a rendered Verovio note group. */
+function eventForRenderedNote(score, element) {
+  const match = element?.id?.match(/^n(rh|lh)-(\d+)-/);
+  if (!match) return null;
+  const hand = match[1];
+  const onset = Number(match[2]);
+  const source = (score.staves[hand] || []).find((event) => !event.rest && event.onset === onset);
+  return source || { onset, duration: score.ts.beat };
+}
+
+/**
+ * Associate expression glyphs with the note that should make them disappear.
+ * Verovio retains explicit slur ids, while dynamics need to be paired to the
+ * nearest rendered note in their measure because it replaces MusicXML ids.
+ */
+function measureExpressions(host, score) {
+  const expressions = [];
+  const claimed = new Set();
+
+  for (const slur of score.slurs || []) {
+    const element = host.querySelector(`[id="${xmlSlurId(slur.hand, slur.from, slur.to)}"]`);
+    const source = (score.staves[slur.hand] || []).find((event) => event.onset === slur.from);
+    if (!element) continue;
+    expressions.push({ element, event: source || { onset: slur.from, duration: score.ts.beat } });
+    claimed.add(element);
+  }
+
+  // Slurs split over a system break acquire an untagged continuation. Fade
+  // that continuation with the first note it spans in the new system.
+  for (const element of host.querySelectorAll('g.slur')) {
+    if (claimed.has(element)) continue;
+    const system = element.closest('g.system');
+    if (!system) continue;
+    const slurBox = element.getBoundingClientRect();
+    const candidates = [...system.querySelectorAll('g.note')]
+      .map((note) => ({ note, box: note.getBoundingClientRect() }))
+      .filter(({ note, box }) => (
+        /^n(rh|lh)-/.test(note.id)
+        && box.right >= slurBox.left - 4
+        && box.left <= slurBox.right + 4
+      ))
+      .sort((a, b) => a.box.left - b.box.left
+        || Math.abs((a.box.top + a.box.bottom) / 2 - (slurBox.top + slurBox.bottom) / 2)
+          - Math.abs((b.box.top + b.box.bottom) / 2 - (slurBox.top + slurBox.bottom) / 2));
+    const event = eventForRenderedNote(score, candidates[0]?.note);
+    if (event) expressions.push({ element, event });
+  }
+
+  for (const hand of ['rh', 'lh']) {
+    for (const source of score.staves[hand] || []) {
+      if (!source.dynamic || source.rest || !source.pitches.length) continue;
+      const note = host.querySelector(`[id="${xmlNoteId(hand, source.onset, source.pitches[0].midi)}"]`);
+      const measure = note?.closest('g.measure');
+      if (!note || !measure) continue;
+      const noteBox = note.getBoundingClientRect();
+      const noteX = (noteBox.left + noteBox.right) / 2;
+      const noteY = (noteBox.top + noteBox.bottom) / 2;
+      const element = [...measure.querySelectorAll('g.dynam')]
+        .filter((candidate) => !claimed.has(candidate))
+        .map((candidate) => {
+          const box = candidate.getBoundingClientRect();
+          const x = (box.left + box.right) / 2;
+          const y = (box.top + box.bottom) / 2;
+          return { candidate, distance: Math.abs(x - noteX) + Math.abs(y - noteY) * 0.25 };
+        })
+        .sort((a, b) => a.distance - b.distance)[0]?.candidate;
+      if (!element) continue;
+      expressions.push({ element, event: source });
+      claimed.add(element);
+    }
+  }
+
+  return expressions;
+}
+
 export default function Score({
   score, showFingerings, noteStates, tick, vanishMode = 'off', vanishTick, layout = 'page', className,
 }) {
@@ -105,6 +180,7 @@ export default function Score({
   const geomRef = useRef(null);
   const paintedRef = useRef(new Set());
   const vanishedRef = useRef(new Set());
+  const expressionsRef = useRef([]);
   const [pageWidth, setPageWidth] = useState(pageWidthForViewport);
   // The engraved result is tagged with the score it came from, so a stale
   // render is simply ignored rather than having to be cleared synchronously.
@@ -150,12 +226,14 @@ export default function Score({
     host.innerHTML = svg || '';
     paintedRef.current = new Set();
     vanishedRef.current = new Set();
+    expressionsRef.current = [];
     if (!svg) { geomRef.current = null; return undefined; }
     remeasure();
+    expressionsRef.current = measureExpressions(host, score);
     const ro = new ResizeObserver(remeasure);
     ro.observe(host);
     return () => ro.disconnect();
-  }, [svg, remeasure]);
+  }, [score, svg, remeasure]);
 
   // Per-note colouring, applied straight to the engraved glyphs.
   useEffect(() => {
@@ -206,6 +284,12 @@ export default function Score({
     for (const beam of host.querySelectorAll('g.beam')) {
       const notes = [...beam.querySelectorAll('g.note')];
       beam.classList.toggle('sr-beam-vanished', notes.length > 0 && notes.every((note) => note.classList.contains('sr-note-vanished')));
+    }
+    for (const { element, event } of expressionsRef.current) {
+      element.classList.toggle(
+        'sr-expression-vanished',
+        eventShouldVanish(event, writtenVanishTick, vanishMode, score.ts),
+      );
     }
     vanishedRef.current = next;
   }, [score, svg, vanishMode, writtenVanishTick]);

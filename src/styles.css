@@ -496,7 +496,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   pointer-events: none;
 }
 .sr-score-host .sr-note-vanished,
-.sr-score-host .sr-beam-vanished { opacity: 0; transition: opacity 650ms ease-out; }
+.sr-score-host .sr-beam-vanished,
+.sr-score-host .sr-expression-vanished { opacity: 0; transition: opacity 650ms ease-out; }
 .sr-playhead-rect { fill: var(--accent); opacity: 0.28; }
 
 .sr-score-loading, .sr-score-error {
