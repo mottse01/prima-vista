@@ -28,12 +28,21 @@ function write(key, value) {
 
 export function loadProfile() {
   const stored = read(KEY, null);
-  if (!stored || ![1, 2, 3].includes(stored.version)) return emptyProfile();
+  if (!stored || ![1, 2, 3, 4].includes(stored.version)) return emptyProfile();
   const blank = emptyProfile();
+  // Earlier builds recorded completely silent runs as hundreds of failed
+  // notes. If every stored take is unmistakably silent, keep the learner's
+  // chosen level but clear the corrupted evidence once during migration.
+  const allTakesWereSilent = stored.version < 4
+    && stored.history?.length > 0
+    && stored.history.every((take) => take.pitchAccuracy === 0
+      && take.rhythmAccuracy === 0
+      && take.continuity === 0);
+  if (allTakesWereSilent) return { ...blank, level: stored.level || 1 };
   return {
     ...blank,
     ...stored,
-    version: 3,
+    version: 4,
     skills: { ...blank.skills, ...stored.skills },
     seenExercises: stored.seenExercises || [],
   };

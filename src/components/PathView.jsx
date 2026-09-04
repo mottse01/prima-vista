@@ -9,8 +9,8 @@ export default function PathView({ profile, onPick }) {
       <p className="sr-setup-lead">
         Ten levels from one-hand five-finger reading to a full-page concert study. Each level is a
         description of what music you should be able to read — not a fixed set of pieces — so
-        it never runs out and you can never memorise your way through it. You can try any level;
-        three fresh reads at 88 or above confirm that the level is secure.
+        it never runs out and you can never memorise your way through it. You can try any level.
+        Three fresh reads at 88 or above, with enough evidence in the level’s focus skills, confirm that it is secure.
       </p>
       {STAGES.map((stage) => (
         <section key={stage} className="sr-stage">

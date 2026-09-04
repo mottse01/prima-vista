@@ -10,6 +10,13 @@ import { exportAll, importAll } from '../core/storage.js';
 
 const NOTE_ORDER = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B', 'Cb', 'Fb', 'E#', 'B#'];
 
+const STRANDS = [
+  { id: 'pitch', label: 'Staff & key reading', skills: ['notes.treble', 'notes.bass', 'notes.ledger', 'notes.accidental'] },
+  { id: 'patterns', label: 'Interval patterns', skills: ['intervals.step', 'intervals.skip', 'intervals.leap'] },
+  { id: 'rhythm', label: 'Rhythm & pulse', skills: ['rhythm.quarter', 'rhythm.eighth', 'rhythm.sixteenth', 'rhythm.dotted', 'rhythm.syncopation', 'rhythm.triplet', 'rhythm.rest'] },
+  { id: 'coordination', label: 'Two-hand coordination', skills: ['coordination.together'] },
+];
+
 export default function ProgressView({ profile, onDrill, onResume, onReset, onReload }) {
   const fileRef = useRef(null);
   const avg = recentAverage(profile, 10);
@@ -17,7 +24,9 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
   const level = levelById(profile.level);
 
   const pitchTally = useMemo(() => aggregatePitches(profile), [profile]);
+  const pitchLocations = useMemo(() => aggregatePitchLocations(profile), [profile]);
   const recovery = useMemo(() => aggregateRecovery(profile), [profile]);
+  const strands = useMemo(() => STRANDS.map((strand) => ({ ...strand, ...strandEvidence(profile, strand.skills) })), [profile]);
   // Replays, assisted practice, and curtain takes are not clean first reads;
   // charting them together would flatter or distort the sight-reading trend.
   const history = profile.history.filter((h) => !h.repeat && !h.assisted && !h.curtain).slice(-40);
@@ -48,12 +57,42 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
         />
       </section>
 
+      <section className="sr-nextstep">
+        <div>
+          <span className="sr-eyebrow">Next useful step</span>
+          <strong>{weak[0] ? `Give ${weak[0].label.toLowerCase()} one focused read.` : 'Complete a fresh read to establish your baseline.'}</strong>
+          <p>{weak[0]
+            ? `This is the clearest skill to revisit from your recent evidence. The next study can emphasize it without adding unrelated difficulty.`
+            : 'Use the silent scan, keep the pulse moving, and let the first few reads reveal where practice will help most.'}</p>
+        </div>
+        {weak[0] && <button type="button" className="sr-btn sr-btn--primary" onClick={() => onDrill(weak[0].id)}>Start focused read</button>}
+      </section>
+
+      <section className="sr-panel">
+        <h3>Learning strands</h3>
+        <p className="sr-hint">A balanced reader grows several abilities together. Scores appear only after enough evidence.</p>
+        <div className="sr-strandgrid">
+          {strands.map((strand) => (
+            <div key={strand.id} className={`sr-strand${strand.rating == null ? ' is-unproven' : ''}`}>
+              <span>{strand.label}</span>
+              <strong>{strand.rating == null ? 'Building evidence' : `${Math.round(strand.rating * 100)}%`}</strong>
+              <small>{strand.rating == null ? 'Complete a few more fresh reads' : `${Math.round(strand.attempts)} observed notes`}</small>
+            </div>
+          ))}
+          <div className="sr-strand is-practice">
+            <span>Look-ahead & prediction</span>
+            <strong>Practice goal</strong>
+            <small>Use Flexible after a clean first read</small>
+          </div>
+        </div>
+      </section>
+
       {weak.length > 0 && (
         <section className="sr-panel">
-          <h3>What is actually costing you points</h3>
+          <h3>Detailed skill evidence</h3>
           <p className="sr-hint">
-            Measured from every note you have played, not from how a piece felt. Drilling one of these
-            biases the next exercises toward it.
+            These are the clearest opportunities measured from your playing. A focused read changes one
+            demand at a time instead of making the whole exercise harder.
           </p>
           <ul className="sr-weaklist">
             {weak.map((w) => (
@@ -88,7 +127,7 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
       </section>
 
       <section className="sr-panel">
-        <h3>Which notes you misread</h3>
+        <h3>Note-reading map</h3>
         {Object.keys(pitchTally).length === 0 ? (
           <p className="sr-hint">Play a few takes and this fills in.</p>
         ) : (
@@ -99,28 +138,46 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
               return (
                 <div
                   key={n}
-                  className="sr-heat"
+                  className={`sr-heat${t.total < 4 ? ' is-unproven' : ''}`}
                   style={{ ['--acc']: acc }}
                   title={`${n}: ${t.correct}/${t.total} correct`}
                 >
                   <span className="sr-heat-name">{n}</span>
-                  <span className="sr-heat-val">{Math.round(acc * 100)}%</span>
+                  <span className="sr-heat-val">{t.total < 4 ? 'learning' : `${Math.round(acc * 100)}%`}</span>
                 </div>
               );
             })}
           </div>
+        )}
+        {Object.keys(pitchLocations).length > 0 && (
+          <>
+            <h4 className="sr-subheading">By staff and register</h4>
+            <div className="sr-locationmap">
+              {Object.entries(pitchLocations)
+                .sort(([, a], [, b]) => a.hand.localeCompare(b.hand) || a.note.localeCompare(b.note, undefined, { numeric: true }))
+                .map(([id, t]) => {
+                  const accuracy = t.correct / t.total;
+                  return (
+                    <div key={id} className="sr-location" title={`${t.correct}/${t.total} correct`}>
+                      <span>{t.hand === 'rh' ? 'Treble' : 'Bass'} {t.note}</span>
+                      <strong>{t.total < 4 ? 'Learning' : `${Math.round(accuracy * 100)}%`}</strong>
+                    </div>
+                  );
+                })}
+            </div>
+          </>
         )}
       </section>
 
       <section className="sr-panel">
         <h3>Reading ahead</h3>
         <p className="sr-hint">
-          How far ahead of your hands you can read. Notes fade as you move through the score,
-          gently preventing backward glances. Harder modes make upcoming notes vanish sooner.
+          Notes fade after their attack so your eyes keep moving into the phrase. Flexible adapts the
+          fade distance to rhythmic density; it is a training variation, not a higher level.
           These takes stay separate from your skill map because they measure reading fluency.
         </p>
         <div className="sr-lookahead">
-          {CURTAIN_MODES.filter((m) => m.beats !== null).map((m) => {
+          {CURTAIN_MODES.filter((m) => m.beats !== null && !m.legacy).map((m) => {
             const v = (profile.lookAhead || {})[m.id];
             return (
               <div key={m.id} className={`sr-look${v ? '' : ' is-untried'}`}>
@@ -216,6 +273,31 @@ function aggregatePitches(profile) {
     }
   }
   return out;
+}
+
+function aggregatePitchLocations(profile) {
+  const out = {};
+  for (const take of profile.history) {
+    if (!take.meta?.pitchLocations) continue;
+    for (const [id, tally] of Object.entries(take.meta.pitchLocations)) {
+      if (!out[id]) out[id] = { ...tally, correct: 0, total: 0 };
+      out[id].correct += tally.correct;
+      out[id].total += tally.total;
+    }
+  }
+  return out;
+}
+
+function strandEvidence(profile, skillIds) {
+  const observed = skillIds
+    .map((id) => profile.skills[id])
+    .filter((skill) => skill && skill.attempts >= 3);
+  const attempts = observed.reduce((sum, skill) => sum + skill.attempts, 0);
+  if (!attempts) return { rating: null, attempts: 0 };
+  return {
+    rating: observed.reduce((sum, skill) => sum + skill.rating * skill.attempts, 0) / attempts,
+    attempts,
+  };
 }
 
 /**

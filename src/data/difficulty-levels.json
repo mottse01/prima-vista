@@ -71,9 +71,9 @@
   },
   {
     "id": 2,
-    "name": "Grand-staff foundations",
+    "name": "Grand-staff orientation",
     "stage": "Foundations",
-    "blurb": "Eight bars on the grand staff with simple bass support, familiar five-finger patterns, and paired eighths.",
+    "blurb": "Eight bars orient both staves with simple bass support, familiar five-finger patterns, and paired eighths.",
     "exam_reference": {
       "abrsm": "Grade 1",
       "rcm": "Level 1"
@@ -118,7 +118,7 @@
       "allowSevenths": false,
       "allowInversions": false,
       "dynamics": true,
-      "articulations": true,
+      "articulations": false,
       "slurs": true,
       "fingerings": true,
       "meters": [
@@ -147,15 +147,15 @@
   },
   {
     "id": 3,
-    "name": "Eighth-note fluency and shifts",
+    "name": "Coordinated shapes and rests",
     "stage": "Phrase reading",
-    "blurb": "Eight-bar periods develop eighth-note fluency before adding one hand-position change and minor keys.",
+    "blurb": "Eight-bar periods coordinate simple attacks, skips, and musically placed rests in familiar major keys.",
     "exam_reference": {
       "abrsm": "Grade 2",
       "rcm": "Levels 2–3"
     },
     "constraints": {
-      "key_signature_accidentals": 2,
+      "key_signature_accidentals": 1,
       "hand_shifts": 1,
       "max_melodic_interval": 4,
       "smallest_ticks": 24,
@@ -166,10 +166,10 @@
         "alberti"
       ],
       "simultaneous_notes": 2,
-      "chromatic_notes": 1,
+      "chromatic_notes": 0,
       "tempo": [
-        66,
-        96
+        64,
+        92
       ],
       "meters": [
         "4/4",
@@ -180,7 +180,7 @@
     },
     "params": {
       "measures": 8,
-      "tempo": 78,
+      "tempo": 76,
       "hands": "both",
       "rhythmTags": [
         "eighth",
@@ -189,6 +189,84 @@
       "maxLeap": 3,
       "stepwiseBias": 0.82,
       "nonChordRate": 0.14,
+      "chromaticRate": 0,
+      "restRate": 0.12,
+      "lhStyle": "roots",
+      "chordsPerMeasure": 1,
+      "allowSevenths": false,
+      "allowInversions": false,
+      "dynamics": true,
+      "articulations": true,
+      "slurs": true,
+      "fingerings": false,
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4"
+      ],
+      "fifths": [
+        -1,
+        0,
+        1
+      ],
+      "modes": [
+        "major"
+      ],
+      "rhLow": 27,
+      "rhHigh": 35,
+      "lhLow": 17,
+      "lhHigh": 25
+    },
+    "focus": [
+      "coordination.together",
+      "intervals.skip",
+      "rhythm.rest"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Position changes and minor keys",
+    "stage": "Phrase reading",
+    "blurb": "Eight-bar studies add one planned position change and minor keys while the rhythm stays familiar.",
+    "exam_reference": {
+      "abrsm": "Grades 3–4",
+      "rcm": "Level 4"
+    },
+    "constraints": {
+      "key_signature_accidentals": 2,
+      "hand_shifts": 1,
+      "max_melodic_interval": 5,
+      "smallest_ticks": 24,
+      "ledger_lines": 1,
+      "lh_textures": [
+        "root_fifth",
+        "block_chord",
+        "alberti"
+      ],
+      "simultaneous_notes": 2,
+      "chromatic_notes": 0,
+      "tempo": [
+        70,
+        108
+      ],
+      "meters": [
+        "4/4",
+        "3/4",
+        "2/4"
+      ],
+      "hand_span": 8
+    },
+    "params": {
+      "measures": 8,
+      "tempo": 80,
+      "hands": "both",
+      "rhythmTags": [
+        "eighth",
+        "rest"
+      ],
+      "maxLeap": 4,
+      "stepwiseBias": 0.8,
+      "nonChordRate": 0.18,
       "chromaticRate": 0,
       "restRate": 0.12,
       "lhStyle": "roots",
@@ -207,7 +285,6 @@
       "fifths": [
         -2,
         -1,
-        0,
         1,
         2
       ],
@@ -216,24 +293,24 @@
         "minor"
       ],
       "rhLow": 27,
-      "rhHigh": 35,
-      "lhLow": 17,
-      "lhHigh": 25
+      "rhHigh": 36,
+      "lhLow": 16,
+      "lhHigh": 26
     },
     "focus": [
-      "intervals.skip",
-      "rhythm.rest",
-      "notes.accidental"
+      "intervals.leap",
+      "notes.accidental",
+      "coordination.together"
     ]
   },
   {
-    "id": 4,
-    "name": "Compound metre and dyads",
-    "stage": "Phrase reading",
-    "blurb": "Twelve-bar studies introduce 6/8, dotted figures, and two-note harmonies without adding fast subdivisions yet.",
+    "id": 5,
+    "name": "Compound beat",
+    "stage": "Intermediate",
+    "blurb": "Twelve-bar studies establish 6/8 and dotted-beat cells while pitch and texture stay familiar.",
     "exam_reference": {
-      "abrsm": "Grades 3–4",
-      "rcm": "Level 4"
+      "abrsm": "Grade 5",
+      "rcm": "Levels 5–6"
     },
     "constraints": {
       "key_signature_accidentals": 2,
@@ -244,18 +321,16 @@
       "lh_textures": [
         "root_fifth",
         "block_chord",
-        "alberti"
+        "alberti",
+        "broken_octave"
       ],
       "simultaneous_notes": 2,
       "chromatic_notes": 1,
       "tempo": [
-        70,
-        108
+        72,
+        112
       ],
       "meters": [
-        "4/4",
-        "3/4",
-        "2/4",
         "6/8"
       ],
       "hand_span": 8
@@ -270,10 +345,10 @@
         "dotted"
       ],
       "maxLeap": 4,
-      "stepwiseBias": 0.8,
+      "stepwiseBias": 0.79,
       "nonChordRate": 0.18,
-      "chromaticRate": 0.05,
-      "restRate": 0.12,
+      "chromaticRate": 0.04,
+      "restRate": 0.13,
       "lhStyle": "blocked",
       "chordsPerMeasure": 1,
       "allowSevenths": false,
@@ -283,95 +358,6 @@
       "slurs": true,
       "fingerings": false,
       "meters": [
-        "4/4",
-        "3/4",
-        "2/4",
-        "6/8"
-      ],
-      "fifths": [
-        -2,
-        -1,
-        0,
-        1,
-        2
-      ],
-      "modes": [
-        "major",
-        "minor"
-      ],
-      "rhLow": 27,
-      "rhHigh": 36,
-      "lhLow": 16,
-      "lhHigh": 26
-    },
-    "focus": [
-      "rhythm.dotted",
-      "rhythm.sixteenth",
-      "coordination.together"
-    ]
-  },
-  {
-    "id": 5,
-    "name": "Sixteenth-note patterns",
-    "stage": "Intermediate",
-    "blurb": "Simple sixteenth-note cells join Alberti and broken-chord textures in twelve-bar tonal studies.",
-    "exam_reference": {
-      "abrsm": "Grade 5",
-      "rcm": "Levels 5–6"
-    },
-    "constraints": {
-      "key_signature_accidentals": 2,
-      "hand_shifts": 2,
-      "max_melodic_interval": 6,
-      "smallest_ticks": 12,
-      "ledger_lines": 2,
-      "lh_textures": [
-        "root_fifth",
-        "block_chord",
-        "alberti",
-        "broken_octave"
-      ],
-      "simultaneous_notes": 3,
-      "chromatic_notes": 2,
-      "tempo": [
-        80,
-        120
-      ],
-      "meters": [
-        "4/4",
-        "3/4",
-        "2/4",
-        "6/8"
-      ],
-      "hand_span": 8
-    },
-    "params": {
-      "measures": 12,
-      "tempo": 96,
-      "hands": "both",
-      "rhythmTags": [
-        "eighth",
-        "rest",
-        "dotted",
-        "sixteenth"
-      ],
-      "maxLeap": 5,
-      "stepwiseBias": 0.76,
-      "nonChordRate": 0.22,
-      "chromaticRate": 0.08,
-      "restRate": 0.13,
-      "lhStyle": "alberti",
-      "chordsPerMeasure": 1,
-      "allowSevenths": true,
-      "allowInversions": true,
-      "dynamics": true,
-      "articulations": true,
-      "slurs": true,
-      "fingerings": false,
-      "meters": [
-        "4/4",
-        "3/4",
-        "2/4",
         "6/8"
       ],
       "fifths": [
@@ -391,25 +377,25 @@
       "lhHigh": 27
     },
     "focus": [
-      "rhythm.sixteenth",
-      "intervals.leap",
-      "notes.ledger"
+      "rhythm.dotted",
+      "rhythm.eighth",
+      "coordination.together"
     ]
   },
   {
     "id": 6,
-    "name": "Syncopation, triplets, and harmonic motion",
+    "name": "Simple-metre subdivisions",
     "stage": "Intermediate",
-    "blurb": "Sixteen-bar studies add simple syncopation and triplets, then increase harmonic motion.",
+    "blurb": "Reusable sixteenth-note cells enter in familiar simple metres before syncopation or triplets.",
     "exam_reference": {
       "abrsm": "Grade 6",
       "rcm": "Level 7"
     },
     "constraints": {
-      "key_signature_accidentals": 3,
-      "hand_shifts": 3,
-      "max_melodic_interval": 7,
-      "smallest_ticks": 16,
+      "key_signature_accidentals": 2,
+      "hand_shifts": 2,
+      "max_melodic_interval": 6,
+      "smallest_ticks": 12,
       "ledger_lines": 2,
       "lh_textures": [
         "root_fifth",
@@ -419,39 +405,35 @@
         "walking"
       ],
       "simultaneous_notes": 3,
-      "chromatic_notes": 3,
+      "chromatic_notes": 2,
       "tempo": [
-        72,
-        132
+        76,
+        124
       ],
       "meters": [
         "4/4",
         "3/4",
-        "2/4",
-        "6/8",
-        "9/8",
-        "5/4"
+        "2/4"
       ],
       "hand_span": 9
     },
     "params": {
-      "measures": 16,
-      "tempo": 100,
+      "measures": 12,
+      "tempo": 92,
       "hands": "both",
       "rhythmTags": [
         "eighth",
         "rest",
         "dotted",
-        "syncopation",
-        "triplet"
+        "sixteenth"
       ],
-      "maxLeap": 6,
-      "stepwiseBias": 0.74,
-      "nonChordRate": 0.24,
-      "chromaticRate": 0.1,
+      "maxLeap": 5,
+      "stepwiseBias": 0.76,
+      "nonChordRate": 0.22,
+      "chromaticRate": 0.08,
       "restRate": 0.14,
-      "lhStyle": "broken",
-      "chordsPerMeasure": 2,
+      "lhStyle": "alberti",
+      "chordsPerMeasure": 1,
       "allowSevenths": true,
       "allowInversions": true,
       "dynamics": true,
@@ -461,19 +443,14 @@
       "meters": [
         "4/4",
         "3/4",
-        "2/4",
-        "6/8",
-        "9/8",
-        "5/4"
+        "2/4"
       ],
       "fifths": [
-        -3,
         -2,
         -1,
         0,
         1,
-        2,
-        3
+        2
       ],
       "modes": [
         "major",
@@ -485,16 +462,16 @@
       "lhHigh": 27
     },
     "focus": [
-      "rhythm.triplet",
-      "notes.accidental",
-      "coordination.together"
+      "rhythm.sixteenth",
+      "intervals.leap",
+      "notes.ledger"
     ]
   },
   {
     "id": 7,
-    "name": "Broader keys and texture",
+    "name": "Ties and syncopation",
     "stage": "Advanced",
-    "blurb": "Broader key areas, denser chords, and flowing accompaniment build vertical and harmonic reading fluency.",
+    "blurb": "Off-beat ties and syncopated cells develop rhythmic independence before triplets and irregular metre.",
     "exam_reference": {
       "abrsm": "Grade 6–7",
       "rcm": "Level 8"
@@ -523,11 +500,7 @@
       "meters": [
         "4/4",
         "3/4",
-        "2/4",
-        "6/8",
-        "9/8",
-        "5/4",
-        "5/8"
+        "2/4"
       ],
       "hand_span": 10
     },
@@ -540,8 +513,7 @@
         "rest",
         "dotted",
         "syncopation",
-        "sixteenth",
-        "triplet"
+        "sixteenth"
       ],
       "maxLeap": 7,
       "stepwiseBias": 0.72,
@@ -559,10 +531,7 @@
       "meters": [
         "4/4",
         "3/4",
-        "2/4",
-        "6/8",
-        "9/8",
-        "5/4"
+        "2/4"
       ],
       "fifths": [
         -3,
@@ -583,24 +552,24 @@
       "lhHigh": 27
     },
     "focus": [
+      "rhythm.syncopation",
       "notes.accidental",
-      "coordination.together",
-      "notes.ledger"
+      "coordination.together"
     ]
   },
   {
     "id": 8,
-    "name": "Mixed metre and independent lines",
+    "name": "Triplets and fuller texture",
     "stage": "Advanced",
-    "blurb": "Twenty-bar studies introduce irregular metres and independent lines while keeping tonal form recognizable.",
+    "blurb": "Sixteen-bar studies add triplets and fuller chord textures while keeping the underlying metre clear.",
     "exam_reference": {
       "abrsm": "Grade 7",
       "rcm": "Level 9"
     },
     "constraints": {
       "key_signature_accidentals": 4,
-      "hand_shifts": 6,
-      "max_melodic_interval": 9,
+      "hand_shifts": 5,
+      "max_melodic_interval": 8,
       "smallest_ticks": 12,
       "ledger_lines": 3,
       "lh_textures": [
@@ -624,14 +593,13 @@
         "2/4",
         "6/8",
         "9/8",
-        "12/8",
-        "5/4"
+        "12/8"
       ],
       "hand_span": 10
     },
     "params": {
-      "measures": 20,
-      "tempo": 108,
+      "measures": 16,
+      "tempo": 104,
       "hands": "both",
       "rhythmTags": [
         "eighth",
@@ -646,7 +614,7 @@
       "nonChordRate": 0.28,
       "chromaticRate": 0.16,
       "restRate": 0.15,
-      "lhStyle": "melodic",
+      "lhStyle": "broken",
       "chordsPerMeasure": 2,
       "allowSevenths": true,
       "allowInversions": true,
@@ -660,8 +628,7 @@
         "2/4",
         "6/8",
         "9/8",
-        "12/8",
-        "5/4"
+        "12/8"
       ],
       "fifths": [
         -4,
@@ -684,16 +651,16 @@
       "lhHigh": 27
     },
     "focus": [
+      "rhythm.triplet",
       "coordination.together",
-      "rhythm.syncopation",
-      "notes.accidental"
+      "notes.ledger"
     ]
   },
   {
     "id": 9,
-    "name": "Extended forms and chromatic color",
+    "name": "Independent lines and extended reading",
     "stage": "Mastery",
-    "blurb": "Twenty-bar forms add richer chromatic color, wide textures, and style-specific articulation.",
+    "blurb": "Twenty-bar forms develop two-voice independence, broader register, and sustained phrase reading.",
     "exam_reference": {
       "abrsm": "Grade 8",
       "rcm": "Level 10"
@@ -725,8 +692,7 @@
         "2/4",
         "6/8",
         "9/8",
-        "12/8",
-        "5/4"
+        "12/8"
       ],
       "hand_span": 11
     },
@@ -761,8 +727,7 @@
         "2/4",
         "6/8",
         "9/8",
-        "12/8",
-        "5/4"
+        "12/8"
       ],
       "fifths": [
         -5,
@@ -787,16 +752,16 @@
       "lhHigh": 27
     },
     "focus": [
-      "notes.ledger",
+      "coordination.together",
       "intervals.leap",
-      "coordination.together"
+      "notes.accidental"
     ]
   },
   {
     "id": 10,
-    "name": "Concert-level reading",
+    "name": "Flexible advanced reading",
     "stage": "Mastery",
-    "blurb": "One-page studies integrate wide intervals, mixed subdivisions, advanced textures, and the full key-signature range.",
+    "blurb": "Longer studies integrate chromaticism, mixed subdivisions, irregular metre, advanced textures, and strategic simplification.",
     "exam_reference": {
       "abrsm": "Post-Grade 8 extension",
       "rcm": "Post-Level 10 extension"

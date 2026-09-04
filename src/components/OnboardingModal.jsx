@@ -15,29 +15,30 @@ const STARTING_POINTS = [
   {
     level: 5,
     label: 'Developing',
-    cue: 'I can keep going through position changes, broken chords, and simple sixteenth patterns.',
+    cue: 'I can keep going through position changes, minor keys, and compound beat.',
   },
   {
     level: 7,
     label: 'Confident',
-    cue: 'I read compound metre, triplets, several keys, and fuller two-hand textures.',
+    cue: 'I read sixteenth notes, ties, syncopation, and several keys.',
   },
   {
     level: 9,
     label: 'Advanced',
-    cue: 'I am comfortable with irregular metre, independent lines, and chromatic harmony.',
+    cue: 'I am comfortable with triplets, independent lines, and chromatic harmony.',
   },
 ];
 
 export default function OnboardingModal({ onChoose }) {
-  const [selected, setSelected] = useState(3);
+  const [selected, setSelected] = useState(1);
   const headingRef = useRef(null);
 
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
 
-  const level = levelById(selected);
+  const startingLevel = Math.max(1, selected - 1);
+  const level = levelById(startingLevel);
 
   return (
     <div className="sr-onboarding-backdrop">
@@ -51,8 +52,8 @@ export default function OnboardingModal({ onChoose }) {
         <span className="sr-eyebrow">Your starting point</span>
         <h2 id="sr-onboarding-title" ref={headingRef} tabIndex="-1">Choose a first reading level.</h2>
         <p id="sr-onboarding-description">
-          Pick the statement that sounds most like you. Your first study will be at least eight bars,
-          and you can move to any level from The path at any time.
+          Pick the statement that sounds most like you. We begin one step easier when possible so the
+          first reads confirm your fluency without overwhelming you. Every study is at least eight bars.
         </p>
 
         <div className="sr-onboarding-options" role="radiogroup" aria-label="Starting difficulty">
@@ -76,15 +77,15 @@ export default function OnboardingModal({ onChoose }) {
         </div>
 
         <div className="sr-onboarding-summary" aria-live="polite">
-          <span>First study</span>
+          <span>Short level check</span>
           <strong>{level.name}</strong>
           <span>{level.blurb}</span>
         </div>
 
         <div className="sr-onboarding-actions">
-          <span>Not sure? “Early reader” is a balanced diagnostic start.</span>
-          <button type="button" className="sr-btn sr-btn--primary sr-btn--large" onClick={() => onChoose(selected)}>
-            Start at level {selected}
+          <span>You can change level at any time. Three secure fresh reads move you forward.</span>
+          <button type="button" className="sr-btn sr-btn--primary sr-btn--large" onClick={() => onChoose(startingLevel)}>
+            Check level {startingLevel}
           </button>
         </div>
       </section>

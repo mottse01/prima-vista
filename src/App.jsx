@@ -65,6 +65,7 @@ export default function App() {
   });
   const nextPathLevelRef = useRef(null);
   const preparedExerciseRef = useRef(null);
+  const learnerTargetRef = useRef(null);
   const [session, setSession] = useState(() => ({
     minutes: loadSettings().sessionMinutes || 0,
     startedAt: null,
@@ -156,7 +157,11 @@ export default function App() {
   }, [profile]);
 
   const regenerate = useCallback(() => {
-    if (params.level) nextFromLevel(nextPathLevelRef.current ?? params.level);
+    if (params.level) {
+      const targetSkill = learnerTargetRef.current;
+      learnerTargetRef.current = null;
+      nextFromLevel(nextPathLevelRef.current ?? params.level, targetSkill ? { targetSkill } : {});
+    }
     else setParams({ ...params, seed: randomSeed() });
   }, [nextFromLevel, params]);
 
@@ -174,6 +179,7 @@ export default function App() {
         assisted,
         meta: {
           pitches: summary.pitches,
+          pitchLocations: summary.pitchLocations,
           recovery: summary.recovery,
           recipe: {
             seed: score.seed,
@@ -195,6 +201,22 @@ export default function App() {
       return next;
     });
   }, [params.level, score, scoreId]);
+
+  const handleReflection = useCallback(({ label, skillId }) => {
+    learnerTargetRef.current = skillId || null;
+    setProfile((current) => {
+      const history = [...current.history];
+      for (let index = history.length - 1; index >= 0; index--) {
+        if (history[index].seed !== score.seed) continue;
+        history[index] = {
+          ...history[index],
+          meta: { ...(history[index].meta || {}), reflection: label },
+        };
+        break;
+      }
+      return { ...current, history };
+    });
+  }, [score.seed]);
 
   const startSession = useCallback(() => {
     if (!settings.sessionMinutes) return;
@@ -345,6 +367,7 @@ export default function App() {
             freshRead={!seenBefore}
             strongReads={strongReads}
             onPreview={handlePreview}
+            onReflect={handleReflection}
             onNotify={notify}
             session={sessionInfo}
             onSessionStart={startSession}

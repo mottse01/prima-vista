@@ -70,6 +70,47 @@ test('guided studies begin at eight bars and never shorten as levels rise', () =
   assert.ok(lengths.every((bars, index) => index === 0 || bars >= lengths[index - 1]));
 });
 
+test('the learning path separates major rhythmic and metric demands', () => {
+  assert.ok(levelById(3).params.rhythmTags.includes('rest'));
+  assert.ok(!levelById(3).params.rhythmTags.includes('sixteenth'));
+  assert.deepEqual(levelById(5).constraints.meters, ['6/8']);
+  assert.ok(levelById(5).params.rhythmTags.includes('dotted'));
+  assert.ok(!levelById(5).params.rhythmTags.includes('sixteenth'));
+  assert.ok(levelById(6).params.rhythmTags.includes('sixteenth'));
+  assert.ok(levelById(7).params.rhythmTags.includes('syncopation'));
+  assert.ok(!levelById(7).params.rhythmTags.includes('triplet'));
+  assert.ok(levelById(8).params.rhythmTags.includes('triplet'));
+  assert.ok(levelById(10).constraints.meters.includes('5/4'));
+});
+
+test('every level focus is observable in generated first reads', () => {
+  for (const level of LEVELS) {
+    const observed = new Set();
+    for (let sample = 1; sample <= 16; sample++) {
+      const score = generateExercise(paramsForLevel(level.id, emptyProfile(), {
+        seed: level.id * 910000 + sample,
+      }));
+      for (const event of analyseEvents(score)) {
+        for (const skill of event.skills) observed.add(skill);
+      }
+    }
+    for (const focus of level.focus) {
+      assert.ok(observed.has(focus), `level ${level.id} never observed ${focus}`);
+    }
+  }
+});
+
+test('rests are assessed at the musical re-entry after silence', () => {
+  const score = generateExercise(paramsForLevel(3, emptyProfile(), {
+    seed: 303033,
+    targetSkill: 'rhythm.rest',
+  }));
+  const events = analyseEvents(score);
+  const restObservations = events.filter((event) => event.skills.includes('rhythm.rest'));
+  assert.ok(restObservations.length > 0);
+  assert.ok(restObservations.every((event) => !event.rest));
+});
+
 test('vanishing notes wait until played or disappear at the chosen look-ahead distance', () => {
   const ts = timeSig('4/4');
   const event = { onset: ts.beat * 2, duration: ts.beat };
@@ -103,7 +144,7 @@ test('public-domain repertoire mode renders a provenance-bearing fixed score', (
 
 test('recombination mode transforms a provenance-bearing human motif deterministically', () => {
   const params = {
-    ...paramsForLevel(5, emptyProfile(), { seed: 246810 }),
+    ...paramsForLevel(6, emptyProfile(), { seed: 246810 }),
     sourceMode: 'recombined',
     compositionStyle: 'classical_early',
     timeSignature: '4/4',
@@ -230,7 +271,7 @@ test('articulations express repeated gestures and phrase structure', () => {
   let tenutoCount = 0;
   for (let seed = 1; seed <= 24; seed++) {
     const score = generateExercise({
-      ...paramsForLevel(5, emptyProfile(), { seed: seed * 104729 }),
+      ...paramsForLevel(6, emptyProfile(), { seed: seed * 104729 }),
       compositionStyle: 'classical_early', timeSignature: '4/4', measures: 12,
       articulations: true,
     });
@@ -256,7 +297,7 @@ test('articulations express repeated gestures and phrase structure', () => {
 
 test('Auto never escapes to a meter-incompatible style pack', () => {
   const params = {
-    ...paramsForLevel(8, emptyProfile(), { seed: 808080 }),
+    ...paramsForLevel(10, emptyProfile(), { seed: 808080 }),
     compositionStyle: 'auto', timeSignature: '5/4', measures: 8,
   };
   const score = generateExercise(params);
@@ -350,7 +391,7 @@ test('selectable styles use coherent, distinct composition grammars', () => {
   const formNames = new Set();
 
   for (const pack of STYLE_PACK_LIST) {
-    const level = Math.max(5, pack.forms[0].min_level);
+    const level = 10;
     const setup = {
       compositionStyle: pack.id,
       measures: pack.forms[0].bars,
@@ -811,4 +852,23 @@ test('assisted practice contributes half-strength diagnostic evidence', () => {
   }).profile;
 
   assert.equal(next.skills['notes.treble'].attempts, 5);
+});
+
+test('an abandoned or disconnected take changes no learner data', () => {
+  const profile = emptyProfile();
+  const result = applyResult(profile, {
+    level: 1,
+    seed: 1,
+    exerciseId: 'no-input',
+    elapsedSec: 20,
+    summary: {
+      valid: false,
+      score: 0,
+      total: 24,
+      skills: { 'notes.treble': { correct: 0, total: 24 } },
+    },
+  });
+
+  assert.equal(result.invalid, true);
+  assert.deepEqual(result.profile, profile);
 });

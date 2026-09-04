@@ -17,6 +17,7 @@ const ALPHA_MAX = 0.45;
 // familiarity inflates it, so it moves the skill map at half weight and can
 // never advance your level.
 const REPEAT_WEIGHT = 0.5;
+const MIN_FOCUS_OBSERVATIONS = 3;
 
 // How many recently-seen exercise fingerprints to remember, so a reload or a
 // shared link cannot launder a repeat into a fresh first read.
@@ -26,7 +27,7 @@ export function emptyProfile() {
   const skills = {};
   for (const s of SKILLS) skills[s.id] = { rating: 0.5, attempts: 0 };
   return {
-    version: 3,
+    version: 4,
     level: 1,
     skills,
     history: [],       // { at, level, score, seed, repeat, curtain, ... }
@@ -58,6 +59,12 @@ export function markExerciseSeen(profile, exerciseId) {
 export function applyResult(profile, {
   level, summary, seed, exerciseId, elapsedSec, meta, takeIndex = 1, curtain = 'off', assisted = false,
 }) {
+  // A disconnected keyboard, blocked on-screen input, or abandoned take is a
+  // device event rather than evidence about the learner. Keep it out of every
+  // progress measure.
+  if (summary?.valid === false) {
+    return { profile, promoted: false, demoted: false, repeat: false, invalid: true };
+  }
   const next = {
     ...profile,
     skills: { ...profile.skills },
@@ -155,7 +162,10 @@ function evaluateLevel(profile, level) {
     .filter((h) => h.level === level && !h.repeat && !h.assisted && !h.curtain)
     .slice(-3);
   const def = levelById(level);
-  const focusOk = def.focus.every((id) => (profile.skills[id]?.rating ?? 0.5) >= 0.72);
+  const focusOk = def.focus.every((id) => {
+    const skill = profile.skills[id] || { rating: 0.5, attempts: 0 };
+    return skill.rating >= 0.72 && skill.attempts >= MIN_FOCUS_OBSERVATIONS;
+  });
   const lastThree = recent.slice(-3);
   const promoted =
     level < LEVELS.length &&
@@ -208,8 +218,21 @@ export function paramsForLevel(level, profile, {
     : null);
   const weakIds = new Set(selectedWeakness ? [selectedWeakness] : []);
   const targeted = new Set();
-  const focusRhythmTags = [];
-  const focusIntervals = [];
+  // Every level must actually present its named rhythm and interval goals.
+  // This makes the public path auditable and prevents promotion gates from
+  // waiting for evidence that random generation happened not to include.
+  const levelRhythmTags = def.focus
+    .map((id) => SKILL_TO_TAG[id])
+    .filter((tag) => tag && (tag === 'quarter' || p.rhythmTags.includes(tag)));
+  const levelIntervals = def.focus
+    .filter((id) => id.startsWith('intervals.'))
+    .map((id) => id.split('.')[1]);
+  const focusRhythmTags = selectedWeakness || !levelRhythmTags.length
+    ? []
+    : [levelRhythmTags[Math.abs(seed) % levelRhythmTags.length]];
+  const focusIntervals = selectedWeakness || !levelIntervals.length
+    ? []
+    : [levelIntervals[Math.abs(seed) % levelIntervals.length]];
 
   // Meter and key are drawn from the level's allowed sets.
   p.timeSignature = rng.pick(p.meters);
@@ -229,7 +252,7 @@ export function paramsForLevel(level, profile, {
     const tag = SKILL_TO_TAG[id];
     if (tag && (tag === 'quarter' || p.rhythmTags.includes(tag) || targetSkill === id)) {
       tags.add(tag);
-      focusRhythmTags.push(tag);
+      if (!focusRhythmTags.includes(tag)) focusRhythmTags.push(tag);
       targeted.add(id);
     }
   }
@@ -246,18 +269,18 @@ export function paramsForLevel(level, profile, {
     p.maxLeap = Math.min(7, p.maxLeap + 2);
     p.stepwiseBias = Math.max(0.45, p.stepwiseBias - 0.15);
     targeted.add('intervals.leap');
-    focusIntervals.push('leap');
+    if (!focusIntervals.includes('leap')) focusIntervals.push('leap');
   }
   if (weakIds.has('intervals.step')) {
     p.stepwiseBias = Math.min(0.92, p.stepwiseBias + 0.1);
     targeted.add('intervals.step');
-    focusIntervals.push('step');
+    if (!focusIntervals.includes('step')) focusIntervals.push('step');
   }
   if (weakIds.has('intervals.skip')) {
     p.maxLeap = Math.max(2, p.maxLeap);
     p.stepwiseBias = Math.min(0.68, p.stepwiseBias);
     targeted.add('intervals.skip');
-    focusIntervals.push('skip');
+    if (!focusIntervals.includes('skip')) focusIntervals.push('skip');
   }
   if (weakIds.has('coordination.together') && p.hands === 'both') {
     if (p.lhStyle === 'roots') p.lhStyle = 'blocked';

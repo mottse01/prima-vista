@@ -15,7 +15,8 @@ import { toMusicXml } from '../core/musicxml.js';
 import { CURTAIN_MODES, curtainMode } from '../core/curtain.js';
 import { LEVELS } from '../core/levels.js';
 
-const LOOK_AHEAD_MODES = CURTAIN_MODES;
+const LOOK_AHEAD_MODES = CURTAIN_MODES.filter((mode) => !mode.legacy);
+const PREPARATION_SECONDS = 30;
 
 /**
  * One take of one exercise. App remounts this whenever the exercise changes,
@@ -25,7 +26,7 @@ export default function PracticeView({
   score, settings, onSettings, onResult, onRegenerate, level,
   onDifficultyChange,
   midi, onConnectMidi, showKeyboard, onToggleKeyboard,
-  freshRead, strongReads = 0, onPreview, onNotify,
+  freshRead, strongReads = 0, onPreview, onReflect, onNotify,
   session, onSessionStart,
 }) {
   const [phase, setPhase] = useState('idle'); // idle | countin | playing | done
@@ -42,6 +43,9 @@ export default function PracticeView({
   const [calibration, setCalibration] = useState({ phase: 'idle', taps: 0, offset: settings.inputLatencyMs || 0 });
   const [standMode, setStandMode] = useState(false);
   const [difficultyDraft, setDifficultyDraft] = useState(level?.id || 1);
+  const [preparation, setPreparation] = useState({ phase: 'idle', remaining: PREPARATION_SECONDS, checks: [] });
+  const [pulseTap, setPulseTap] = useState({ times: [], message: 'Tap four beats at the written tempo.' });
+  const [reflection, setReflection] = useState(null);
 
   const graderRef = useRef(null);
   const startRef = useRef(0);
@@ -74,6 +78,14 @@ export default function PracticeView({
     const grader = graderRef.current;
     if (!grader) { setPhaseBoth('idle'); return; }
     const summary = grader.finish();
+    if (!summary.valid) {
+      takeCountRef.current = Math.max(0, takeCountRef.current - 1);
+      setNoteStates({});
+      setResult({ ...summary, invalid: true, takeIndex: takeCountRef.current });
+      setPhaseBoth('done');
+      onNotify?.('We did not detect enough of the performance. This take was not saved.', 'down');
+      return;
+    }
     setNoteStates(grader.states());
     setResult({
       ...summary,
@@ -89,7 +101,7 @@ export default function PracticeView({
       curtain: settings.curtain,
       assisted: assistedRef.current,
     });
-  }, [onResult, settings.curtain, stopEverything]);
+  }, [onNotify, onResult, settings.curtain, stopEverything]);
 
   /** Which notes are due at the playhead, for the optional keyboard guide. */
   const refreshGuide = useCallback((t) => {
@@ -126,6 +138,18 @@ export default function PracticeView({
   }, [onSettings, settings.curtain]);
 
   useEffect(() => {
+    if (preparation.phase !== 'active') return undefined;
+    const timer = window.setInterval(() => {
+      setPreparation((current) => {
+        if (current.phase !== 'active') return current;
+        const remaining = Math.max(0, current.remaining - 1);
+        return { ...current, remaining, phase: remaining === 0 ? 'ready' : 'active' };
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [preparation.phase]);
+
+  useEffect(() => {
     frameRef.current = () => {
       if (advance()) rafRef.current = requestAnimationFrame(frameRef.current);
     };
@@ -150,6 +174,8 @@ export default function PracticeView({
     setListening(false);
     setResult(null);
     setNoteStates({});
+    setPreparation((current) => ({ ...current, phase: 'done' }));
+    setPulseTap({ times: [], message: 'Tap four beats at the written tempo.' });
     setDueNow(new Set());
     takeCountRef.current += 1;
     assistedRef.current = Boolean(previewed || settings.guideKeys);
@@ -194,6 +220,50 @@ export default function PracticeView({
       score, startTime, metronome: settings.metronome, playScore: false, onEnd: () => {},
     });
   }, [finish, freshRead, onSessionStart, prepareSound, previewed, score, settings.countInBeats, settings.guideKeys, settings.metronome, settings.toleranceScale, startLoop, stopEverything]);
+
+  const beginPreparation = useCallback(() => {
+    setPreparation({ phase: 'active', remaining: PREPARATION_SECONDS, checks: [] });
+    setPulseTap({ times: [], message: 'Tap four beats at the written tempo.' });
+  }, []);
+
+  const togglePreparationCheck = useCallback((id) => {
+    setPreparation((current) => ({
+      ...current,
+      checks: current.checks.includes(id)
+        ? current.checks.filter((item) => item !== id)
+        : [...current.checks, id],
+    }));
+  }, []);
+
+  const tapPulse = useCallback(() => {
+    const time = performance.now();
+    setPulseTap((current) => {
+      const times = [...current.times, time].slice(-4);
+      if (times.length < 4) {
+        return { times, message: `${4 - times.length} more ${4 - times.length === 1 ? 'tap' : 'taps'}` };
+      }
+      const intervals = times.slice(1).map((value, index) => value - times[index]);
+      const writtenBeatMs = (60000 / score.tempo) * ((score.ts.beat || TPQ) / TPQ);
+      const average = intervals.reduce((sum, value) => sum + value, 0) / intervals.length;
+      const spacingError = Math.abs(average - writtenBeatMs) / writtenBeatMs;
+      const unevenness = Math.max(...intervals.map((value) => Math.abs(value - average))) / average;
+      const steady = spacingError <= 0.22 && unevenness <= 0.2;
+      if (steady) {
+        setPreparation((prep) => ({
+          ...prep,
+          checks: prep.checks.includes('rhythm') ? prep.checks : [...prep.checks, 'rhythm'],
+        }));
+      }
+      return {
+        times: [],
+        message: steady
+          ? `Steady — you found the ${score.tempo} bpm pulse.`
+          : average < writtenBeatMs
+            ? 'A little quick. Leave more space and try four taps again.'
+            : 'A little slow. Bring the taps closer and try again.',
+      };
+    });
+  }, [score.tempo, score.ts.beat]);
 
   const stop = useCallback(() => {
     if (phaseRef.current === 'countin') {
@@ -438,6 +508,7 @@ export default function PracticeView({
     .map((id) => SKILLS.find((skill) => skill.id === id)?.label)
     .filter(Boolean)
     .slice(0, 3);
+  const prepItems = preparationItems(score);
   const sessionLabel = session?.remaining == null
     ? 'Open practice'
     : session.complete
@@ -457,9 +528,17 @@ export default function PracticeView({
 
   return (
     <div className="sr-practice">
-      <section className={`sr-practice-dock${level ? '' : ' is-custom'}`} aria-label="Practice controls">
-        {level ? (
-          <div className="sr-difficulty-control">
+      <section className={`sr-practice-dock is-compact${level ? '' : ' is-custom'}`} aria-label="Practice controls">
+        <div className="sr-practice-dock-current">
+          <span>{level ? `Level ${level.id}` : 'Custom exercise'}</span>
+          <strong>{level?.name || 'Your chosen settings'}</strong>
+          <small>{level ? `${strongReads}/3 secure fresh reads` : 'Build controls set the challenge'}</small>
+        </div>
+        <details className="sr-practice-tools">
+          <summary>Adjust level &amp; flexible look-ahead</summary>
+          <div className="sr-practice-tools-panel">
+          {level ? (
+            <div className="sr-difficulty-control">
             <div className="sr-dock-heading">
               <span>Difficulty</span>
               <strong>Level {difficultyDraft} · {draftLevel.name}</strong>
@@ -477,18 +556,18 @@ export default function PracticeView({
             <div className="sr-difficulty-scale" aria-hidden="true">
               <span>Foundations</span><span>Fluency</span><span>Advanced</span>
             </div>
-          </div>
-        ) : (
-          <div className="sr-custom-difficulty">
-            <span>Custom exercise</span>
-            <strong>Difficulty is set in Build</strong>
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="sr-custom-difficulty">
+              <span>Custom exercise</span>
+              <strong>Difficulty is set in Build</strong>
+            </div>
+          )}
 
         <fieldset className="sr-lookahead-control" disabled={busy}>
           <legend>
-            <span>Vanishing notes</span>
-            <small>Played notes fade away; harder modes fade them sooner.</small>
+            <span>Flexible look-ahead</span>
+            <small>Fade earlier material to discourage backward glances.</small>
           </legend>
           <div className="sr-lookahead-options">
             {LOOK_AHEAD_MODES.map((mode) => (
@@ -502,8 +581,10 @@ export default function PracticeView({
               </label>
             ))}
           </div>
-          <p>{settings.curtain === 'off' ? 'Optional focus drill' : `${curtainMode(settings.curtain).blurb} Results stay separate from level progress.`}</p>
+          <p>{settings.curtain === 'off' ? 'Optional fluency drill' : `${curtainMode(settings.curtain).blurb} Results stay separate from level progress.`}</p>
         </fieldset>
+          </div>
+        </details>
       </section>
 
       <section className="sr-practice-summary" aria-label="Practice plan">
@@ -529,6 +610,53 @@ export default function PracticeView({
           <strong>{sessionLabel}</strong>
         </div>
       </section>
+
+      {freshRead && !result && (
+        <section className={`sr-preparation is-${preparation.phase}`} aria-label="Silent preparation">
+          <div className="sr-preparation-head">
+            <div>
+              <span className="sr-eyebrow">Silent preparation</span>
+              <strong>{preparation.phase === 'idle'
+                ? 'Scan before you play.'
+                : preparation.phase === 'ready'
+                  ? 'Your scan is complete.'
+                  : preparation.phase === 'active'
+                    ? `${preparation.remaining} seconds to notice the structure.`
+                    : 'Prepared for this first read.'}</strong>
+            </div>
+            {preparation.phase === 'idle' && (
+              <button type="button" className="sr-btn sr-btn--small" onClick={beginPreparation}>Begin 30-second scan</button>
+            )}
+          </div>
+          {preparation.phase !== 'idle' && (
+            <div className="sr-preparation-body">
+              <div className="sr-preparation-grid">
+                {prepItems.map((item) => {
+                  const checked = preparation.checks.includes(item.id);
+                  return (
+                    <button
+                      key={item.id} type="button"
+                      className={`sr-preparation-item${checked ? ' is-checked' : ''}`}
+                      aria-pressed={checked}
+                      onClick={() => togglePreparationCheck(item.id)}
+                    >
+                      <span aria-hidden="true">{checked ? '✓' : item.step}</span>
+                      <div><b>{item.label}</b><small>{item.detail}</small></div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="sr-pulse-practice" aria-live="polite">
+                <button type="button" onClick={tapPulse}>
+                  <span aria-hidden="true">{pulseTap.times.length ? '●'.repeat(pulseTap.times.length) : '○○○○'}</span>
+                  Tap pulse
+                </button>
+                <p>{pulseTap.message}</p>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="sr-scorecard">
         <div className="sr-scorehead">
@@ -617,10 +745,16 @@ export default function PracticeView({
           ) : (
             <button
               type="button" className="sr-btn sr-btn--primary sr-btn--start"
-              onPointerDown={primeAudioGesture} onClick={start} disabled={busy}
+              onPointerDown={primeAudioGesture}
+              onClick={qualifies && preparation.phase === 'idle' && !result ? beginPreparation : start}
+              disabled={busy}
             >
               <span className="sr-btn-icon" aria-hidden="true">▶</span>
-              {audioBusy ? 'Turning on sound…' : result ? 'Play again' : qualifies ? 'Start first read' : 'Start practice'}
+              {audioBusy ? 'Turning on sound…'
+                : result ? 'Play again'
+                  : qualifies && preparation.phase === 'idle' ? 'Prepare first read'
+                    : qualifies && preparation.phase === 'active' ? `Start when ready · ${preparation.remaining}s`
+                      : qualifies ? 'Start first read' : 'Start practice'}
             </button>
           )}
           <button
@@ -773,22 +907,44 @@ export default function PracticeView({
       )}
 
       {result && (
-        <ResultPanel
-          result={result}
+          <ResultPanel
+            result={result}
           onAgain={start}
           onNext={onRegenerate}
           onRepair={(tempo) => onSettings({ tempoOverride: tempo })}
           tempo={score.tempo}
           repeat={result.takeIndex > 1 || !result.wasFresh}
           assisted={result.assisted}
-          curtain={curtainMode(settings.curtain)}
-        />
+            curtain={curtainMode(settings.curtain)}
+            score={score}
+            focusIds={focusIds}
+            reflection={reflection}
+            onReflect={(choice) => {
+              setReflection(choice.label);
+              onReflect?.(choice);
+            }}
+          />
       )}
     </div>
   );
 }
 
-function ResultPanel({ result, onAgain, onNext, onRepair, tempo, repeat, assisted, curtain }) {
+function ResultPanel({
+  result, onAgain, onNext, onRepair, tempo, repeat, assisted, curtain,
+  score, focusIds, reflection, onReflect,
+}) {
+  if (result.invalid) {
+    return (
+      <section className="sr-result sr-result--invalid" aria-live="polite">
+        <div className="sr-result-coach">
+          <span className="sr-eyebrow">Nothing counted</span>
+          <strong>We did not receive enough notes to assess this read.</strong>
+          <p>Check the MIDI connection or open the on-screen keyboard, then try again. Your progress and streak were not changed.</p>
+        </div>
+        <button type="button" className="sr-btn sr-btn--primary" onClick={onAgain}>Try this first read again</button>
+      </section>
+    );
+  }
   const pct = (x) => `${Math.round(x * 100)}%`;
   const timing = result.meanSignedTiming;
   const rec = result.recovery;
@@ -827,6 +983,27 @@ function ResultPanel({ result, onAgain, onNext, onRepair, tempo, repeat, assiste
         <Metric label="Recovery" value={recoveryValue(rec)} detail={recoveryDetail(rec)} />
       </div>
       <TimingStrip result={result} />
+      <div className="sr-learning-review">
+        <div className="sr-pattern-insight">
+          <span className="sr-eyebrow">See the pattern</span>
+          <strong>{patternInsight(score)}</strong>
+          <p>{score.form?.label || 'Follow the phrase shape'} · {score.harmony?.cadencePlan || 'listen for the cadence'}</p>
+        </div>
+        <fieldset className="sr-reflection">
+          <legend>What broke first?</legend>
+          <div>
+            {reflectionChoices(focusIds).map((choice) => (
+              <button
+                type="button" key={choice.label}
+                className={reflection === choice.label ? 'is-on' : ''}
+                aria-pressed={reflection === choice.label}
+                onClick={() => onReflect(choice)}
+              >{choice.label}</button>
+            ))}
+          </div>
+          <small>{reflection ? 'Your next fresh study will take this into account.' : 'Your answer helps choose the next fresh study.'}</small>
+        </fieldset>
+      </div>
       <div className="sr-result-actions">
         {shouldRepair ? (
           <>
@@ -846,7 +1023,7 @@ function ResultPanel({ result, onAgain, onNext, onRepair, tempo, repeat, assiste
       {(repeat || assisted || curtain.beats !== null) && (
         <p className="sr-result-note">
           {curtain.beats !== null
-            ? `Vanishing-notes take (${curtain.label}) — tracked under reading ahead, and it does not move your skill map or level.`
+            ? `Flexible look-ahead take (${curtain.label}) — tracked under reading ahead, and it does not move your skill map or level.`
             : assisted
               ? 'Assisted practice — hearing the exercise first or using guide keys counts at half weight and cannot advance your level.'
               : 'Replay of music you have already seen, so it counts at half weight and cannot advance your level.'}
@@ -854,6 +1031,37 @@ function ResultPanel({ result, onAgain, onNext, onRepair, tempo, repeat, assiste
       )}
     </section>
   );
+}
+
+function preparationItems(score) {
+  const rhythm = (score.params?.focusRhythmTags || score.params?.rhythmTags || []).at(-1);
+  const rhythmLabel = rhythm ? rhythm.replace('sixteenth', 'sixteenth-note').replace('dotted', 'dotted-note') : 'steady quarter-note';
+  const leftHand = (score.params?.lhStyle || 'simple').replace('_', ' ');
+  return [
+    { id: 'frame', step: '1', label: 'Key & metre', detail: `${keyLabel(score.key)} · ${score.ts.name}` },
+    { id: 'rhythm', step: '2', label: 'Tap the hardest cell', detail: `${rhythmLabel} pattern · feel the pulse first` },
+    { id: 'hands', step: '3', label: 'Place your hands', detail: `${leftHand} left hand · find the widest move` },
+    { id: 'phrase', step: '4', label: 'Hear the opening silently', detail: `${score.form?.label || 'follow the phrase'} · notice the final cadence` },
+  ];
+}
+
+function reflectionChoices(focusIds = []) {
+  const rhythmSkill = focusIds.find((id) => id.startsWith('rhythm.')) || 'rhythm.quarter';
+  const pitchSkill = focusIds.find((id) => id.startsWith('notes.')) || 'notes.treble';
+  return [
+    { label: 'Pulse or rhythm', skillId: rhythmSkill },
+    { label: 'Notes or key', skillId: pitchSkill },
+    { label: 'Left-hand pattern', skillId: 'notes.bass' },
+    { label: 'Hands together', skillId: 'coordination.together' },
+    { label: 'Kept control', skillId: null },
+  ];
+}
+
+function patternInsight(score) {
+  const motif = score.development?.motif;
+  if (motif?.rhythm?.length) return 'Read the recurring rhythm and contour as one musical word.';
+  if (score.notationRepeat) return 'The repeated phrase is a chunk: recognize it before reading individual notes.';
+  return 'Group intervals, harmony, and rhythm into shapes instead of naming every note.';
 }
 
 function formatClock(seconds) {

@@ -7,6 +7,7 @@
 import { TPQ, diaToY, pitchClassName } from './theory.js';
 import { xmlNoteId } from './musicxml.js';
 import { expectedEvents } from './generator.js';
+import { playbackEvents } from './playback.js';
 
 export const SKILLS = [
   { id: 'notes.treble', label: 'Treble staff notes' },
@@ -37,6 +38,19 @@ export function analyseEvents(score) {
   const events = expectedEvents(score);
   const groups = new Map();
   const handsAtOnset = new Map();
+  // A rest is read successfully when the player carries the pulse through the
+  // silence and returns at the right place. Attach one observation to the
+  // first attack after each notated rest; raw rest events are intentionally
+  // absent from expectedEvents because there is no pitch to match.
+  const restReentries = new Set();
+  for (const hand of ['rh', 'lh']) {
+    const staff = playbackEvents(score, hand);
+    staff.forEach((event, index) => {
+      if (!event.rest) return;
+      const reentry = staff.slice(index + 1).find((candidate) => !candidate.rest);
+      if (reentry) restReentries.add(`${hand}:${reentry.onset}`);
+    });
+  }
   for (const event of events) {
     const key = `${event.hand}:${event.onset}`;
     if (!groups.has(key)) groups.set(key, []);
@@ -95,6 +109,9 @@ export function analyseEvents(score) {
     // two hands actually attack together. Count one anchor per hand so a triad
     // does not create three times as much evidence as a single bass note.
     const groupKey = `${e.hand}:${e.onset}`;
+    if (restReentries.has(groupKey) && anchorForGroup.get(groupKey) === e) {
+      skills.add('rhythm.rest');
+    }
     if ((handsAtOnset.get(e.onset)?.size || 0) > 1 && anchorForGroup.get(groupKey) === e) {
       skills.add('coordination.together');
     }
@@ -235,6 +252,7 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       if (ok) skillTally[id].correct += 1;
     };
     const pitchTally = {};
+    const pitchLocations = {};
 
     let correct = 0;
     let wrong = 0;
@@ -262,6 +280,14 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       if (!pitchTally[e.pitchClass]) pitchTally[e.pitchClass] = { correct: 0, total: 0 };
       pitchTally[e.pitchClass].total += 1;
       if (pitchOk) pitchTally[e.pitchClass].correct += 1;
+      const locationName = `${e.hand}:${e.pitchClass}${e.pitch.octave}`;
+      if (!pitchLocations[locationName]) {
+        pitchLocations[locationName] = {
+          correct: 0, total: 0, hand: e.hand, note: `${e.pitchClass}${e.pitch.octave}`,
+        };
+      }
+      pitchLocations[locationName].total += 1;
+      if (pitchOk) pitchLocations[locationName].correct += 1;
     }
 
     // Every expected note in time order, with the timing error where we have
@@ -297,6 +323,11 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
     const attackCount = attacks.size || 1;
     const attacksKept = [...attacks.values()].filter(Boolean).length;
     const continuity = attacksKept / attackCount;
+    const inputCoverage = attacksKept / attackCount;
+    const minimumDetectedAttacks = Math.min(3, attackCount);
+    const valid = played.length > 0
+      && attacksKept >= minimumDetectedAttacks
+      && inputCoverage >= 0.12;
     const overall = 0.5 * pitchAccuracy + 0.3 * rhythmAccuracy + 0.2 * continuity;
 
     return {
@@ -306,9 +337,14 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       meanSignedTiming: deltaCount ? signedDelta / deltaCount : null,
       skills: skillTally,
       pitches: pitchTally,
+      pitchLocations,
       played,
       timeline,
       recovery: analyseRecovery(expected),
+      valid,
+      inputCoverage,
+      minimumDetectedAttacks,
+      invalidReason: valid ? null : 'not-enough-input',
       // Scales the timing strip so takes are comparable to each other.
       window,
       goodTiming,

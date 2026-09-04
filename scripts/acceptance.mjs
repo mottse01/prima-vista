@@ -65,7 +65,7 @@ function barSignatures(score) {
 const diversityCount = Math.min(samples, 1000);
 const index = new Map();
 const diversityParams = {
-  ...paramsForLevel(5, profile, { seed: 4000001, targeting: false }),
+  ...paramsForLevel(6, profile, { seed: 4000001, targeting: false }),
   compositionStyle: 'classical_early',
   timeSignature: '4/4',
   keyMode: 'major',
