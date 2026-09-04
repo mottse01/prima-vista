@@ -4,6 +4,7 @@ import SetupPanel from './components/SetupPanel.jsx';
 import ProgressView from './components/ProgressView.jsx';
 import PathView from './components/PathView.jsx';
 import CompareView from './components/CompareView.jsx';
+import OnboardingModal from './components/OnboardingModal.jsx';
 import { generateExercise } from './core/generator.js';
 import { applyResult, markExerciseSeen, paramsForLevel } from './core/adaptive.js';
 import { levelById } from './core/levels.js';
@@ -56,6 +57,12 @@ export default function App() {
   const [tab, setTab] = useState('practice');
   const [showKeyboard, setShowKeyboard] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    const shared = exerciseFromUrl();
+    const existingProfile = loadProfile();
+    const isNewReader = existingProfile.totals.takes === 0 && existingProfile.history.length === 0;
+    return isNewReader && !loadSettings().onboardingComplete && !(shared.seed != null && shared.params);
+  });
   const nextPathLevelRef = useRef(null);
   const preparedExerciseRef = useRef(null);
   const [session, setSession] = useState(() => ({
@@ -81,14 +88,14 @@ export default function App() {
     if (!params.level) return 0;
     const eligible = profile.history
       .filter((take) => take.level === params.level && !take.repeat && !take.assisted && !take.curtain)
-      .slice(-2)
+      .slice(-3)
       .reverse();
     let count = 0;
     for (const take of eligible) {
       if (take.score < 88) break;
       count += 1;
     }
-    return Math.min(2, count);
+    return Math.min(3, count);
   }, [params.level, profile.history]);
 
   useEffect(() => { saveProfile(profile); }, [profile]);
@@ -243,6 +250,15 @@ export default function App() {
     setSettings((s) => ({ ...s, ...patch }));
   }, []);
 
+  const chooseStartingLevel = useCallback((levelId) => {
+    const nextProfile = { ...profile, level: levelId };
+    setProfile(nextProfile);
+    setParams(paramsForLevel(levelId, nextProfile, { seed: randomSeed(), targeting: false }));
+    setSettings((current) => ({ ...current, onboardingComplete: true }));
+    setShowOnboarding(false);
+    setTab('practice');
+  }, [profile]);
+
   // Compose and engrave the likely next adaptive study while the learner is
   // reading this one. The same score is then ready when “New study” is tapped.
   useEffect(() => {
@@ -367,6 +383,8 @@ export default function App() {
           the on-screen and computer keys. <button type="button" className="sr-footer-link" onClick={() => setTab('compare')}>Why Prima Vista?</button>
         </p>
       </footer>
+
+      {showOnboarding && <OnboardingModal onChoose={chooseStartingLevel} />}
     </div>
   );
 }

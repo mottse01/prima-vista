@@ -497,7 +497,7 @@ export default function PracticeView({
             </select>
           </label>
           <strong>{sessionLabel}</strong>
-          {level && <span className="sr-why">Path: {strongReads}/2 fresh reads at 88+</span>}
+          {level && <span className="sr-why">Path: {strongReads}/3 fresh reads at 88+</span>}
         </div>
       </section>
 

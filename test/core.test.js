@@ -8,7 +8,7 @@ import {
 import { generateExercise, planMusicalForm } from '../src/core/generator.js';
 import { analyseEvents, createGrader } from '../src/core/grader.js';
 import { COMMON_CADENCES } from '../src/core/harmony.js';
-import { levelById } from '../src/core/levels.js';
+import { LEVELS, levelById } from '../src/core/levels.js';
 import { reviewMusicality } from '../src/core/musicality.js';
 import { STYLE_OPTIONS, styleSetupPatch } from '../src/core/compositionStyles.js';
 import { STYLE_PACK_LIST, stylePack } from '../src/core/stylePacks.js';
@@ -60,6 +60,12 @@ test('all ten level envelopes pass hard validation across deterministic samples'
       assert.ok(review.metrics.coherence <= stylePack(score.style.id).validator.coherence_max);
     }
   }
+});
+
+test('guided studies begin at eight bars and never shorten as levels rise', () => {
+  const lengths = LEVELS.map((level) => level.params.measures);
+  assert.ok(lengths.every((bars) => bars >= 8));
+  assert.ok(lengths.every((bars, index) => index === 0 || bars >= lengths[index - 1]));
 });
 
 test('style-pack schemas are complete and inheritance has been resolved', () => {
@@ -607,7 +613,7 @@ test('audio is unlocked before notes are scheduled', async () => {
   }
 });
 
-test('assisted work cannot satisfy the two-first-read promotion rule', () => {
+test('assisted work cannot satisfy the three-first-read promotion rule', () => {
   let profile = emptyProfile();
   for (const id of ['notes.treble', 'intervals.step', 'rhythm.quarter']) {
     profile.skills[id] = { rating: 0.95, attempts: 100 };
@@ -631,6 +637,11 @@ test('assisted work cannot satisfy the two-first-read promotion rule', () => {
 
   profile = applyResult(profile, {
     level: 1, summary, seed: 3, exerciseId: 'c', elapsedSec: 20,
+  }).profile;
+  assert.equal(profile.level, 1);
+
+  profile = applyResult(profile, {
+    level: 1, summary, seed: 4, exerciseId: 'd', elapsedSec: 20,
   }).profile;
   assert.equal(profile.level, 2);
 });

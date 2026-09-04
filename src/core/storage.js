@@ -61,6 +61,7 @@ export const DEFAULT_SETTINGS = {
   coachDismissed: false,
   sessionMinutes: 0,
   inputLatencyMs: 0,
+  onboardingComplete: false,
 };
 
 export function loadSettings() {

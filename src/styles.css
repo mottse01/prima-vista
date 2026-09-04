@@ -109,6 +109,58 @@ body::before {
 }
 .sr-streak { font-size: 12.5px; color: var(--ink-faint); }
 
+/* ---------- first-visit level placement ---------- */
+
+.sr-onboarding-backdrop {
+  position: fixed; z-index: 200; inset: 0; display: grid; place-items: center;
+  padding: 24px; overflow-y: auto;
+  background: rgba(3, 5, 9, 0.82); backdrop-filter: blur(16px) saturate(0.8);
+}
+.sr-onboarding {
+  width: min(940px, 100%); padding: 28px;
+  border: 1px solid rgba(167, 180, 255, 0.26); border-radius: 22px;
+  background:
+    radial-gradient(620px 240px at 50% -100px, rgba(116, 139, 255, 0.22), transparent 72%),
+    linear-gradient(160deg, #161d29, #0d121b 78%);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.62), inset 0 1px rgba(255, 255, 255, 0.06);
+}
+.sr-onboarding h2 {
+  margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(27px, 4vw, 42px);
+  font-weight: 500; line-height: 1.08; letter-spacing: -0.035em;
+}
+.sr-onboarding > p { max-width: 67ch; margin: 10px 0 22px; color: var(--ink-soft); }
+.sr-onboarding-options {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px;
+}
+.sr-onboarding-option {
+  position: relative; display: flex; min-height: 178px; flex-direction: column; gap: 8px;
+  padding: 16px; cursor: pointer; border: 1px solid var(--line); border-radius: 14px;
+  background: rgba(255, 255, 255, 0.018); color: var(--ink-soft);
+  transition: border-color .16s, background .16s, transform .16s;
+}
+.sr-onboarding-option:hover { border-color: #59677e; transform: translateY(-2px); }
+.sr-onboarding-option.is-on {
+  border-color: var(--accent); background: linear-gradient(155deg, rgba(141, 158, 255, 0.16), rgba(112, 215, 236, 0.045));
+  box-shadow: inset 0 0 0 1px rgba(167, 180, 255, 0.12);
+}
+.sr-onboarding-option input { position: absolute; opacity: 0; pointer-events: none; }
+.sr-onboarding-option:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent); outline-offset: 2px; }
+.sr-onboarding-option strong { color: var(--ink); font-size: 15px; line-height: 1.25; }
+.sr-onboarding-option > span:last-child { font-size: 13px; line-height: 1.45; }
+.sr-onboarding-level {
+  width: max-content; padding: 3px 7px; border: 1px solid rgba(167, 180, 255, 0.25);
+  border-radius: 999px; color: #cbd3ff; font-size: 11px; font-weight: 700; letter-spacing: .035em;
+}
+.sr-onboarding-summary {
+  display: grid; grid-template-columns: auto minmax(160px, .7fr) minmax(260px, 1.4fr); align-items: center;
+  gap: 12px; margin-top: 12px; padding: 12px 14px; border: 1px solid rgba(112, 215, 236, 0.14);
+  border-radius: 12px; background: rgba(112, 215, 236, 0.035); color: var(--ink-soft); font-size: 13px;
+}
+.sr-onboarding-summary > span:first-child { color: var(--accent-cyan); font-size: 10.5px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.sr-onboarding-summary strong { color: var(--ink); }
+.sr-onboarding-actions { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-top: 20px; }
+.sr-onboarding-actions > span { color: var(--ink-faint); font-size: 13px; }
+
 /* ---------- buttons and fields ---------- */
 
 .sr-btn {
@@ -712,6 +764,10 @@ html.sr-stand-mode .sr-transport { position: sticky; z-index: 10; bottom: 12px; 
 }
 
 @media (max-width: 1000px) and (min-width: 721px) {
+  .sr-onboarding-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sr-onboarding-option { min-height: 150px; }
+  .sr-onboarding-summary { grid-template-columns: auto 1fr; }
+  .sr-onboarding-summary > span:last-child { grid-column: 1 / -1; }
   .sr-coach { grid-template-columns: 1fr auto; }
   .sr-coach p { grid-column: 1 / -1; grid-row: 2; }
   .sr-setup-grid--basic { grid-template-columns: 1fr; }
@@ -721,6 +777,14 @@ html.sr-stand-mode .sr-transport { position: sticky; z-index: 10; bottom: 12px; 
 
 @media (max-width: 720px) {
   body { font-size: 16px; }
+  .sr-onboarding-backdrop { align-items: start; padding: 10px; }
+  .sr-onboarding { padding: 20px 16px; border-radius: 17px; }
+  .sr-onboarding > p { margin-bottom: 16px; }
+  .sr-onboarding-options { grid-template-columns: 1fr; }
+  .sr-onboarding-option { min-height: 0; padding: 13px; }
+  .sr-onboarding-summary { grid-template-columns: 1fr; }
+  .sr-onboarding-summary > span:last-child { grid-column: auto; }
+  .sr-onboarding-actions { align-items: stretch; flex-direction: column; gap: 12px; }
   .sr-app { padding: 0 10px 92px; }
   .sr-stylegrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sr-stylechoice { min-height: 82px; }

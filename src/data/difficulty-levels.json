@@ -1,9 +1,9 @@
 [
   {
     "id": 1,
-    "name": "Five-finger melody",
+    "name": "One-hand reading foundations",
     "stage": "Foundations",
-    "blurb": "A four-bar melody in a fixed five-finger position, using quarters and halves.",
+    "blurb": "An eight-bar melody for either hand in a fixed five-finger position, using quarters and halves.",
     "exam_reference": {
       "abrsm": "Initial",
       "rcm": "Preparatory A–B"
@@ -31,7 +31,7 @@
       "hand_span": 6
     },
     "params": {
-      "measures": 4,
+      "measures": 8,
       "tempo": 68,
       "hands": "rh",
       "rhythmTags": [],
@@ -71,9 +71,9 @@
   },
   {
     "id": 2,
-    "name": "Two hands, steady pulse",
+    "name": "Grand-staff foundations",
     "stage": "Foundations",
-    "blurb": "Both hands read together with single bass notes and occasional paired eighths.",
+    "blurb": "Eight bars on the grand staff with simple bass support, familiar five-finger patterns, and paired eighths.",
     "exam_reference": {
       "abrsm": "Grade 1",
       "rcm": "Level 1"
@@ -102,7 +102,7 @@
       "hand_span": 6
     },
     "params": {
-      "measures": 4,
+      "measures": 8,
       "tempo": 72,
       "hands": "both",
       "rhythmTags": [
@@ -147,9 +147,9 @@
   },
   {
     "id": 3,
-    "name": "Phrases and position changes",
+    "name": "Eighth-note fluency and shifts",
     "stage": "Phrase reading",
-    "blurb": "Eight-bar periods introduce one hand-position change and simple accompaniment.",
+    "blurb": "Eight-bar periods develop eighth-note fluency before adding one hand-position change and minor keys.",
     "exam_reference": {
       "abrsm": "Grade 2",
       "rcm": "Levels 2–3"
@@ -228,9 +228,9 @@
   },
   {
     "id": 4,
-    "name": "Compound metre and chords",
+    "name": "Compound metre and dyads",
     "stage": "Phrase reading",
-    "blurb": "Six-eight, two-note harmonies, dotted figures, and simple sixteenth patterns.",
+    "blurb": "Twelve-bar studies introduce 6/8, dotted figures, and two-note harmonies without adding fast subdivisions yet.",
     "exam_reference": {
       "abrsm": "Grades 3–4",
       "rcm": "Level 4"
@@ -239,7 +239,7 @@
       "key_signature_accidentals": 2,
       "hand_shifts": 1,
       "max_melodic_interval": 5,
-      "smallest_ticks": 12,
+      "smallest_ticks": 24,
       "ledger_lines": 1,
       "lh_textures": [
         "root_fifth",
@@ -261,14 +261,13 @@
       "hand_span": 8
     },
     "params": {
-      "measures": 8,
+      "measures": 12,
       "tempo": 84,
       "hands": "both",
       "rhythmTags": [
         "eighth",
         "rest",
-        "dotted",
-        "sixteenth"
+        "dotted"
       ],
       "maxLeap": 4,
       "stepwiseBias": 0.8,
@@ -313,9 +312,9 @@
   },
   {
     "id": 5,
-    "name": "Independent musical textures",
+    "name": "Sixteenth-note patterns",
     "stage": "Intermediate",
-    "blurb": "Alberti and broken-chord textures with one or two shifts and broader melody.",
+    "blurb": "Simple sixteenth-note cells join Alberti and broken-chord textures in twelve-bar tonal studies.",
     "exam_reference": {
       "abrsm": "Grade 5",
       "rcm": "Levels 5–6"
@@ -324,7 +323,7 @@
       "key_signature_accidentals": 2,
       "hand_shifts": 2,
       "max_melodic_interval": 6,
-      "smallest_ticks": 24,
+      "smallest_ticks": 12,
       "ledger_lines": 2,
       "lh_textures": [
         "root_fifth",
@@ -354,7 +353,7 @@
         "eighth",
         "rest",
         "dotted",
-        "syncopation"
+        "sixteenth"
       ],
       "maxLeap": 5,
       "stepwiseBias": 0.76,
@@ -392,16 +391,16 @@
       "lhHigh": 27
     },
     "focus": [
-      "rhythm.syncopation",
+      "rhythm.sixteenth",
       "intervals.leap",
       "notes.ledger"
     ]
   },
   {
     "id": 6,
-    "name": "Triplets and harmonic motion",
+    "name": "Syncopation, triplets, and harmonic motion",
     "stage": "Intermediate",
-    "blurb": "Triplets, seventh chords, and two harmonies per bar appear in longer phrases.",
+    "blurb": "Sixteen-bar studies add simple syncopation and triplets, then increase harmonic motion.",
     "exam_reference": {
       "abrsm": "Grade 6",
       "rcm": "Level 7"
@@ -436,7 +435,7 @@
       "hand_span": 9
     },
     "params": {
-      "measures": 12,
+      "measures": 16,
       "tempo": 100,
       "hands": "both",
       "rhythmTags": [
@@ -493,9 +492,9 @@
   },
   {
     "id": 7,
-    "name": "Sixteenth-note fluency",
+    "name": "Broader keys and texture",
     "stage": "Advanced",
-    "blurb": "Sixteenths, compound metre, and contrapuntal options demand faster pattern recognition.",
+    "blurb": "Broader key areas, denser chords, and flowing accompaniment build vertical and harmonic reading fluency.",
     "exam_reference": {
       "abrsm": "Grade 6–7",
       "rcm": "Level 8"
@@ -584,16 +583,16 @@
       "lhHigh": 27
     },
     "focus": [
-      "rhythm.sixteenth",
-      "rhythm.triplet",
+      "notes.accidental",
+      "coordination.together",
       "notes.ledger"
     ]
   },
   {
     "id": 8,
-    "name": "Mixed metre and contrapuntal reading",
+    "name": "Mixed metre and independent lines",
     "stage": "Advanced",
-    "blurb": "Irregular metres and independent lines expand the reading field without abandoning form.",
+    "blurb": "Twenty-bar studies introduce irregular metres and independent lines while keeping tonal form recognizable.",
     "exam_reference": {
       "abrsm": "Grade 7",
       "rcm": "Level 9"
@@ -626,14 +625,12 @@
         "6/8",
         "9/8",
         "12/8",
-        "5/4",
-        "5/8",
-        "7/8"
+        "5/4"
       ],
       "hand_span": 10
     },
     "params": {
-      "measures": 16,
+      "measures": 20,
       "tempo": 108,
       "hands": "both",
       "rhythmTags": [
@@ -694,9 +691,9 @@
   },
   {
     "id": 9,
-    "name": "Extended style reading",
+    "name": "Extended forms and chromatic color",
     "stage": "Mastery",
-    "blurb": "Longer forms, richer chromaticism, wide textures, and style-specific articulation.",
+    "blurb": "Twenty-bar forms add richer chromatic color, wide textures, and style-specific articulation.",
     "exam_reference": {
       "abrsm": "Grade 8",
       "rcm": "Level 10"
@@ -734,7 +731,7 @@
       "hand_span": 11
     },
     "params": {
-      "measures": 16,
+      "measures": 20,
       "tempo": 112,
       "hands": "both",
       "rhythmTags": [
@@ -797,15 +794,15 @@
   },
   {
     "id": 10,
-    "name": "Unrestricted concert reading",
+    "name": "Concert-level reading",
     "stage": "Mastery",
-    "blurb": "The complete vocabulary: wide intervals, mixed subdivisions, advanced textures, and every common key.",
+    "blurb": "One-page studies integrate wide intervals, mixed subdivisions, advanced textures, and the full key-signature range.",
     "exam_reference": {
       "abrsm": "Post-Grade 8 extension",
       "rcm": "Post-Level 10 extension"
     },
     "constraints": {
-      "key_signature_accidentals": 5,
+      "key_signature_accidentals": 7,
       "hand_shifts": 99,
       "max_melodic_interval": 12,
       "smallest_ticks": 12,
@@ -871,6 +868,8 @@
         "5/4"
       ],
       "fifths": [
+        -7,
+        -6,
         -5,
         -4,
         -3,
@@ -881,7 +880,9 @@
         2,
         3,
         4,
-        5
+        5,
+        6,
+        7
       ],
       "modes": [
         "major",

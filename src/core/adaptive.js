@@ -146,7 +146,7 @@ export function applyResult(profile, {
 }
 
 /**
- * Promotion needs two strong first reads in a row *and* no weak focus skill.
+ * Promotion needs three strong first reads in a row *and* no weak focus skill.
  * Replays, assisted takes, and curtain takes are excluded: none is clean
  * evidence that you can read this level's material at sight.
  */
@@ -156,11 +156,11 @@ function evaluateLevel(profile, level) {
     .slice(-3);
   const def = levelById(level);
   const focusOk = def.focus.every((id) => (profile.skills[id]?.rating ?? 0.5) >= 0.72);
-  const lastTwo = recent.slice(-2);
+  const lastThree = recent.slice(-3);
   const promoted =
     level < LEVELS.length &&
-    lastTwo.length === 2 &&
-    lastTwo.every((h) => h.score >= 88) &&
+    lastThree.length === 3 &&
+    lastThree.every((h) => h.score >= 88) &&
     focusOk;
   const demoted =
     !promoted && level > 1 && recent.length === 3 && recent.every((h) => h.score < 55);
