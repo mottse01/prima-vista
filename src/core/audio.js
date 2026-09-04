@@ -395,9 +395,23 @@ export function startReferencePlayback({
     renderedReference = { score, renderKey, bytes };
   }
   const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
-  const element = new Audio(url);
+  // WebKit has historically been less reliable at inferring the format of a
+  // Blob URL passed straight to Audio(). A real, attached media element with
+  // an explicit source type gives its media pipeline the information it needs.
+  const canCreateElement = typeof document !== 'undefined' && document.createElement;
+  const element = canCreateElement ? document.createElement('audio') : new Audio(url);
+  if (canCreateElement) {
+    const source = document.createElement('source');
+    source.src = url;
+    source.type = 'audio/wav';
+    element.appendChild(source);
+    element.hidden = true;
+    element.setAttribute('aria-hidden', 'true');
+    document.body?.appendChild(element);
+  }
   element.preload = 'auto';
   element.volume = masterVolume;
+  element.muted = false;
   let active = false;
   let settled = false;
   let stopped = false;
@@ -411,6 +425,7 @@ export function startReferencePlayback({
     }
     element.onended = null;
     element.onerror = null;
+    element.remove?.();
     URL.revokeObjectURL(url);
     if (natural || (active && !stopped)) onEnd?.();
   };

@@ -481,21 +481,32 @@ test('reference playback renders a non-empty browser-safe WAV', () => {
 
 test('reference playback starts through an HTML media element', async () => {
   const originalAudio = globalThis.Audio;
+  const originalDocument = globalThis.document;
   const originalCreate = globalThis.URL.createObjectURL;
   const originalRevoke = globalThis.URL.revokeObjectURL;
   let plays = 0;
   let revoked = 0;
+  let appended = 0;
+  let removed = 0;
+  let sourceType = null;
 
   class FakeAudio {
     constructor() {
       this.currentTime = 0;
       this.volume = 1;
     }
+    appendChild(source) { sourceType = source.type; }
+    setAttribute() {}
     play() { plays += 1; return Promise.resolve(); }
     pause() {}
+    remove() { removed += 1; }
   }
 
   globalThis.Audio = FakeAudio;
+  globalThis.document = {
+    createElement: (tag) => tag === 'audio' ? new FakeAudio() : {},
+    body: { appendChild: () => { appended += 1; } },
+  };
   globalThis.URL.createObjectURL = () => 'blob:prima-vista-test';
   globalThis.URL.revokeObjectURL = () => { revoked += 1; };
   try {
@@ -504,8 +515,11 @@ test('reference playback starts through an HTML media element', async () => {
     assert.ok(playback);
     assert.equal(await playback.started, true);
     assert.equal(plays, 1);
+    assert.equal(appended, 1);
+    assert.equal(sourceType, 'audio/wav');
     playback.stop();
     assert.equal(revoked, 1);
+    assert.equal(removed, 1);
 
     const practice = startPracticePlayback({ score, metronome: true, countInBeats: 4 });
     assert.equal(await practice.started, true);
@@ -515,6 +529,8 @@ test('reference playback starts through an HTML media element', async () => {
     assert.equal(revoked, 2);
   } finally {
     globalThis.Audio = originalAudio;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
     globalThis.URL.createObjectURL = originalCreate;
     globalThis.URL.revokeObjectURL = originalRevoke;
   }

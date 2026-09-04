@@ -629,7 +629,7 @@ export default function PracticeView({
             title={freshRead && !previewed ? 'Hearing the exercise first makes the next take practice-only.' : undefined}
           >
             <span className="sr-btn-icon sr-btn-icon--sound" aria-hidden="true">♪</span>
-            {listening ? 'Stop playback' : 'Hear it'}
+            {listening ? 'Stop playback' : 'Hear score'}
           </button>
         </div>
 
