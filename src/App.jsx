@@ -259,6 +259,17 @@ export default function App() {
     setTab('practice');
   }, [profile]);
 
+  const changeDifficulty = useCallback((levelId) => {
+    const chosen = levelById(levelId);
+    const nextProfile = { ...profile, level: chosen.id };
+    nextPathLevelRef.current = null;
+    preparedExerciseRef.current = null;
+    setProfile(nextProfile);
+    setParams(paramsForLevel(chosen.id, nextProfile, { seed: randomSeed(), targeting: false }));
+    setToast({ kind: 'info', text: `Level ${chosen.id} · ${chosen.name}` });
+    setTab('practice');
+  }, [profile]);
+
   // Compose and engrave the likely next adaptive study while the learner is
   // reading this one. The same score is then ready when “New study” is tapped.
   useEffect(() => {
@@ -325,6 +336,7 @@ export default function App() {
             onSettings={practiceSettings}
             onResult={handleResult}
             onRegenerate={regenerate}
+            onDifficultyChange={changeDifficulty}
             level={level}
             midi={midi}
             onConnectMidi={handleConnectMidi}
@@ -332,8 +344,6 @@ export default function App() {
             onToggleKeyboard={() => setShowKeyboard((v) => !v)}
             freshRead={!seenBefore}
             strongReads={strongReads}
-            showCoach={profile.totals.takes === 0 && !settings.coachDismissed}
-            onDismissCoach={() => setSettings((s) => ({ ...s, coachDismissed: true }))}
             onPreview={handlePreview}
             onNotify={notify}
             session={sessionInfo}

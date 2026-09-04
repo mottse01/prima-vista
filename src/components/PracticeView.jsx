@@ -13,6 +13,9 @@ import { seedToCode } from '../core/rng.js';
 import { warmUp } from '../core/verovio.js';
 import { toMusicXml } from '../core/musicxml.js';
 import { CURTAIN_MODES, curtainMode, curtainOffsetTicks } from '../core/curtain.js';
+import { LEVELS } from '../core/levels.js';
+
+const LOOK_AHEAD_MODES = CURTAIN_MODES.filter((mode) => ['off', 'beat', 'twobeats', 'bar'].includes(mode.id));
 
 /**
  * One take of one exercise. App remounts this whenever the exercise changes,
@@ -20,8 +23,9 @@ import { CURTAIN_MODES, curtainMode, curtainOffsetTicks } from '../core/curtain.
  */
 export default function PracticeView({
   score, settings, onSettings, onResult, onRegenerate, level,
+  onDifficultyChange,
   midi, onConnectMidi, showKeyboard, onToggleKeyboard,
-  freshRead, strongReads = 0, showCoach, onDismissCoach, onPreview, onNotify,
+  freshRead, strongReads = 0, onPreview, onNotify,
   session, onSessionStart,
 }) {
   const [phase, setPhase] = useState('idle'); // idle | countin | playing | done
@@ -37,6 +41,7 @@ export default function PracticeView({
   const [audioBusy, setAudioBusy] = useState(false);
   const [calibration, setCalibration] = useState({ phase: 'idle', taps: 0, offset: settings.inputLatencyMs || 0 });
   const [standMode, setStandMode] = useState(false);
+  const [difficultyDraft, setDifficultyDraft] = useState(level?.id || 1);
 
   const graderRef = useRef(null);
   const startRef = useRef(0);
@@ -116,6 +121,9 @@ export default function PracticeView({
   useEffect(() => { guideRef.current = Boolean(settings.guideKeys); }, [settings.guideKeys]);
   useEffect(() => subscribeAudioState(setSoundState), []);
   useEffect(() => { setMasterVolume(settings.masterVolume ?? 0.82); }, [settings.masterVolume]);
+  useEffect(() => {
+    if (!LOOK_AHEAD_MODES.some((mode) => mode.id === settings.curtain)) onSettings({ curtain: 'off' });
+  }, [onSettings, settings.curtain]);
 
   useEffect(() => {
     frameRef.current = () => {
@@ -421,6 +429,11 @@ export default function PracticeView({
     : null;
 
   const busy = phase === 'playing' || phase === 'countin' || listening || audioBusy || calibration.phase === 'active';
+  const draftLevel = LEVELS[difficultyDraft - 1] || LEVELS[0];
+  const commitDifficulty = useCallback((value) => {
+    const next = Number(value);
+    if (!level || next !== level.id) onDifficultyChange?.(next);
+  }, [level, onDifficultyChange]);
   const qualifies = freshRead && !previewed && !settings.guideKeys && settings.curtain === 'off';
   const targetedIds = score.params.targeted || [];
   const focusIds = targetedIds.length ? targetedIds : (level?.focus || []);
@@ -428,11 +441,6 @@ export default function PracticeView({
     .map((id) => SKILLS.find((skill) => skill.id === id)?.label)
     .filter(Boolean)
     .slice(0, 3);
-  const focusReason = targetedIds.length
-    ? `Selected from your recent reads to strengthen ${focusLabels.join(' and ').toLowerCase()}.`
-    : level
-      ? 'A balanced check of this level before the path adapts again.'
-      : 'Built from the musical and technical limits you selected.';
   const sessionLabel = session?.remaining == null
     ? 'Open practice'
     : session.complete
@@ -452,40 +460,65 @@ export default function PracticeView({
 
   return (
     <div className="sr-practice">
-      {showCoach && (
-        <section className="sr-coach" aria-labelledby="first-read-title">
-          <div className="sr-coach-copy">
-            <span className="sr-eyebrow">First read</span>
-            <h2 id="first-read-title">Scan. Count in. Keep moving.</h2>
+      <section className={`sr-practice-dock${level ? '' : ' is-custom'}`} aria-label="Practice controls">
+        {level ? (
+          <div className="sr-difficulty-control">
+            <div className="sr-dock-heading">
+              <span>Difficulty</span>
+              <strong>Level {difficultyDraft} · {draftLevel.name}</strong>
+            </div>
+            <input
+              type="range" min="1" max={LEVELS.length} step="1" value={difficultyDraft}
+              aria-label="Difficulty level"
+              aria-valuetext={`Level ${difficultyDraft}, ${draftLevel.name}`}
+              disabled={busy}
+              onChange={(event) => setDifficultyDraft(Number(event.target.value))}
+              onPointerUp={(event) => commitDifficulty(event.currentTarget.value)}
+              onKeyUp={(event) => commitDifficulty(event.currentTarget.value)}
+              onBlur={(event) => commitDifficulty(event.currentTarget.value)}
+            />
+            <div className="sr-difficulty-scale" aria-hidden="true">
+              <span>Foundations</span><span>Fluency</span><span>Advanced</span>
+            </div>
           </div>
-          <p>Check the key and metre, choose a sustainable pulse, and recover forward after a slip.</p>
-          <div className="sr-coach-actions">
-            <button type="button" className="sr-coach-dismiss" onClick={onDismissCoach}>Dismiss tips</button>
+        ) : (
+          <div className="sr-custom-difficulty">
+            <span>Custom exercise</span>
+            <strong>Difficulty is set in Build</strong>
           </div>
-        </section>
-      )}
+        )}
 
-      <section className="sr-readbrief" aria-label="Practice plan">
-        <div className="sr-readbrief-item">
+        <fieldset className="sr-lookahead-control" disabled={busy}>
+          <legend>
+            <span>Look-ahead curtain</span>
+            <small>Hides music before you reach it to train forward scanning.</small>
+          </legend>
+          <div className="sr-lookahead-options">
+            {LOOK_AHEAD_MODES.map((mode) => (
+              <label key={mode.id} title={mode.blurb}>
+                <input
+                  type="radio" name="look-ahead" value={mode.id}
+                  checked={settings.curtain === mode.id}
+                  onChange={() => onSettings({ curtain: mode.id })}
+                />
+                <span>{mode.id === 'off' ? 'Off' : mode.id === 'bar' ? '1 bar' : mode.label.replace(' ahead', '')}</span>
+              </label>
+            ))}
+          </div>
+          <p>{settings.curtain === 'off' ? 'Optional focus drill' : `${curtainMode(settings.curtain).blurb} Results stay separate from level progress.`}</p>
+        </fieldset>
+      </section>
+
+      <section className="sr-practice-summary" aria-label="Practice plan">
+        <div className="sr-practice-summary-main">
           <span className={`sr-statuspill${qualifies ? ' is-fresh' : ' is-practice'}`}>
             {settings.curtain !== 'off' ? 'Look-ahead drill' : qualifies ? 'Fresh read' : 'Practice take'}
           </span>
-          <span>
-            {settings.curtain !== 'off'
-              ? 'Tracked separately'
-              : qualifies
-                ? 'Qualifies for your path'
-                : 'Practice only'}
-          </span>
+          <span>Focus: <strong>{focusLabels.length ? focusLabels.join(' · ') : 'clean baseline'}</strong></span>
+          {level && <span>{strongReads}/3 strong fresh reads</span>}
         </div>
-        <div className="sr-readbrief-item">
-          <span className="sr-readbrief-label">Focus</span>
-          <strong>{focusLabels.length ? focusLabels.join(' · ') : 'Build a clean baseline'}</strong>
-          <span className="sr-why">{focusReason}</span>
-        </div>
-        <div className="sr-readbrief-item sr-readbrief-session">
-          <label>
-            <span className="sr-readbrief-label">Session</span>
+        <div className="sr-practice-session">
+          <label aria-label="Practice session length">
             <select
               value={settings.sessionMinutes || 0}
               onChange={(event) => onSettings({ sessionMinutes: Number(event.target.value) })}
@@ -497,7 +530,6 @@ export default function PracticeView({
             </select>
           </label>
           <strong>{sessionLabel}</strong>
-          {level && <span className="sr-why">Path: {strongReads}/3 fresh reads at 88+</span>}
         </div>
       </section>
 
@@ -506,15 +538,6 @@ export default function PracticeView({
           <div className="sr-scoreidentity">
             <div className="sr-scorekicker">
               <span>{score.repertoire ? 'Public-domain repertoire' : score.fragment ? 'Recombined human motif' : 'Original study'}</span>
-              <span className="sr-structure-pill" title={score.style?.description}>
-                {score.style?.label} · {score.form?.name}
-              </span>
-              {score.compositionReview && (
-                <span
-                  className={`sr-reviewbadge${score.compositionReview.passed ? ' is-passed' : ''}`}
-                  title={`Composition review ${score.compositionReview.score}/100; best of ${score.compositionReview.candidates} candidates`}
-                >✓ reviewed {score.compositionReview.score}</span>
-              )}
             </div>
             <h2 className="sr-scoretitle">{score.title}</h2>
             <p className="sr-scoremeta">
@@ -524,12 +547,12 @@ export default function PracticeView({
             <details className="sr-structure">
               <summary>Structure</summary>
               <div className="sr-structure-grid">
-                <div><span>Form</span><strong>{score.form.name} · {score.form.label}</strong></div>
+                <div><span>Style & form</span><strong>{score.style?.label} · {score.form.name} · {score.form.label}</strong></div>
                 <div><span>Harmony model</span><strong>{score.harmony.sourceProgression || score.harmony.name}</strong></div>
                 <div><span>Chord path</span><strong>{score.harmony.roman}</strong></div>
                 <div><span>Cadences</span><strong>{score.harmony.cadencePlan}</strong></div>
                 <div><span>Phrase functions</span><strong>{score.form.phrases?.map((item) => item.function).join(' → ')}</strong></div>
-                <div><span>{score.repertoire ? 'Source status' : 'Quality gate'}</span><strong>{score.repertoire
+                <div><span>{score.repertoire ? 'Source status' : 'Quality review'}</span><strong>{score.repertoire
                   ? `${score.repertoire.license} · provenance recorded`
                   : score.fragment
                     ? `Transposed ${score.fragment.shift > 0 ? 'up' : 'down'} ${Math.abs(score.fragment.shift)} scale step${Math.abs(score.fragment.shift) === 1 ? '' : 's'} · provenance recorded`
@@ -537,14 +560,10 @@ export default function PracticeView({
               </div>
             </details>
           </div>
-          <div className="sr-seed" title="The short seed replays this variation with the same setup. The copied link includes the full setup.">
-            <span className="sr-seed-label">Exercise ID</span>
-            <div className="sr-seed-row">
-              <code>{seedToCode(score.seed)}</code>
-              <button type="button" className="sr-copybtn" onClick={copyLink} title="Copy an exact exercise link">
-                {copied ? 'Copied' : 'Share'}
-              </button>
-            </div>
+          <div className="sr-seed" title={`Exercise ${seedToCode(score.seed)}`}>
+            <button type="button" className="sr-copybtn" onClick={copyLink} title="Copy an exact exercise link">
+              {copied ? 'Copied' : 'Share'}
+            </button>
           </div>
         </div>
 
@@ -584,16 +603,17 @@ export default function PracticeView({
             </button>
           )}
           <button
-            type="button" className="sr-btn" onClick={listening ? stopReference : listen}
-            onPointerDown={primeAudioGesture}
-            disabled={busy && !listening}
+            type="button" className="sr-btn" onClick={onRegenerate} disabled={busy}
+          >
+            New study
+          </button>
+          <button
+            type="button" className="sr-btn sr-btn--ghost" onClick={listening ? stopReference : listen}
+            onPointerDown={primeAudioGesture} disabled={busy && !listening}
             title={freshRead && !previewed ? 'Hearing the exercise first makes the next take practice-only.' : undefined}
           >
             <span className="sr-btn-icon sr-btn-icon--sound" aria-hidden="true">♪</span>
-            {listening ? 'Stop playback' : freshRead && !previewed ? 'Hear the score' : 'Hear it'}
-          </button>
-          <button type="button" className="sr-btn" onClick={onRegenerate} disabled={busy}>
-            New study
+            {listening ? 'Stop playback' : 'Hear it'}
           </button>
         </div>
 
@@ -638,12 +658,6 @@ export default function PracticeView({
                   <option value={4}>4 beats</option>
                 </select>
               </label>
-              <label className="sr-field sr-field--select" title={curtainMode(settings.curtain).blurb}>
-                <span>Look-ahead curtain</span>
-                <select value={settings.curtain} onChange={(e) => onSettings({ curtain: e.target.value })} disabled={busy}>
-                  {CURTAIN_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
-              </label>
               <div className="sr-calibration">
                 <div>
                   <strong>Timing calibration</strong>
@@ -677,50 +691,56 @@ export default function PracticeView({
         </div>
       </div>
 
-      <div className="sr-devicebar">
-        <div className={`sr-sound sr-sound--${soundState}`} aria-live="polite">
-          <span className="sr-sound-icon" aria-hidden="true">♪</span>
-          <span className="sr-sound-status">{soundLabel(soundState)}</span>
-          <button
-            type="button" className="sr-btn sr-btn--small" onPointerDown={primeAudioGesture}
-            onClick={testSound} disabled={busy}
-          >Test sound</button>
-          <label className="sr-volume">
-            <span>Volume <b>{Math.round((settings.masterVolume ?? 0.82) * 100)}%</b></span>
-            <input
-              type="range" min="0" max="1" step="0.05" value={settings.masterVolume ?? 0.82}
-              onChange={(e) => onSettings({ masterVolume: Number(e.target.value) })}
-              aria-label="Playback volume"
-            />
-          </label>
-        </div>
-
-        <div className="sr-inputbar">
-          <div className={`sr-midi sr-midi--${midi.status}`}>
-            <span className="sr-dot" />
-            {midi.status === 'connected'
-              ? <span>MIDI: {midi.inputs.join(', ') || 'connected'}</span>
-              : midi.status === 'connecting'
-                ? <span>Requesting MIDI access…</span>
-                : midi.status === 'ready'
-                  ? <span>MIDI ready — plug in or switch on your keyboard</span>
-                  : midi.status === 'error'
-                    ? <span>{midi.error}</span>
-                    : <span>No MIDI keyboard connected</span>}
-            {!['connected', 'ready'].includes(midi.status) && (
-              <button
-                type="button" className="sr-btn sr-btn--small" onPointerDown={primeAudioGesture}
-                onClick={connectMidiWithSound} disabled={midi.status === 'connecting'}
-              >
-                {midi.status === 'connecting' ? 'Connecting…' : 'Connect MIDI'}
-              </button>
-            )}
+      <details className="sr-device-panel">
+        <summary>
+          <span>Sound & keyboard</span>
+          <small>{midi.status === 'connected' ? `MIDI: ${midi.inputs.join(', ') || 'connected'}` : soundLabel(soundState)}</small>
+        </summary>
+        <div className="sr-devicebar">
+          <div className={`sr-sound sr-sound--${soundState}`} aria-live="polite">
+            <span className="sr-sound-icon" aria-hidden="true">♪</span>
+            <span className="sr-sound-status">{soundLabel(soundState)}</span>
+            <button
+              type="button" className="sr-btn sr-btn--small" onPointerDown={primeAudioGesture}
+              onClick={testSound} disabled={busy}
+            >Test sound</button>
+            <label className="sr-volume">
+              <span>Volume <b>{Math.round((settings.masterVolume ?? 0.82) * 100)}%</b></span>
+              <input
+                type="range" min="0" max="1" step="0.05" value={settings.masterVolume ?? 0.82}
+                onChange={(e) => onSettings({ masterVolume: Number(e.target.value) })}
+                aria-label="Playback volume"
+              />
+            </label>
           </div>
-          <button type="button" className="sr-btn sr-btn--small sr-btn--ghost" onClick={onToggleKeyboard}>
-            {showKeyboard ? 'Hide keyboard' : 'Show keyboard'}
-          </button>
+
+          <div className="sr-inputbar">
+            <div className={`sr-midi sr-midi--${midi.status}`}>
+              <span className="sr-dot" />
+              {midi.status === 'connected'
+                ? <span>MIDI: {midi.inputs.join(', ') || 'connected'}</span>
+                : midi.status === 'connecting'
+                  ? <span>Requesting MIDI access…</span>
+                  : midi.status === 'ready'
+                    ? <span>MIDI ready — plug in or switch on your keyboard</span>
+                    : midi.status === 'error'
+                      ? <span>{midi.error}</span>
+                      : <span>No MIDI keyboard connected</span>}
+              {!['connected', 'ready'].includes(midi.status) && (
+                <button
+                  type="button" className="sr-btn sr-btn--small" onPointerDown={primeAudioGesture}
+                  onClick={connectMidiWithSound} disabled={midi.status === 'connecting'}
+                >
+                  {midi.status === 'connecting' ? 'Connecting…' : 'Connect MIDI'}
+                </button>
+              )}
+            </div>
+            <button type="button" className="sr-btn sr-btn--small sr-btn--ghost" onClick={onToggleKeyboard}>
+              {showKeyboard ? 'Hide keyboard' : 'Show keyboard'}
+            </button>
+          </div>
         </div>
-      </div>
+      </details>
 
       {showKeyboard && (
         <Keyboard
