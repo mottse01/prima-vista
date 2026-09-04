@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { pageWidthForViewport, renderScoreSvg } from '../core/verovio.js';
 import { xmlNoteId, xmlRestId } from '../core/musicxml.js';
 import { eventShouldVanish } from '../core/curtain.js';
+import { notationTickAtPlaybackTick } from '../core/playback.js';
 
 // Renders the engraved score and everything drawn on top of it: the playhead,
 // the playhead, vanishing-note drill, and per-note colouring.
@@ -110,6 +111,8 @@ export default function Score({
   const [result, setResult] = useState({ score: null, svg: null, error: null });
   const fresh = result.score === score ? result : { svg: null, error: null };
   const { svg, error } = fresh;
+  const writtenTick = notationTickAtPlaybackTick(score, tick);
+  const writtenVanishTick = notationTickAtPlaybackTick(score, vanishTick);
 
   // Engrave. Verovio is async and lazily loaded, so this settles a moment
   // after the exercise changes.
@@ -185,7 +188,7 @@ export default function Score({
     const next = new Set();
     for (const hand of ['rh', 'lh']) {
       for (const event of score.staves[hand] || []) {
-        if (!eventShouldVanish(event, vanishTick, vanishMode, score.ts)) continue;
+        if (!eventShouldVanish(event, writtenVanishTick, vanishMode, score.ts)) continue;
         const ids = event.rest
           ? [xmlRestId(hand, event.onset)]
           : event.pitches.map((pitch) => xmlNoteId(hand, event.onset, pitch.midi));
@@ -205,7 +208,7 @@ export default function Score({
       beam.classList.toggle('sr-beam-vanished', notes.length > 0 && notes.every((note) => note.classList.contains('sr-note-vanished')));
     }
     vanishedRef.current = next;
-  }, [score, svg, vanishMode, vanishTick]);
+  }, [score, svg, vanishMode, writtenVanishTick]);
 
   // Playhead, redrawn in place as the take runs.
   useEffect(() => {
@@ -215,8 +218,8 @@ export default function Score({
     if (!geom) { overlay.innerHTML = ''; return; }
 
     const parts = [];
-    if (tick != null) {
-      const head = positionAt(geom, tick);
+    if (writtenTick != null) {
+      const head = positionAt(geom, writtenTick);
       if (head) {
         const sys = geom.systems[head.system];
         if (sys) {
@@ -229,7 +232,7 @@ export default function Score({
       }
     }
     overlay.innerHTML = parts.join('');
-  }, [tick, layout, svg]);
+  }, [writtenTick, layout, svg]);
 
   return (
     <div
@@ -272,6 +275,9 @@ function scoreDescription(score) {
     `${score.key.mode} key with ${score.key.fifths} fifths`,
     score.ts.name,
     `${score.measures} bars`,
+    score.notationRepeat
+      ? `bars ${score.notationRepeat.startMeasure + 1} through ${score.notationRepeat.endMeasure + 1} repeat once`
+      : null,
     score.style?.label,
     score.form?.name,
     cadences ? `cadences ${cadences}` : null,

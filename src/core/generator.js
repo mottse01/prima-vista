@@ -16,6 +16,7 @@ import { formForStyle, resolveCompositionStyle } from './compositionStyles.js';
 import { levelById } from './levels.js';
 import { repertoireExercise } from './repertoire.js';
 import { chooseFragment } from './fragments.js';
+import { performanceTicks, playbackEvents } from './playback.js';
 
 // ---------------------------------------------------------------------------
 // Rhythm
@@ -1163,6 +1164,36 @@ export const DEFAULT_PARAMS = {
 
 const ORDINALS = ['No. 1', 'No. 2', 'No. 3', 'No. 4', 'No. 5', 'No. 6', 'No. 7', 'No. 8', 'No. 9', 'No. 10'];
 
+/**
+ * Introduce repeat literacy only after the reading foundations are stable.
+ * A repeat encloses one complete, non-final formal unit: the learner gets a
+ * clear musical idea to recognise, the final cadence keeps its closing force,
+ * and no first/second ending is needed to explain the route.
+ */
+function planNotationRepeat(rng, form, level, measures) {
+  if (level < 4) return null;
+  const chance = Math.min(0.5, 0.28 + (level - 4) * 0.04);
+  if (!rng.chance(chance)) return null;
+
+  const eligible = (form.units || []).filter((unit) => {
+    const length = unit.bars[1] - unit.bars[0] + 1;
+    return unit.bars[1] < measures - 1 && length >= 2 && length <= 4;
+  });
+  if (!eligible.length) return null;
+
+  // The opening phrase is the clearest first encounter with repeat barlines.
+  // At higher levels, a later complete phrase can occasionally be repeated.
+  const opening = eligible.find((unit) => unit.bars[0] === 0);
+  const unit = opening && (level < 7 || rng.chance(0.72)) ? opening : rng.pick(eligible);
+  return {
+    startMeasure: unit.bars[0],
+    endMeasure: unit.bars[1],
+    times: 2,
+    unit: unit.index,
+    phraseFunction: unit.function,
+  };
+}
+
 export function composeCandidate(userParams = {}, attempt = 0) {
   const params = { ...DEFAULT_PARAMS, ...userParams };
   const seed = params.seed >>> 0;
@@ -1336,8 +1367,9 @@ export function composeCandidate(userParams = {}, attempt = 0) {
 
   const keyName = KEY_NAMES[key.mode][String(key.fifths)];
   const title = `${style.title} in ${key.mode === 'minor' ? keyName.toUpperCase() : keyName} ${key.mode}, ${ORDINALS[seed % ORDINALS.length]}`;
+  const notationRepeat = planNotationRepeat(rng, form, level, measures);
 
-  return {
+  const score = {
     seed,
     key,
     ts,
@@ -1385,7 +1417,10 @@ export function composeCandidate(userParams = {}, attempt = 0) {
     constraints: params.level ? levelById(params.level).constraints : null,
     fragment: fragment ? { id: fragment.id, shift: fragmentShift, provenance: fragment.provenance } : null,
     totalTicks: measures * ts.ticks,
+    notationRepeat,
   };
+  score.performanceTicks = performanceTicks(score);
+  return score;
 }
 
 const COMPOSITION_CANDIDATES = 20;
@@ -1479,13 +1514,14 @@ export function generateExercise(userParams = {}) {
 export function expectedEvents(score) {
   const out = [];
   for (const hand of ['rh', 'lh']) {
-    for (const note of score.staves[hand] || []) {
+    for (const note of playbackEvents(score, hand)) {
       if (note.rest) continue;
       for (const p of note.pitches) {
         out.push({
           midi: p.midi,
           pitch: p,
           onset: note.onset,
+          notationOnset: note.notationOnset,
           duration: note.duration,
           hand,
           tags: note.tags,

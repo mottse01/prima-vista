@@ -5,6 +5,7 @@
 // reliable. Both paths are generated locally; there are no sample downloads.
 
 import { TPQ } from './theory.js';
+import { performanceTicks, playbackEvents } from './playback.js';
 
 let ctx = null;
 let bus = null;
@@ -211,7 +212,7 @@ export function startPlayback({ score, startTime, metronome, playScore, onEnd })
   const stops = [];
 
   if (metronome) {
-    for (let t = 0; t <= score.totalTicks; t += score.ts.beat) {
+    for (let t = 0; t <= performanceTicks(score); t += score.ts.beat) {
       const g = playClick(startTime + t * secPerTick, t % score.ts.ticks === 0);
       if (g) stops.push(g);
     }
@@ -219,7 +220,7 @@ export function startPlayback({ score, startTime, metronome, playScore, onEnd })
 
   if (playScore) {
     for (const hand of ['rh', 'lh']) {
-      for (const note of score.staves[hand] || []) {
+      for (const note of playbackEvents(score, hand)) {
         if (note.rest) continue;
         for (const p of note.pitches) {
           const g = playPianoNote(
@@ -234,7 +235,7 @@ export function startPlayback({ score, startTime, metronome, playScore, onEnd })
     }
   }
 
-  const endsAt = startTime + score.totalTicks * secPerTick;
+  const endsAt = startTime + performanceTicks(score) * secPerTick;
   const timer = setTimeout(() => onEnd?.(), Math.max(0, (endsAt - ac.currentTime) * 1000) + 120);
 
   return {
@@ -273,7 +274,7 @@ export function renderReferenceWav(score, {
   const secPerBeat = score.ts.beat * secPerTick;
   const exerciseStart = leadIn + countInBeats * secPerBeat;
   const tail = Math.max(0.48, TPQ * secPerTick + 0.14);
-  const totalSeconds = exerciseStart + score.totalTicks * secPerTick + tail;
+  const totalSeconds = exerciseStart + performanceTicks(score) * secPerTick + tail;
   const mix = new Float32Array(Math.max(1, Math.ceil(totalSeconds * sampleRate)));
 
   const addPiano = (start, midi, duration, gain) => {
@@ -309,7 +310,7 @@ export function renderReferenceWav(score, {
 
   if (playScore) {
     for (const hand of ['rh', 'lh']) {
-      for (const note of score.staves[hand] || []) {
+      for (const note of playbackEvents(score, hand)) {
         if (note.rest) continue;
         for (const pitch of note.pitches) {
           addPiano(
@@ -327,7 +328,7 @@ export function renderReferenceWav(score, {
     addClick(leadIn + beat * secPerBeat, beat === 0);
   }
   if (metronome) {
-    for (let tick = 0; tick <= score.totalTicks; tick += score.ts.beat) {
+    for (let tick = 0; tick <= performanceTicks(score); tick += score.ts.beat) {
       addClick(exerciseStart + tick * secPerTick, tick % score.ts.ticks === 0);
     }
   }

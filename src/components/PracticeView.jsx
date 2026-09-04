@@ -111,12 +111,12 @@ export default function PracticeView({
     setTick(t);
     if (guideRef.current && modeRef.current === 'take') refreshGuide(t);
     // Give a beat of grace at the end so a late final note still counts.
-    const over = t > score.totalTicks + TPQ;
+    const over = t > (score.performanceTicks || score.totalTicks) + TPQ;
     if (modeRef.current === 'listen') return !over;
     if (phaseRef.current === 'countin' && t >= 0) setPhaseBoth('playing');
     if (over) { finish(); return false; }
     return true;
-  }, [finish, refreshGuide, score.totalTicks, secPerTick]);
+  }, [finish, refreshGuide, score.performanceTicks, score.totalTicks, secPerTick]);
 
   useEffect(() => { guideRef.current = Boolean(settings.guideKeys); }, [settings.guideKeys]);
   useEffect(() => subscribeAudioState(setSoundState), []);
@@ -399,7 +399,8 @@ export default function PracticeView({
     });
   }, [midi, handleNoteOn, handleNoteOff]);
 
-  const running = (phase === 'playing' || listening) && tick >= 0 && tick <= score.totalTicks;
+  const running = (phase === 'playing' || listening)
+    && tick >= 0 && tick <= (score.performanceTicks || score.totalTicks);
   const playheadTick = running ? tick : null;
 
   // Notes vanish only during a take. Count-in and review keep the full score
@@ -538,6 +539,7 @@ export default function PracticeView({
             <h2 className="sr-scoretitle">{score.title}</h2>
             <p className="sr-scoremeta">
               {keyLabel(score.key)} · {score.ts.name} · ♩= {score.tempo} · {score.measures} bars
+              {score.notationRepeat ? <> · one phrase repeats</> : null}
               {level ? <> · Level {level.id} <span className="sr-dim">{level.name}</span></> : null}
             </p>
             <details className="sr-structure">
@@ -548,6 +550,9 @@ export default function PracticeView({
                 <div><span>Chord path</span><strong>{score.harmony.roman}</strong></div>
                 <div><span>Cadences</span><strong>{score.harmony.cadencePlan}</strong></div>
                 <div><span>Phrase functions</span><strong>{score.form.phrases?.map((item) => item.function).join(' → ')}</strong></div>
+                {score.notationRepeat && (
+                  <div><span>Repeat</span><strong>Bars {score.notationRepeat.startMeasure + 1}–{score.notationRepeat.endMeasure + 1} play twice</strong></div>
+                )}
                 <div><span>{score.repertoire ? 'Source status' : 'Quality review'}</span><strong>{score.repertoire
                   ? `${score.repertoire.license} · provenance recorded`
                   : score.fragment

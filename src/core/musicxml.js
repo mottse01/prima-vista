@@ -279,6 +279,10 @@ export function toMusicXml(score, opts = {}) {
       );
     }
 
+    if (score.notationRepeat?.startMeasure === m) {
+      parts.push('<barline location="left"><bar-style>heavy-light</bar-style><repeat direction="forward"/></barline>');
+    }
+
     hands.forEach((h, hi) => {
       if (hi > 0) parts.push(`<backup><duration>${ts.ticks}</duration></backup>`);
       for (const w of byHand[h.hand][m]) {
@@ -305,10 +309,13 @@ export function toMusicXml(score, opts = {}) {
       }
     });
 
+    const repeatBar = score.notationRepeat?.endMeasure === m
+      ? '<barline location="right"><bar-style>light-heavy</bar-style><repeat direction="backward"/></barline>'
+      : '';
     const finalBar = m === score.measures - 1
       ? '<barline location="right"><bar-style>light-heavy</bar-style></barline>'
       : '';
-    measures.push(`<measure number="${m + 1}">${parts.join('')}${finalBar}</measure>`);
+    measures.push(`<measure number="${m + 1}">${parts.join('')}${repeatBar}${finalBar}</measure>`);
   }
 
   return `<?xml version="1.0" encoding="UTF-8"?>

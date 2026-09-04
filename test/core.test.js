@@ -5,7 +5,7 @@ import { applyResult, emptyProfile, paramsForLevel } from '../src/core/adaptive.
 import {
   renderReferenceWav, startPracticePlayback, startReferencePlayback,
 } from '../src/core/audio.js';
-import { generateExercise, planMusicalForm } from '../src/core/generator.js';
+import { expectedEvents, generateExercise, planMusicalForm } from '../src/core/generator.js';
 import { analyseEvents, createGrader } from '../src/core/grader.js';
 import { COMMON_CADENCES } from '../src/core/harmony.js';
 import { LEVELS, levelById } from '../src/core/levels.js';
@@ -168,6 +168,49 @@ test('rests occur sometimes, support phrasing, and never interrupt a cadence', (
   assert.ok(scoresWithoutRests >= 8, `only ${scoresWithoutRests} of 48 scores omitted rests`);
   assert.ok(phraseBreaths > 0);
   assert.ok(motivicRests > 0);
+});
+
+test('repeat barlines occasionally repeat one complete phrase and playback follows them', () => {
+  let withRepeat = 0;
+  let withoutRepeat = 0;
+  for (let seed = 1; seed <= 24; seed++) {
+    const score = generateExercise(paramsForLevel(6, emptyProfile(), { seed: 610600 + seed }));
+    const repeat = score.notationRepeat;
+    if (!repeat) {
+      withoutRepeat += 1;
+      assert.equal(score.performanceTicks, score.totalTicks);
+      continue;
+    }
+
+    withRepeat += 1;
+    const unit = score.form.units[repeat.unit];
+    assert.deepEqual([repeat.startMeasure, repeat.endMeasure], unit.bars);
+    assert.ok(repeat.endMeasure < score.measures - 1);
+    assert.equal(repeat.times, 2);
+
+    const repeatedBars = repeat.endMeasure - repeat.startMeasure + 1;
+    assert.equal(score.performanceTicks, score.totalTicks + repeatedBars * score.ts.ticks);
+    const writtenEvents = Object.values(score.staves).flat()
+      .filter((event) => !event.rest)
+      .reduce((count, event) => count + event.pitches.length, 0);
+    const repeatedEvents = Object.values(score.staves).flat()
+      .filter((event) => !event.rest
+        && Math.floor(event.onset / score.ts.ticks) >= repeat.startMeasure
+        && Math.floor(event.onset / score.ts.ticks) <= repeat.endMeasure)
+      .reduce((count, event) => count + event.pitches.length, 0);
+    assert.equal(expectedEvents(score).length, writtenEvents + repeatedEvents);
+
+    const xml = toMusicXml(score);
+    assert.ok(xml.includes('<repeat direction="forward"/>'));
+    assert.ok(xml.includes('<repeat direction="backward"/>'));
+  }
+  assert.ok(withRepeat >= 4, `only ${withRepeat} of 24 scores contained repeats`);
+  assert.ok(withoutRepeat >= 4, `only ${withoutRepeat} of 24 scores omitted repeats`);
+
+  for (let seed = 1; seed <= 8; seed++) {
+    const foundation = generateExercise(paramsForLevel(3, emptyProfile(), { seed: 610300 + seed }));
+    assert.equal(foundation.notationRepeat, null);
+  }
 });
 
 test('a targeted rest drill always contains a musically placed rest', () => {

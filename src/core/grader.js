@@ -103,7 +103,7 @@ export function analyseEvents(score) {
       ...e,
       index: i,
       // Same id the MusicXML carries, so the renderer can colour this note.
-      key: xmlNoteId(e.hand, e.onset, e.midi),
+      key: xmlNoteId(e.hand, e.notationOnset ?? e.onset, e.midi),
       skills: [...skills],
       pitchClass: pitchClassName(e.pitch),
     };
@@ -312,7 +312,7 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       // Scales the timing strip so takes are comparable to each other.
       window,
       goodTiming,
-      totalTicks: score.totalTicks,
+      totalTicks: score.performanceTicks || score.totalTicks,
       barTicks: score.ts.ticks,
       score: Math.round(overall * 100),
     };
