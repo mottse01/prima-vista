@@ -432,8 +432,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   position: absolute; inset: 0; width: 100%; height: 100%;
   pointer-events: none;
 }
-.sr-curtain-rect { fill: #e8e9ec; }
-.sr-curtain-line { stroke: var(--accent); stroke-width: 0.14; opacity: 0.75; }
+.sr-score-host .sr-note-vanished,
+.sr-score-host .sr-beam-vanished { opacity: 0; transition: opacity 180ms ease-out; }
 .sr-playhead-rect { fill: var(--accent); opacity: 0.28; }
 
 .sr-score-loading, .sr-score-error {

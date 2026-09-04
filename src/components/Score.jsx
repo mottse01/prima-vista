@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { pageWidthForViewport, renderScoreSvg } from '../core/verovio.js';
 import { xmlNoteId, xmlRestId } from '../core/musicxml.js';
+import { eventShouldVanish } from '../core/curtain.js';
 
 // Renders the engraved score and everything drawn on top of it: the playhead,
-// the look-ahead curtain, and per-note colouring.
+// the playhead, vanishing-note drill, and per-note colouring.
 //
 // The overlay is driven imperatively rather than through React state. It moves
 // every animation frame, and reconciling a component tree sixty times a second
@@ -95,13 +96,14 @@ function positionAt(geom, tick) {
 }
 
 export default function Score({
-  score, showFingerings, noteStates, tick, curtainTick, layout = 'page', className,
+  score, showFingerings, noteStates, tick, vanishMode = 'off', vanishTick, layout = 'page', className,
 }) {
   const viewportRef = useRef(null);
   const hostRef = useRef(null);
   const overlayRef = useRef(null);
   const geomRef = useRef(null);
   const paintedRef = useRef(new Set());
+  const vanishedRef = useRef(new Set());
   const [pageWidth, setPageWidth] = useState(pageWidthForViewport);
   // The engraved result is tagged with the score it came from, so a stale
   // render is simply ignored rather than having to be cleared synchronously.
@@ -144,6 +146,7 @@ export default function Score({
     if (!host) return undefined;
     host.innerHTML = svg || '';
     paintedRef.current = new Set();
+    vanishedRef.current = new Set();
     if (!svg) { geomRef.current = null; return undefined; }
     remeasure();
     const ro = new ResizeObserver(remeasure);
@@ -174,7 +177,37 @@ export default function Score({
     paintedRef.current = painted;
   }, [noteStates, svg]);
 
-  // Playhead and curtain, redrawn in place as the take runs.
+  // Fade complete notation events rather than laying an opaque card over the
+  // staff. During review `vanishTick` becomes null, restoring the full score.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !svg) return;
+    const next = new Set();
+    for (const hand of ['rh', 'lh']) {
+      for (const event of score.staves[hand] || []) {
+        if (!eventShouldVanish(event, vanishTick, vanishMode, score.ts)) continue;
+        const ids = event.rest
+          ? [xmlRestId(hand, event.onset)]
+          : event.pitches.map((pitch) => xmlNoteId(hand, event.onset, pitch.midi));
+        for (const id of ids) {
+          host.querySelector(`[id="${id}"]`)?.classList.add('sr-note-vanished');
+          next.add(id);
+        }
+      }
+    }
+    for (const id of vanishedRef.current) {
+      if (!next.has(id)) host.querySelector(`[id="${id}"]`)?.classList.remove('sr-note-vanished');
+    }
+    // A beam belongs to the whole rhythmic group; let it fade once every note
+    // it joins has vanished so no disconnected strokes linger behind.
+    for (const beam of host.querySelectorAll('g.beam')) {
+      const notes = [...beam.querySelectorAll('g.note')];
+      beam.classList.toggle('sr-beam-vanished', notes.length > 0 && notes.every((note) => note.classList.contains('sr-note-vanished')));
+    }
+    vanishedRef.current = next;
+  }, [score, svg, vanishMode, vanishTick]);
+
+  // Playhead, redrawn in place as the take runs.
   useEffect(() => {
     const overlay = overlayRef.current;
     const geom = geomRef.current;
@@ -182,23 +215,6 @@ export default function Score({
     if (!geom) { overlay.innerHTML = ''; return; }
 
     const parts = [];
-    if (curtainTick != null) {
-      const edge = positionAt(geom, curtainTick);
-      if (edge) {
-        geom.systems.forEach((sys, i) => {
-          const height = sys.bottom - sys.top;
-          if (i < edge.system) {
-            parts.push(`<rect class="sr-curtain-rect" x="${sys.musicLeft * 100}" y="${sys.top * 100}" width="${(sys.right - sys.musicLeft) * 100}" height="${height * 100}"/>`);
-          } else if (i === edge.system) {
-            const to = Math.max(sys.musicLeft, edge.x);
-            if (to > sys.musicLeft) {
-              parts.push(`<rect class="sr-curtain-rect" x="${sys.musicLeft * 100}" y="${sys.top * 100}" width="${(to - sys.musicLeft) * 100}" height="${height * 100}"/>`);
-            }
-            parts.push(`<line class="sr-curtain-line" x1="${to * 100}" y1="${sys.top * 100}" x2="${to * 100}" y2="${sys.bottom * 100}"/>`);
-          }
-        });
-      }
-    }
     if (tick != null) {
       const head = positionAt(geom, tick);
       if (head) {
@@ -213,7 +229,7 @@ export default function Score({
       }
     }
     overlay.innerHTML = parts.join('');
-  }, [tick, curtainTick, layout, svg]);
+  }, [tick, layout, svg]);
 
   return (
     <div

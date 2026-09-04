@@ -12,10 +12,10 @@ import {
 import { seedToCode } from '../core/rng.js';
 import { warmUp } from '../core/verovio.js';
 import { toMusicXml } from '../core/musicxml.js';
-import { CURTAIN_MODES, curtainMode, curtainOffsetTicks } from '../core/curtain.js';
+import { CURTAIN_MODES, curtainMode } from '../core/curtain.js';
 import { LEVELS } from '../core/levels.js';
 
-const LOOK_AHEAD_MODES = CURTAIN_MODES.filter((mode) => ['off', 'beat', 'twobeats', 'bar'].includes(mode.id));
+const LOOK_AHEAD_MODES = CURTAIN_MODES;
 
 /**
  * One take of one exercise. App remounts this whenever the exercise changes,
@@ -402,13 +402,9 @@ export default function PracticeView({
   const running = (phase === 'playing' || listening) && tick >= 0 && tick <= score.totalTicks;
   const playheadTick = running ? tick : null;
 
-  // Not during the count-in (you are meant to read the opening bar then), not
-  // during reference playback, and never once the take is over — the review is
-  // the point.
-  const curtainOffset = curtainOffsetTicks(settings.curtain, score.ts);
-  const curtainTick = phase === 'playing' && tick >= 0 && curtainOffset !== null
-    ? tick + curtainOffset
-    : null;
+  // Notes vanish only during a take. Count-in and review keep the full score
+  // visible, and reference playback never turns on the drill.
+  const vanishTick = phase === 'playing' && tick >= 0 && settings.curtain !== 'off' ? tick : null;
 
   const range = useMemo(() => {
     let lo = 127;
@@ -490,8 +486,8 @@ export default function PracticeView({
 
         <fieldset className="sr-lookahead-control" disabled={busy}>
           <legend>
-            <span>Look-ahead curtain</span>
-            <small>Hides music before you reach it to train forward scanning.</small>
+            <span>Vanishing notes</span>
+            <small>Played notes fade away; harder modes fade them sooner.</small>
           </legend>
           <div className="sr-lookahead-options">
             {LOOK_AHEAD_MODES.map((mode) => (
@@ -501,7 +497,7 @@ export default function PracticeView({
                   checked={settings.curtain === mode.id}
                   onChange={() => onSettings({ curtain: mode.id })}
                 />
-                <span>{mode.id === 'off' ? 'Off' : mode.id === 'bar' ? '1 bar' : mode.label.replace(' ahead', '')}</span>
+                <span>{mode.id === 'off' ? 'Off' : mode.id === 'played' ? 'Played' : mode.id === 'bar' ? '1 bar' : mode.label.replace(' ahead', '')}</span>
               </label>
             ))}
           </div>
@@ -512,7 +508,7 @@ export default function PracticeView({
       <section className="sr-practice-summary" aria-label="Practice plan">
         <div className="sr-practice-summary-main">
           <span className={`sr-statuspill${qualifies ? ' is-fresh' : ' is-practice'}`}>
-            {settings.curtain !== 'off' ? 'Look-ahead drill' : qualifies ? 'Fresh read' : 'Practice take'}
+            {settings.curtain !== 'off' ? 'Reading-ahead drill' : qualifies ? 'Fresh read' : 'Practice take'}
           </span>
           <span>Focus: <strong>{focusLabels.length ? focusLabels.join(' · ') : 'clean baseline'}</strong></span>
           {level && <span>{strongReads}/3 strong fresh reads</span>}
@@ -591,7 +587,8 @@ export default function PracticeView({
             showFingerings={settings.showFingerings}
             noteStates={settings.colourNotes ? noteStates : null}
             tick={playheadTick}
-            curtainTick={curtainTick}
+            vanishMode={settings.curtain}
+            vanishTick={vanishTick}
             layout={settings.scoreLayout || 'page'}
           />
           {countdown != null && (
@@ -844,7 +841,7 @@ function ResultPanel({ result, onAgain, onNext, onRepair, tempo, repeat, assiste
       {(repeat || assisted || curtain.beats !== null) && (
         <p className="sr-result-note">
           {curtain.beats !== null
-            ? `Curtain take (${curtain.label}) — tracked under look-ahead, and it does not move your skill map or level.`
+            ? `Vanishing-notes take (${curtain.label}) — tracked under reading ahead, and it does not move your skill map or level.`
             : assisted
               ? 'Assisted practice — hearing the exercise first or using guide keys counts at half weight and cannot advance your level.'
               : 'Replay of music you have already seen, so it counts at half weight and cannot advance your level.'}

@@ -55,7 +55,7 @@ export const DEFAULT_SETTINGS = {
   scale: 9,
   // Page shows a conventional multi-system score; scroll keeps one continuous system.
   scoreLayout: 'page',
-  // Look-ahead curtain: see CURTAIN_MODES in PracticeView.
+  // Vanishing-note drill (historical setting name retained for compatibility).
   curtain: 'off',
   guideKeys: false,
   keySound: true,

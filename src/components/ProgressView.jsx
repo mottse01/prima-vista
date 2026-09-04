@@ -113,11 +113,11 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
       </section>
 
       <section className="sr-panel">
-        <h3>Look-ahead</h3>
+        <h3>Reading ahead</h3>
         <p className="sr-hint">
-          How far ahead of your hands you can read. The curtain hides the music as you reach it,
-          so the only way through is to have read it already. These takes are kept separate from
-          your skill map — the curtain measures reading fluency, not whether you know the notes.
+          How far ahead of your hands you can read. Notes fade as you move through the score,
+          gently preventing backward glances. Harder modes make upcoming notes vanish sooner.
+          These takes stay separate from your skill map because they measure reading fluency.
         </p>
         <div className="sr-lookahead">
           {CURTAIN_MODES.filter((m) => m.beats !== null).map((m) => {

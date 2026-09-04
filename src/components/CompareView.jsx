@@ -24,7 +24,7 @@ const ROWS = [
     feature: 'Read-ahead training',
     srf: 'Optional disappearing measures',
     tree: 'Read-ahead mode hides the current bar',
-    us: 'Adjustable curtain from one beat to one full bar ahead',
+    us: 'Adjustable vanishing notes from just played to a full bar ahead',
   },
   {
     feature: 'What changes after a weak read?',

@@ -17,6 +17,7 @@ import { toMusicXml } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
 import { timeSig } from '../src/core/rhythm.js';
 import { scoreLayoutOptions } from '../src/core/verovio.js';
+import { eventShouldVanish } from '../src/core/curtain.js';
 import { fromDia, keyAlterations, tonicLetter } from '../src/core/theory.js';
 import {
   decodeExerciseParams, encodeExerciseParams, exerciseFingerprint, exactExerciseUrl,
@@ -67,6 +68,16 @@ test('guided studies begin at eight bars and never shorten as levels rise', () =
   const lengths = LEVELS.map((level) => level.params.measures);
   assert.ok(lengths.every((bars) => bars >= 8));
   assert.ok(lengths.every((bars, index) => index === 0 || bars >= lengths[index - 1]));
+});
+
+test('vanishing notes wait until played or disappear at the chosen look-ahead distance', () => {
+  const ts = timeSig('4/4');
+  const event = { onset: ts.beat * 2, duration: ts.beat };
+  assert.equal(eventShouldVanish(event, ts.beat * 2.5, 'played', ts), false);
+  assert.equal(eventShouldVanish(event, ts.beat * 3, 'played', ts), true);
+  assert.equal(eventShouldVanish(event, ts.beat, 'beat', ts), true);
+  assert.equal(eventShouldVanish(event, 0, 'bar', ts), true);
+  assert.equal(eventShouldVanish(event, ts.beat * 20, 'off', ts), false);
 });
 
 test('style-pack schemas are complete and inheritance has been resolved', () => {
