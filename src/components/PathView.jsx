@@ -1,5 +1,6 @@
 import { LEVELS, STAGES, levelById } from '../core/levels.js';
 import { comparableReads } from '../core/adaptive.js';
+import { waypointFor } from '../core/constellation.js';
 
 // The graded path. Levels are parameter envelopes, so each one is an endless
 // supply of new material rather than a finite set of pieces to memorise.
@@ -14,14 +15,15 @@ export default function PathView({ profile, onPick }) {
       <p className="sr-setup-lead">Choose a level that feels comfortable. You can try any level, any time.</p>
       <div className="sr-path-spotlight">
         <section className="sr-path-current">
-          <span className="sr-eyebrow">Where you are · Level {current.id}</span>
+          <span className="sr-eyebrow">Where you are · Level {current.id} · {waypointFor(current.id).name}</span>
           <h3>{current.name}</h3>
           <p>{current.blurb}</p>
+          <p className="sr-waypoint-note">{waypointFor(current.id).note}</p>
           {demonstrated && <span className="sr-milestone">✓ Shown in your first reads</span>}
           <button type="button" className="sr-btn sr-btn--primary" onClick={() => onPick(current.id)}>Practice at this level</button>
         </section>
         <section className="sr-path-next">
-          <span className="sr-eyebrow">{next ? `Explore next · Level ${next.id}` : 'Keep exploring'}</span>
+          <span className="sr-eyebrow">{next ? `Explore next · Level ${next.id} · ${waypointFor(next.id).name}` : 'Keep exploring'}</span>
           <h3>{next ? next.name : 'Fresh music, familiar skills'}</h3>
           <p>{next ? next.blurb : 'There is always more music to read. Keep exploring new pieces, or revisit a level for a relaxed practice.'}</p>
           <button type="button" className="sr-btn" onClick={() => onPick(next?.id || current.id)}>{next ? 'Try this when you’re ready' : 'Find another piece'}</button>
@@ -52,6 +54,7 @@ export default function PathView({ profile, onPick }) {
                   <span className="sr-level-num">{l.id}</span>
                   <span className="sr-level-body">
                     <b>{l.name}</b>
+                    <span className="sr-waypoint">{waypointFor(l.id).name}</span>
                     <span className="sr-dim">{l.blurb}</span>
                   </span>
                   <span className="sr-level-score">

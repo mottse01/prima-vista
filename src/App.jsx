@@ -4,10 +4,13 @@ import SetupPanel from './components/SetupPanel.jsx';
 import ProgressView from './components/ProgressView.jsx';
 import PathView from './components/PathView.jsx';
 import CompareView from './components/CompareView.jsx';
+import TransitCard from './components/TransitCard.jsx';
 import OnboardingModal from './components/OnboardingModal.jsx';
 import { generateExercise } from './core/generator.js';
 import { applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
 import { levelById } from './core/levels.js';
+import { waypointFor } from './core/constellation.js';
+import { recordTransit, transitParams, transitStreak } from './core/transit.js';
 import { connectMidi } from './core/midi.js';
 import { connectMicrophone } from './core/microphone.js';
 import { codeToSeed, randomSeed } from './core/rng.js';
@@ -58,6 +61,7 @@ export default function App() {
   const [tab, setTab] = useState('practice');
   const [showKeyboard, setShowKeyboard] = useState(false);
   const [repairHand, setRepairHand] = useState(null);
+  const [transitActive, setTransitActive] = useState(false);
   const [placement, setPlacement] = useState(null);
   const [toast, setToast] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(() => {
@@ -222,6 +226,7 @@ export default function App() {
       ? placementRecommendation(placement.startLevel, placementScores)
       : null;
     setSession((current) => current.startedAt ? { ...current, takes: current.takes + 1 } : current);
+    const readingTransit = transitActive && eligible;
     setProfile((prev) => {
       const { profile: next, promoted, demoted } = applyResult(prev, {
         level: params.level || null,
@@ -257,7 +262,11 @@ export default function App() {
         nextPathLevelRef.current = next.level;
         setToast({ kind: 'down', text: `Stepping back to level ${next.level} to rebuild.` });
       }
-      return next;
+      // A transit is recorded only for a genuine first read, which is the
+      // whole point of it: the streak counts cold reads, not repeats.
+      return readingTransit
+        ? recordTransit(next, { score: summary.score, level: params.level || next.level })
+        : next;
     });
     if (placement?.active && placementScores) {
       if (placementComplete) {
@@ -270,7 +279,7 @@ export default function App() {
     } else if (placement?.active) {
       setToast({ kind: 'info', text: 'Practice saved. Choose New music for the next independent level-check read.' });
     }
-  }, [params.level, placement, score, scoreId]);
+  }, [params.level, placement, score, scoreId, transitActive]);
 
   const handleReflection = useCallback(({ label, skillId }) => {
     learnerTargetRef.current = skillId || null;
@@ -372,8 +381,25 @@ export default function App() {
     setTab('practice');
   }, [handleConnectMicrophone, handleConnectMidi, profile]);
 
+  // Tonight's transit is an ordinary exercise built from today's date, so it
+  // travels through the same generator, grader and profile as anything else.
+  const readTransit = useCallback(() => {
+    const { params: transit } = transitParams(profile);
+    preparedExerciseRef.current = null;
+    setRepairHand(null);
+    setTransitActive(true);
+    setParams(transit);
+    setTab('practice');
+  }, [profile]);
+
+  const leaveTransit = useCallback(() => {
+    setTransitActive(false);
+    setParams(paramsForLevel(profile.level, profile, { seed: randomSeed() }));
+  }, [profile]);
+
   const changeDifficulty = useCallback((levelId) => {
     setPlacement(null);
+    setTransitActive(false);
     const chosen = levelById(levelId);
     const nextProfile = { ...profile, level: chosen.id };
     nextPathLevelRef.current = null;
@@ -411,9 +437,11 @@ export default function App() {
   }, [params.level, profile, scoreId, settings.showFingerings]);
 
   const customParams = useMemo(() => customisableParams(params), [params]);
+  const nightsObserved = useMemo(() => transitStreak(profile), [profile]);
 
   return (
     <div className="sr-app">
+      <div className="sr-starfield" aria-hidden="true" />
       <a className="sr-skip" href="#practice-main">Skip to practice</a>
       <header className="sr-header">
         <div className="sr-brand">
@@ -445,12 +473,27 @@ export default function App() {
             aria-pressed={Boolean(settings.comfortView)}
             onClick={() => setSettings((current) => ({ ...current, comfortView: !current.comfortView }))}
           >Aa <span>Comfort</span></button>
-          <span className="sr-level-badge">Level {profile.level}</span>
-          {profile.streak.count > 0 && <span className="sr-streak">{profile.streak.count}-day streak</span>}
+          <span className="sr-level-badge">
+            Level {profile.level}
+            <em>{waypointFor(profile.level).name}</em>
+          </span>
+          {nightsObserved > 0 && (
+            <span className="sr-streak" title="Consecutive days with a first read of Tonight’s Transit">
+              {nightsObserved} {nightsObserved === 1 ? 'night' : 'nights'}
+            </span>
+          )}
         </div>
       </header>
 
       <main className="sr-main" id="practice-main">
+        {tab === 'practice' && (
+          <TransitCard
+            profile={profile}
+            active={transitActive}
+            onRead={readTransit}
+            onLeave={leaveTransit}
+          />
+        )}
         {tab === 'practice' && (
           <PracticeView
             key={`${score.seed}:${score.tempo}:${repairHand || 'both'}`}

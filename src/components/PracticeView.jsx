@@ -653,8 +653,8 @@ export default function PracticeView({
         </div>
         <fieldset className="sr-lookahead-control" disabled={busy}>
           <legend>
-            <span>Disappearing notes</span>
-            <small>Fade earlier material to discourage backward glances.</small>
+            <span>Eclipse</span>
+            <small>Notes go dark ahead of the playhead, so the only way through is to read ahead.</small>
           </legend>
           <div className="sr-lookahead-options">
             {LOOK_AHEAD_MODES.map((mode) => (
@@ -664,7 +664,7 @@ export default function PracticeView({
                   checked={settings.curtain === mode.id}
                   onChange={() => onSettings({ curtain: mode.id })}
                 />
-                <span>{mode.id === 'off' ? 'Off' : mode.id === 'played' ? 'Played' : mode.id === 'bar' ? '1 bar' : mode.label.replace(' ahead', '')}</span>
+                <span>{mode.short || mode.label}</span>
               </label>
             ))}
           </div>
@@ -1178,7 +1178,7 @@ export function ResultPanel({
           {placement?.active || placement?.complete
             ? 'Level-check read — used to recommend a comfortable starting point, not to advance the learning path.'
             : curtain.beats !== null
-            ? `Flexible look-ahead take (${curtain.label}) — tracked under reading ahead, and it does not move your skill map or level.`
+            ? `Eclipse take (${curtain.label}) — tracked under reading ahead, and it does not move your constellation or level.`
             : assisted
               ? 'Assisted practice — saved separately from your first-read skill ratings and cannot advance your level.'
               : 'Replay — useful practice, saved separately from first-read skill ratings and cannot advance your level.'}

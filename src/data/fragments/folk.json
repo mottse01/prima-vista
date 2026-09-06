@@ -1,0 +1,343 @@
+[
+  {
+    "id": "frag_frere_jacques_01",
+    "genre": "folk",
+    "level": 1,
+    "meter": "4/4",
+    "bars": 2,
+    "role": "opening",
+    "harmonic_context": [
+      "I",
+      "I"
+    ],
+    "events": [
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      }
+    ],
+    "contour": "arch",
+    "lh_compatible": [
+      "root_fifth",
+      "block_chord",
+      "bass_pulse",
+      "pad"
+    ],
+    "provenance": {
+      "source_id": "pd:trad-frere-jacques",
+      "source": "Prima Vista public-domain melody encoding",
+      "composer": "Traditional (French)",
+      "work": "Frere Jacques",
+      "measures": "opening two bars",
+      "license": "Public domain"
+    }
+  },
+  {
+    "id": "frag_au_clair_de_la_lune_01",
+    "genre": "folk",
+    "level": 1,
+    "meter": "4/4",
+    "bars": 2,
+    "role": "opening",
+    "harmonic_context": [
+      "I",
+      "I"
+    ],
+    "events": [
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 2
+      },
+      {
+        "bar": 1,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 2
+      }
+    ],
+    "contour": "arch",
+    "lh_compatible": [
+      "root_fifth",
+      "block_chord",
+      "bass_pulse",
+      "pad"
+    ],
+    "provenance": {
+      "source_id": "pd:trad-au-clair-de-la-lune",
+      "source": "Prima Vista public-domain melody encoding",
+      "composer": "Traditional (French)",
+      "work": "Au clair de la lune",
+      "measures": "opening two bars",
+      "license": "Public domain"
+    }
+  },
+  {
+    "id": "frag_mary_had_a_little_lamb_01",
+    "genre": "folk",
+    "level": 1,
+    "meter": "4/4",
+    "bars": 2,
+    "role": "opening",
+    "harmonic_context": [
+      "I",
+      "I"
+    ],
+    "events": [
+      {
+        "bar": 0,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 2
+      }
+    ],
+    "contour": "wave",
+    "lh_compatible": [
+      "root_fifth",
+      "block_chord",
+      "bass_pulse"
+    ],
+    "provenance": {
+      "source_id": "pd:trad-mary-had-a-little-lamb",
+      "source": "Prima Vista public-domain melody encoding",
+      "composer": "Traditional (American)",
+      "work": "Mary Had a Little Lamb",
+      "measures": "opening two bars",
+      "license": "Public domain"
+    }
+  },
+  {
+    "id": "frag_hot_cross_buns_01",
+    "genre": "folk",
+    "level": 1,
+    "meter": "4/4",
+    "bars": 2,
+    "role": "opening",
+    "harmonic_context": [
+      "I",
+      "I"
+    ],
+    "events": [
+      {
+        "bar": 0,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 2
+      },
+      {
+        "bar": 1,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 2
+      }
+    ],
+    "contour": "descending",
+    "lh_compatible": [
+      "root_fifth",
+      "block_chord",
+      "bass_pulse"
+    ],
+    "provenance": {
+      "source_id": "pd:trad-hot-cross-buns",
+      "source": "Prima Vista public-domain melody encoding",
+      "composer": "Traditional (English)",
+      "work": "Hot Cross Buns",
+      "measures": "opening two bars",
+      "license": "Public domain"
+    }
+  },
+  {
+    "id": "frag_lightly_row_01",
+    "genre": "folk",
+    "level": 2,
+    "meter": "4/4",
+    "bars": 2,
+    "role": "opening",
+    "harmonic_context": [
+      "I",
+      "V"
+    ],
+    "events": [
+      {
+        "bar": 0,
+        "degree": 5,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 2
+      },
+      {
+        "bar": 1,
+        "degree": 4,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 2
+      }
+    ],
+    "contour": "descending",
+    "lh_compatible": [
+      "root_fifth",
+      "block_chord",
+      "bass_pulse",
+      "waltz"
+    ],
+    "provenance": {
+      "source_id": "pd:trad-lightly-row",
+      "source": "Prima Vista public-domain melody encoding",
+      "composer": "Traditional (German)",
+      "work": "Lightly Row",
+      "measures": "opening two bars",
+      "license": "Public domain"
+    }
+  }
+]

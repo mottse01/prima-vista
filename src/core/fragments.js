@@ -1,4 +1,7 @@
 import classical from '../data/fragments/classical_early.json' with { type: 'json' };
+import classicalStudies from '../data/fragments/classical_early_studies.json' with { type: 'json' };
+import folk from '../data/fragments/folk.json' with { type: 'json' };
+import hymn from '../data/fragments/hymn_chorale.json' with { type: 'json' };
 import { normaliseTexture } from './accompaniment.js';
 
 function validate(fragment) {
@@ -22,7 +25,9 @@ function validate(fragment) {
   return Object.freeze(fragment);
 }
 
-export const FRAGMENTS = Object.freeze(classical.map(validate));
+export const FRAGMENTS = Object.freeze(
+  [...classical, ...classicalStudies, ...folk, ...hymn].map(validate),
+);
 
 export function chooseFragment(rng, { meter, level, genre, lhStyle }) {
   const texture = normaliseTexture(lhStyle);

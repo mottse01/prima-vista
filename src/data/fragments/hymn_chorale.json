@@ -1,0 +1,73 @@
+[
+  {
+    "id": "frag_old_hundredth_01",
+    "genre": "hymn_chorale",
+    "level": 2,
+    "meter": "4/4",
+    "bars": 2,
+    "role": "opening",
+    "harmonic_context": [
+      "I",
+      "I"
+    ],
+    "events": [
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 2,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 0,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 1,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 4,
+        "octave_offset": 0,
+        "dur": 1
+      },
+      {
+        "bar": 1,
+        "degree": 3,
+        "octave_offset": 0,
+        "dur": 2
+      }
+    ],
+    "contour": "arch",
+    "lh_compatible": [
+      "root_fifth",
+      "block_chord",
+      "chord_pulse",
+      "pad"
+    ],
+    "provenance": {
+      "source_id": "pd:genevan-psalter-1551-old-hundredth",
+      "source": "Prima Vista public-domain melody encoding",
+      "composer": "Louis Bourgeois",
+      "work": "Old Hundredth, Genevan Psalter (1551)",
+      "measures": "opening two bars",
+      "license": "Public domain"
+    }
+  }
+]

@@ -4,6 +4,7 @@ import { comparableReads, recentAverage, weakestSkills } from '../core/adaptive.
 import { levelById } from '../core/levels.js';
 import { CURTAIN_MODES } from '../core/curtain.js';
 import { exportAll, importAll } from '../core/storage.js';
+import ConstellationView from './ConstellationView.jsx';
 
 // Keep first-read evidence distinct from familiar and assisted practice.
 
@@ -70,6 +71,8 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
       </section>
       {profile.legacySkills && <p className="sr-hint">Scoring has improved. Your past history is preserved; current skill ratings are rebuilding from the corrected measurements.</p>}
 
+      <ConstellationView profile={profile} onDrill={onDrill} />
+
       <details className="sr-progress-more">
         <summary>
           <span><strong>More detail</strong><small>Learning strands, skill maps, history, and your data</small></span>
@@ -78,7 +81,7 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
         <div className="sr-progress-more-body">
       <section className="sr-panel">
         <h3>Learning strands</h3>
-        <p className="sr-hint">A balanced reader grows several abilities together. Scores appear only after enough evidence.</p>
+        <p className="sr-hint">The same evidence the constellation is drawn from, as numbers. Scores appear only after enough observations.</p>
         <div className="sr-strandgrid">
           {strands.map((strand) => (
             <div key={strand.id} className={`sr-strand${strand.rating == null ? ' is-unproven' : ''}`}>
@@ -90,7 +93,7 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
           <div className="sr-strand is-practice">
             <span>Look-ahead & prediction</span>
             <strong>Practice goal</strong>
-            <small>Use Flexible after a clean first read</small>
+            <small>Try Eclipse after a clean first read</small>
           </div>
         </div>
       </section>

@@ -67,7 +67,7 @@ test('practice exposes one difficulty slider, named actions and independent disp
   const html = render(Practice, props);
   assert.equal((html.match(/aria-label="Difficulty level"/g) || []).length, 1);
   assert.ok(html.indexOf('aria-label="Difficulty level"') < html.indexOf('<summary>Settings</summary>'));
-  for (const label of ['Start practice', 'New music', 'Listen', 'Preparation tips', 'Comfort view', 'Disappearing notes', '2-minute practice']) assert.ok(html.includes(label), label);
+  for (const label of ['Start practice', 'New music', 'Listen', 'Preparation tips', 'Comfort view', 'Eclipse', '2-minute practice']) assert.ok(html.includes(label), label);
   assert.match(html, /30-second preparation/);
   assert.doesNotMatch(render(Practice, { ...props, settings: { ...DEFAULT_SETTINGS, preparationTips: false } }), /class="sr-btn sr-btn--ghost sr-prep-toggle"/);
   assert.match(render(Practice, { ...props, level: null }), /Custom exercise/);
@@ -103,7 +103,7 @@ test('placement, assisted and one-hand feedback retain their distinct actions an
   assert.match(render(Result, resultProps({ placement: { active: true } })), /Next level-check read/);
   assert.match(render(Result, resultProps({ placement: { complete: true, recommended: 2 } })), /Start at level 2/);
   assert.match(render(Result, resultProps({ assisted: true })), /cannot advance your level/);
-  assert.match(render(Result, resultProps({ curtain: curtainMode('played') })), /does not move your skill map or level/);
+  assert.match(render(Result, resultProps({ curtain: curtainMode('played') })), /does not move your constellation or level/);
   assert.doesNotMatch(render(Result, resultProps({ repairHand: 'rh' })), /Right hand only/);
   assert.match(render(Result, resultProps({ result: { ...result, score: 50, continuity: 0.5 } })), /Try again at 60 bpm/);
 });
