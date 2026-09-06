@@ -1,11 +1,9 @@
 // Adaptive engine.
 //
 // Two things happen after every take: skill ratings move, and the *next*
-// exercise is bent toward whatever is weakest. This is the part neither
-// competitor does — SRF has no idea how you played, and fixed-library apps can
-// only pick a different piece, not a different weakness.
+// exercise emphasizes an observed need within the chosen level's envelope.
 
-import { SKILLS } from './grader.js';
+import { SKILLS, SCORING_VERSION } from './grader.js';
 import { levelById, LEVELS } from './levels.js';
 import { makeRng, randomSeed } from './rng.js';
 
@@ -14,9 +12,8 @@ const ALPHA_MAX = 0.45;
 
 // A second reading of music you have already seen is practice, not
 // sight-reading: it still says something about your notes and rhythm, but
-// familiarity inflates it, so it moves the skill map at half weight and can
-// never advance your level.
-const REPEAT_WEIGHT = 0.5;
+// familiarity inflates it, so its evidence is kept in a separate practice map
+// and can never advance your level.
 const MIN_FOCUS_OBSERVATIONS = 3;
 
 // How many recently-seen exercise fingerprints to remember, so a reload or a
@@ -31,13 +28,27 @@ export function placementRecommendation(startLevel, scores) {
   return Math.max(1, Math.min(LEVELS.length, Number(startLevel) + adjustment));
 }
 
+/** Shared first-read rule for placement, promotion and comparable evidence. */
+export function eligibleFirstRead({ summary, fresh = true, takeIndex = 1, assisted = false, curtain = 'off' }) {
+  return summary?.valid !== false && summary?.assessmentEligible !== false
+    && fresh && takeIndex === 1 && !assisted && (!curtain || curtain === 'off');
+}
+
+export function comparableReads(profile, level = profile.level) {
+  return profile.history.filter((take) => take.level === level
+    && take.scoringVersion === SCORING_VERSION && !take.repeat && !take.assisted && !take.curtain);
+}
+
 export function emptyProfile() {
   const skills = {};
   for (const s of SKILLS) skills[s.id] = { rating: 0.5, attempts: 0 };
   return {
-    version: 4,
+    version: 5,
+    scoringVersion: SCORING_VERSION,
+    demonstratedLevels: [],
     level: 1,
     skills,
+    practiceSkills: {},
     history: [],       // { at, level, score, seed, repeat, curtain, ... }
     streak: { count: 0, lastDay: null },
     totals: { takes: 0, notes: 0, minutes: 0 },
@@ -70,12 +81,13 @@ export function applyResult(profile, {
   // A disconnected keyboard, blocked on-screen input, or abandoned take is a
   // device event rather than evidence about the learner. Keep it out of every
   // progress measure.
-  if (summary?.valid === false) {
+  if (summary?.valid === false || summary?.assessmentEligible === false) {
     return { profile, promoted: false, demoted: false, repeat: false, invalid: true };
   }
   const next = {
     ...profile,
     skills: { ...profile.skills },
+    practiceSkills: { ...(profile.practiceSkills || {}) },
     history: [...profile.history],
     totals: { ...profile.totals },
     streak: { ...profile.streak },
@@ -99,16 +111,17 @@ export function applyResult(profile, {
   // A curtain take is a reading-fluency drill. Scoring it against the skill map
   // would read the curtain's difficulty as "you forgot where F sharp is".
   if (!curtained) {
-    const weight = repeat || assisted ? REPEAT_WEIGHT : 1;
+    const bank = repeat || assisted ? next.practiceSkills : next.skills;
     for (const [id, tally] of Object.entries(summary.skills)) {
-      if (!next.skills[id]) next.skills[id] = { rating: 0.5, attempts: 0 };
-      const prev = next.skills[id];
+      if (!tally.total) continue;
+      if (!bank[id]) bank[id] = { rating: 0.5, attempts: 0 };
+      const prev = bank[id];
       const observed = tally.total ? tally.correct / tally.total : 0;
       // Weight the update by how much evidence this take gave us.
-      const alpha = Math.min(ALPHA_MAX, ALPHA_MIN + tally.total * 0.03) * weight;
-      next.skills[id] = {
+      const alpha = Math.min(ALPHA_MAX, ALPHA_MIN + tally.total * 0.03);
+      bank[id] = {
         rating: prev.rating * (1 - alpha) + observed * alpha,
-        attempts: prev.attempts + tally.total * weight,
+        attempts: prev.attempts + tally.total,
       };
     }
   } else {
@@ -121,6 +134,7 @@ export function applyResult(profile, {
   }
 
   next.history.push({
+    scoringVersion: summary.scoringVersion || SCORING_VERSION,
     at: Date.now(),
     level: level || null,
     seed,
@@ -154,7 +168,10 @@ export function applyResult(profile, {
   }
 
   const { promoted, demoted } = evaluateLevel(next, level);
-  if (promoted) next.level = Math.min(LEVELS.length, level + 1);
+  if (promoted) {
+    next.level = Math.min(LEVELS.length, level + 1);
+    next.demonstratedLevels = [...new Set([...(next.demonstratedLevels || []), level])];
+  }
   if (demoted) next.level = Math.max(1, level - 1);
 
   return { profile: next, promoted, demoted, repeat };
@@ -166,9 +183,7 @@ export function applyResult(profile, {
  * evidence that you can read this level's material at sight.
  */
 function evaluateLevel(profile, level) {
-  const recent = profile.history
-    .filter((h) => h.level === level && !h.repeat && !h.assisted && !h.curtain)
-    .slice(-3);
+  const recent = comparableReads(profile, level).slice(-3);
   const def = levelById(level);
   const focusOk = def.focus.every((id) => {
     const skill = profile.skills[id] || { rating: 0.5, attempts: 0 };
@@ -188,13 +203,14 @@ function evaluateLevel(profile, level) {
 /** Skills sorted weakest first, with enough evidence to be worth trusting. */
 export function weakestSkills(profile, limit = 3) {
   return Object.entries(profile.skills)
-    .filter(([, v]) => v.attempts >= 8)
+    .filter(([, v]) => v.attempts >= 8 && v.rating < 0.78)
     .sort((a, b) => a[1].rating - b[1].rating)
     .slice(0, limit)
     .map(([id, v]) => ({ id, ...v, label: SKILLS.find((s) => s.id === id)?.label || id }));
 }
 
 const SKILL_TO_TAG = {
+  'rhythm.silence': 'rest',
   'rhythm.quarter': 'quarter',
   'rhythm.eighth': 'eighth',
   'rhythm.sixteenth': 'sixteenth',
@@ -314,9 +330,14 @@ export function paramsForLevel(level, profile, {
 
 /** Rolling score over clean first reads, so rehearsal does not inflate it. */
 export function recentAverage(profile, n = 10) {
-  const recent = profile.history
-    .filter((take) => !take.repeat && !take.assisted && !take.curtain)
-    .slice(-n);
+  const reads = comparableReads(profile);
+  const latest = reads.at(-1);
+  const recent = reads.filter((take) => {
+    const recipe = take.meta?.recipe?.params;
+    const anchor = latest?.meta?.recipe?.params;
+    return recipe?.tempo === anchor?.tempo && recipe?.timeSignature === anchor?.timeSignature
+      && recipe?.hands === anchor?.hands && recipe?.measures === anchor?.measures;
+  }).slice(-n);
   if (!recent.length) return null;
   return Math.round(recent.reduce((a, h) => a + h.score, 0) / recent.length);
 }

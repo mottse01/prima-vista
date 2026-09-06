@@ -31,7 +31,7 @@ function measureGeometry(host, score) {
   const fx = (v) => (v - box.left) / box.width;
   const fy = (v) => (v - box.top) / box.height;
 
-  const systemEls = [...svg.querySelectorAll('g.system')];
+  const systemEls = [...host.querySelectorAll('g.system')];
   const systems = systemEls.map((el) => {
     const r = el.getBoundingClientRect();
     return { top: fy(r.top), bottom: fy(r.bottom), left: fx(r.left), right: fx(r.right), musicLeft: fx(r.left) };
@@ -44,7 +44,7 @@ function measureGeometry(host, score) {
   // One entry per onset, positioned at whichever element represents it.
   const byTick = new Map();
   const consider = (id, onset) => {
-    const el = svg.querySelector(`[id="${id}"]`);
+    const el = host.querySelector(`[id="${id}"]`);
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (!r.width && !r.height) return;
@@ -60,6 +60,12 @@ function measureGeometry(host, score) {
       if (note.rest) consider(xmlRestId(hand, note.onset), note.onset);
       else for (const p of note.pitches) consider(xmlNoteId(hand, note.onset, p.midi), note.onset);
     }
+  }
+
+  // Engraved ties and split rests create additional written onsets.
+  for (const element of host.querySelectorAll('g.note, g.rest')) {
+    const match = element.id.match(/^[nr](rh|lh)-(\d+)(?:-|$)/);
+    if (match) consider(element.id, Number(match[2]));
   }
 
   const ticks = [...byTick.values()].sort((a, b) => a.tick - b.tick);
@@ -98,11 +104,11 @@ function positionAt(geom, tick) {
 
 /** Recover the generated event represented by a rendered Verovio note group. */
 function eventForRenderedNote(score, element) {
-  const match = element?.id?.match(/^n(rh|lh)-(\d+)-/);
+  const match = element?.id?.match(/^[nr](rh|lh)-(\d+)(?:-|$)/);
   if (!match) return null;
   const hand = match[1];
   const onset = Number(match[2]);
-  const source = (score.staves[hand] || []).find((event) => !event.rest && event.onset === onset);
+  const source = (score.staves[hand] || []).find((event) => event.onset <= onset && event.onset + event.duration > onset);
   return source || { onset, duration: score.ts.beat };
 }
 
@@ -117,15 +123,15 @@ function measureExpressions(host, score) {
 
   for (const slur of score.slurs || []) {
     const element = host.querySelector(`[id="${xmlSlurId(slur.hand, slur.from, slur.to)}"]`);
-    const source = (score.staves[slur.hand] || []).find((event) => event.onset === slur.from);
+    const source = (score.staves[slur.hand] || []).find((event) => event.onset === slur.to);
     if (!element) continue;
-    expressions.push({ element, event: source || { onset: slur.from, duration: score.ts.beat } });
+    expressions.push({ element, event: source || { onset: slur.to, duration: score.ts.beat } });
     claimed.add(element);
   }
 
   // Slurs split over a system break acquire an untagged continuation. Fade
-  // that continuation with the first note it spans in the new system.
-  for (const element of host.querySelectorAll('g.slur')) {
+  // that continuation with the last note it spans, preserving unread phrasing.
+  for (const element of host.querySelectorAll('g.slur, g.tie')) {
     if (claimed.has(element)) continue;
     const system = element.closest('g.system');
     if (!system) continue;
@@ -137,7 +143,7 @@ function measureExpressions(host, score) {
         && box.right >= slurBox.left - 4
         && box.left <= slurBox.right + 4
       ))
-      .sort((a, b) => a.box.left - b.box.left
+      .sort((a, b) => b.box.left - a.box.left
         || Math.abs((a.box.top + a.box.bottom) / 2 - (slurBox.top + slurBox.bottom) / 2)
           - Math.abs((b.box.top + b.box.bottom) / 2 - (slurBox.top + slurBox.bottom) / 2));
     const event = eventForRenderedNote(score, candidates[0]?.note);
@@ -172,7 +178,7 @@ function measureExpressions(host, score) {
 }
 
 export default function Score({
-  score, showFingerings, noteStates, tick, vanishMode = 'off', vanishTick, layout = 'page', className,
+  score, showFingerings, noteStates, tick, vanishMode = 'off', vanishTick, layout = 'page', className, notationScale = 1,
 }) {
   const viewportRef = useRef(null);
   const hostRef = useRef(null);
@@ -203,13 +209,13 @@ export default function Score({
 
   useEffect(() => {
     let cancelled = false;
-    renderScoreSvg(score, { showFingerings, pageWidth, layout })
+    renderScoreSvg(score, { showFingerings, pageWidth: Math.round(pageWidth / notationScale), layout })
       .then((markup) => { if (!cancelled) setResult({ score, svg: markup, error: null }); })
       .catch((err) => {
         if (!cancelled) setResult({ score, svg: null, error: err.message || String(err) });
       });
     return () => { cancelled = true; };
-  }, [layout, pageWidth, score, showFingerings]);
+  }, [layout, notationScale, pageWidth, score, showFingerings]);
 
   useEffect(() => {
     if (viewportRef.current) viewportRef.current.scrollLeft = 0;
@@ -264,17 +270,11 @@ export default function Score({
     const host = hostRef.current;
     if (!host || !svg) return;
     const next = new Set();
-    for (const hand of ['rh', 'lh']) {
-      for (const event of score.staves[hand] || []) {
-        if (!eventShouldVanish(event, writtenVanishTick, vanishMode, score.ts)) continue;
-        const ids = event.rest
-          ? [xmlRestId(hand, event.onset)]
-          : event.pitches.map((pitch) => xmlNoteId(hand, event.onset, pitch.midi));
-        for (const id of ids) {
-          host.querySelector(`[id="${id}"]`)?.classList.add('sr-note-vanished');
-          next.add(id);
-        }
-      }
+    for (const element of host.querySelectorAll('g.note, g.rest')) {
+      const event = eventForRenderedNote(score, element);
+      if (!event || !eventShouldVanish(event, writtenVanishTick, vanishMode, score.ts)) continue;
+      element.classList.add('sr-note-vanished');
+      next.add(element.id);
     }
     for (const id of vanishedRef.current) {
       if (!next.has(id)) host.querySelector(`[id="${id}"]`)?.classList.remove('sr-note-vanished');

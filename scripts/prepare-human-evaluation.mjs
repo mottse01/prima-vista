@@ -61,8 +61,8 @@ for (let index = 0; index < selected.length; index++) {
   const generated = generateExercise({
     ...paramsForLevel(reference.level, emptyProfile(), { seed: (seed + index * 104729) >>> 0, targeting: false }),
     compositionStyle: style,
-    timeSignature: reference.meter || '4/4',
-    measures: reference.measures || 8,
+    ...(reference.meter ? { timeSignature: reference.meter } : {}),
+    ...(reference.measures ? { measures: reference.measures } : {}),
   });
   await writeFile(resolve(abDir, `${generatedId}.musicxml`), toMusicXml(generated));
   stimuli.push(
@@ -85,7 +85,7 @@ for (let level = 1; level <= 10; level++) {
     const exerciseSeed = (seed + level * 1000003 + sample * 7919) >>> 0;
     const score = generateExercise({
       ...paramsForLevel(level, emptyProfile(), { seed: exerciseSeed, targeting: false }),
-      compositionStyle: style, timeSignature: '4/4', measures: 8,
+      compositionStyle: style,
     });
     const id = `level-${String(level).padStart(2, '0')}-${String(sample + 1).padStart(2, '0')}`;
     await writeFile(resolve(teacherDir, `${id}.musicxml`), toMusicXml(score));

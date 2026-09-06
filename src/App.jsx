@@ -6,7 +6,7 @@ import PathView from './components/PathView.jsx';
 import CompareView from './components/CompareView.jsx';
 import OnboardingModal from './components/OnboardingModal.jsx';
 import { generateExercise } from './core/generator.js';
-import { applyResult, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
+import { applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
 import { levelById } from './core/levels.js';
 import { connectMidi } from './core/midi.js';
 import { connectMicrophone } from './core/microphone.js';
@@ -101,8 +101,7 @@ export default function App() {
     || (profile.seenSeeds || []).includes(score.seed);
   const strongReads = useMemo(() => {
     if (!params.level) return 0;
-    const eligible = profile.history
-      .filter((take) => take.level === params.level && !take.repeat && !take.assisted && !take.curtain)
+    const eligible = comparableReads(profile, params.level)
       .slice(-3)
       .reverse();
     let count = 0;
@@ -111,7 +110,7 @@ export default function App() {
       count += 1;
     }
     return Math.min(3, count);
-  }, [params.level, profile.history]);
+  }, [params.level, profile]);
 
   useEffect(() => { saveProfile(profile); }, [profile]);
   useEffect(() => { saveSettings(settings); }, [settings]);
@@ -146,6 +145,10 @@ export default function App() {
   }, []);
 
   const handleConnectMidi = useCallback(async () => {
+    microphoneConnectionRef.current?.close();
+    microphoneConnectionRef.current = null;
+    setMicrophoneState({ status: 'idle', confidence: 0, midi: null, error: null });
+    setSettings((current) => ({ ...current, inputMode: 'midi' }));
     setMidiState({ status: 'connecting', inputs: [], error: null });
     try {
       const connection = await connectMidi(
@@ -165,9 +168,11 @@ export default function App() {
       microphoneConnectionRef.current.close();
       microphoneConnectionRef.current = null;
       setMicrophoneState({ status: 'idle', confidence: 0, midi: null, error: null });
+      setSettings((current) => ({ ...current, inputMode: 'screen' }));
       return;
     }
     setMicrophoneState({ status: 'connecting', confidence: 0, midi: null, error: null });
+    setSettings((current) => ({ ...current, inputMode: 'microphone' }));
     try {
       const connection = await connectMicrophone(
         (event) => { for (const fn of subsRef.current) fn(event); },
@@ -201,20 +206,17 @@ export default function App() {
 
   const regenerate = useCallback(() => {
     setRepairHand(null);
-    if (!placement?.active && session.startedAt && session.minutes) {
-      const nextDailyStep = session.takes % 3;
-      setSettings((current) => ({ ...current, curtain: nextDailyStep === 2 ? 'played' : 'off' }));
-    }
     if (params.level) {
       const targetSkill = learnerTargetRef.current;
       learnerTargetRef.current = null;
       nextFromLevel(nextPathLevelRef.current ?? params.level, targetSkill ? { targetSkill } : {});
     }
     else setParams({ ...params, seed: randomSeed() });
-  }, [nextFromLevel, params, placement?.active, session.minutes, session.startedAt, session.takes]);
+  }, [nextFromLevel, params]);
 
-  const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain, assisted }) => {
-    const placementScores = placement?.active ? [...placement.scores, summary.score] : null;
+  const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain, assisted, fresh }) => {
+    const eligible = eligibleFirstRead({ summary, takeIndex, curtain, assisted, fresh });
+    const placementScores = placement?.active && eligible ? [...placement.scores, summary.score] : null;
     const placementComplete = Boolean(placementScores && placementScores.length >= placement.total);
     const placementLevel = placementComplete
       ? placementRecommendation(placement.startLevel, placementScores)
@@ -257,7 +259,7 @@ export default function App() {
       }
       return next;
     });
-    if (placement?.active) {
+    if (placement?.active && placementScores) {
       if (placementComplete) {
         const recommended = levelById(placementLevel);
         setPlacement({ ...placement, active: false, complete: true, scores: placementScores, recommended: placementLevel });
@@ -265,6 +267,8 @@ export default function App() {
       } else {
         setPlacement({ ...placement, scores: placementScores, remaining: placement.total - placementScores.length });
       }
+    } else if (placement?.active) {
+      setToast({ kind: 'info', text: 'Practice saved. Choose New study for the next unassisted level-check read.' });
     }
   }, [params.level, placement, score, scoreId]);
 
@@ -339,6 +343,11 @@ export default function App() {
     setSettings((s) => ({ ...s, ...patch }));
   }, []);
 
+  const dismissOnboarding = useCallback(() => {
+    setShowOnboarding(false);
+    setSettings((current) => ({ ...current, onboardingComplete: true }));
+  }, []);
+
   const chooseStartingLevel = useCallback((levelId, preferences = {}) => {
     const nextProfile = { ...profile, level: levelId };
     setProfile(nextProfile);
@@ -349,10 +358,12 @@ export default function App() {
       sessionMinutes: 5,
       inputMode: preferences.inputMode || 'screen',
       comfortView: Boolean(preferences.comfortView),
+      curtain: 'off',
+      guideKeys: false,
     }));
     setSession({ minutes: 5, startedAt: null, takes: 0 });
     setSessionNow(Date.now());
-    setPlacement({ active: true, complete: false, startLevel: levelId, total: 3, remaining: 3, scores: [] });
+    setPlacement(preferences.inputMode === 'microphone' ? null : { active: true, complete: false, startLevel: levelId, total: 3, remaining: 3, scores: [] });
     if (preferences.inputMode === 'screen') setShowKeyboard(true);
     if (preferences.inputMode === 'midi') void handleConnectMidi();
     if (preferences.inputMode === 'microphone') void handleConnectMicrophone();
@@ -361,6 +372,7 @@ export default function App() {
   }, [handleConnectMicrophone, handleConnectMidi, profile]);
 
   const changeDifficulty = useCallback((levelId) => {
+    setPlacement(null);
     const chosen = levelById(levelId);
     const nextProfile = { ...profile, level: chosen.id };
     nextPathLevelRef.current = null;
@@ -488,7 +500,7 @@ export default function App() {
         )}
 
         {tab === 'path' && (
-          <PathView profile={profile} onPick={(id) => nextFromLevel(id)} />
+          <PathView profile={profile} onPick={changeDifficulty} />
         )}
 
         {tab === 'custom' && (
@@ -506,6 +518,7 @@ export default function App() {
         {tab === 'progress' && (
           <ProgressView
             profile={profile}
+            onStart={() => setTab('practice')}
             onDrill={drillSkill}
             onResume={(recipe) => {
               setParams({ ...recipe.params, seed: recipe.seed });
@@ -530,7 +543,7 @@ export default function App() {
         </p>
       </footer>
 
-      {showOnboarding && <OnboardingModal onChoose={chooseStartingLevel} />}
+      {showOnboarding && <OnboardingModal onChoose={chooseStartingLevel} onDismiss={dismissOnboarding} />}
     </div>
   );
 }

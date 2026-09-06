@@ -81,24 +81,14 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
       )}
       <div className="sr-setup-grid sr-setup-grid--basic">
         <Group title="Style" className="sr-group--style">
-          <div className="sr-stylegrid" role="radiogroup" aria-label="Composition style">
-            {STYLE_OPTIONS.map((style) => {
-              const selected = (params.compositionStyle || 'auto') === style.id;
-              return (
-                <label key={style.id} className={`sr-stylechoice${selected ? ' is-on' : ''}`}>
-                  <input
-                    type="radio"
-                    name="composition-style"
-                    value={style.id}
-                    checked={selected}
-                    onChange={() => set(styleSetupPatch(style.id, params))}
-                  />
-                  <strong>{style.label}</strong>
-                  <span>{style.description}</span>
-                </label>
-              );
-            })}
-          </div>
+          <label className="sr-field">
+            <span>Musical style</span>
+            <select value={params.compositionStyle || 'auto'}
+              onChange={(event) => set(styleSetupPatch(event.target.value, params))}>
+              {STYLE_OPTIONS.map((style) => <option key={style.id} value={style.id}>{style.label}</option>)}
+            </select>
+          </label>
+          <p className="sr-hint">{STYLE_OPTIONS.find((style) => style.id === (params.compositionStyle || 'auto'))?.description}</p>
         </Group>
 
         <Group title="Key, metre & length">
@@ -112,16 +102,12 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
               >{mode}</button>
             ))}
           </div>
-          <div className="sr-chips sr-chips--keys" aria-label="Key">
-            {keyOptions.map(({ f, label }) => (
-              <button
-                key={f} type="button"
-                className={`sr-chip${params.keyFifths === f ? ' is-on' : ''}`}
-                aria-pressed={params.keyFifths === f}
-                onClick={() => set({ keyFifths: f })}
-              >{label}</button>
-            ))}
-          </div>
+          <label className="sr-field">
+            <span>Key</span>
+            <select value={params.keyFifths} onChange={(event) => set({ keyFifths: Number(event.target.value) })}>
+              {keyOptions.map(({ f, label }) => <option key={f} value={f}>{label}</option>)}
+            </select>
+          </label>
           <div className="sr-builder-row">
             <label className="sr-field">
               <span>Metre</span>
@@ -132,7 +118,7 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
             <label className="sr-field">
               <span>Length</span>
               <select value={params.measures} onChange={(event) => set({ measures: Number(event.target.value) })}>
-                {[4, 8, 12, 16, 24].map((bars) => <option key={bars} value={bars}>{bars} bars</option>)}
+                {[4, 8, 12, 16, 20, 24].map((bars) => <option key={bars} value={bars}>{bars} bars</option>)}
               </select>
             </label>
           </div>

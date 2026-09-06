@@ -5,7 +5,7 @@
 // same music, which is what makes exact exercise links shareable and assignable.
 
 import {
-  TPQ, clamp, fromDia, isChordTone, keyAlterations, spellInKey, spellChordTone, tonicLetter, KEY_NAMES,
+  TPQ, clamp, fromDia, isChordTone, isStructuralAlteration, keyAlterations, spellInKey, spellChordTone, tonicLetter, KEY_NAMES,
 } from './theory.js';
 import { getCell, metricWeight, resolveCells, timeSig } from './rhythm.js';
 import { planProgression, spellVoicing, voiceChordSequence } from './harmony.js';
@@ -261,7 +261,12 @@ function transformRhythm(events, ts, spec, canSubdivide, minDuration = 1) {
     const sounded = source.filter((event) => !event.rest);
     const keep = new Set(sounded.slice(0, Math.max(1, Math.ceil(sounded.length / 2))));
     const last = [...source].findLastIndex((event) => keep.has(event));
-    source = source.slice(0, Math.max(1, last + 1));
+    // Keep complete metric units: cutting after two notes of a triplet and
+    // cycling that fragment creates an unnotatable tail at the barline.
+    const desiredEnd = source[Math.max(0, last)].onset + source[Math.max(0, last)].duration;
+    const cut = source.findIndex((event) => event.onset + event.duration >= desiredEnd
+      && (event.onset + event.duration) % ts.beat === 0);
+    if (cut >= 0) source = source.slice(0, cut + 1);
   }
 
   const motifLength = Math.max(1, source.reduce((end, event) => Math.max(end, event.onset + event.duration), 0) * scale);
@@ -284,7 +289,8 @@ function transformRhythm(events, ts, spec, canSubdivide, minDuration = 1) {
       });
     }
   }
-  return transformed.length ? transformed : events;
+  const supported = new Set([6, 8, 12, 16, 18, 24, 32, 36, 48, 72, 96, 144, 192, 240, 288]);
+  return transformed.length && transformed.every((event) => supported.has(event.duration)) ? transformed : events;
 }
 
 /** Rhythm for the whole line, with motivic echoes and cadential arrivals. */
@@ -744,7 +750,7 @@ function assignPitches(rng, opts) {
 
     const signature = keyAlterations(key.fifths);
     let chromatic = p.alter !== signature[p.letter];
-    if (chromaticBudget && chromatic) {
+    if (chromaticBudget && chromatic && !isStructuralAlteration(key, chord, p)) {
       const reserve = chromaticBudget.reservedForAccompaniment || 0;
       if (chromaticBudget.remaining > reserve) chromaticBudget.remaining -= 1;
       else {
@@ -931,8 +937,9 @@ function buildLeftHand(rng, opts) {
 
   function mk(onset, duration, pitches, tags) {
     const signature = keyAlterations(key.fifths);
+    const chord = chords[Math.min(chords.length - 1, Math.floor(onset / (ts.ticks / chordsPerMeasure)))];
     const constrained = (pitches.length ? pitches : [spelledFallback]).map((pitch) => {
-      if (!chromaticBudget || pitch.alter === signature[pitch.letter]) return pitch;
+      if (!chromaticBudget || pitch.alter === signature[pitch.letter] || isStructuralAlteration(key, chord, pitch)) return pitch;
       if (chromaticBudget.remaining > 0) {
         chromaticBudget.remaining -= 1;
         return pitch;
@@ -1108,22 +1115,19 @@ function buildSlurs(notes, ts, form) {
   return slurs;
 }
 
-/** Naive but useful fingering hints: step to a neighbouring finger, reset on a leap. */
-function addFingerings(notes) {
-  let finger = 1;
-  let prevDia = null;
+/** Only offer fingerings we can explain with a stable five-finger position. */
+function addFingerings(notes, low, high, hand = 'rh') {
+  const sounded = notes.filter((n) => !n.rest && n.pitches.length === 1);
+  if (!sounded.length) return;
+  const lowest = Math.min(...sounded.map((n) => n.pitches[0].dia));
+  const highest = Math.max(...sounded.map((n) => n.pitches[0].dia));
+  const position = high - low <= 4 ? low : lowest;
+  if (highest - position > 4 || lowest < position) return;
   for (const n of notes) {
     if (n.rest || !n.pitches.length) continue;
     const dia = n.pitches[0].dia;
-    if (prevDia === null) finger = 1;
-    else {
-      const step = dia - prevDia;
-      if (Math.abs(step) === 0) { /* keep the finger */ }
-      else if (Math.abs(step) === 1) finger = clamp(finger + Math.sign(step), 1, 5);
-      else finger = clamp(finger + step, 1, 5);
-    }
-    n.fingering = finger;
-    prevDia = dia;
+    if (n.pitches.length !== 1) continue;
+    n.fingering = hand === 'rh' ? dia - position + 1 : 5 - (dia - position);
   }
 }
 
@@ -1362,7 +1366,10 @@ export function composeCandidate(userParams = {}, attempt = 0) {
   if (params.dynamics) addDynamics(rng, lead, ts, measures, style);
   if (params.articulations) addArticulations(lead, ts, style, form);
   addOrnaments(rng, lead, level, style);
-  if (params.fingerings && staves.rh.length) addFingerings(staves.rh);
+  if (params.fingerings) {
+    addFingerings(staves.rh, params.rhLow, params.rhHigh, 'rh');
+    addFingerings(staves.lh, params.lhLow, params.lhHigh, 'lh');
+  }
   const slurs = params.slurs && staves.rh.length ? buildSlurs(staves.rh, ts, form) : [];
 
   const keyName = KEY_NAMES[key.mode][String(key.fifths)];
@@ -1451,6 +1458,16 @@ function constraintsFor(score) {
  */
 export function generateExercise(userParams = {}) {
   if (userParams.sourceMode === 'repertoire') return repertoireExercise({ ...DEFAULT_PARAMS, ...userParams });
+  if (userParams.level && Number.isFinite(userParams.tempo)) {
+    const [minimum, maximum] = levelById(userParams.level).constraints.tempo;
+    const safeTempo = Math.max(minimum, Math.min(maximum, userParams.tempo));
+    if (safeTempo !== userParams.tempo) {
+      // Tempo changes do not rewrite the music. Outside the level's assessment
+      // range, preserve the chosen speed but label the take practice-only.
+      const study = generateExercise({ ...userParams, tempo: safeTempo });
+      return { ...study, tempo: userParams.tempo, params: { ...study.params, tempo: userParams.tempo }, tempoPracticeOnly: true };
+    }
+  }
   let best = null;
   let bestReview = null;
   let bestValidation = null;

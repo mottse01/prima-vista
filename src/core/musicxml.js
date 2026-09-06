@@ -14,17 +14,19 @@ const COMPOUND_UNITS = [288, 144, 72, 36, 24, 12, 6];
  * by ties. 5/4's whole bar becomes a whole tied to a quarter, and so on.
  */
 function splitDuration(ticks, compound) {
+  if (HEAD_BY_TICKS[ticks]) return [ticks];
   const units = compound ? COMPOUND_UNITS : SIMPLE_UNITS;
   const out = [];
   let left = ticks;
   let guard = 0;
   while (left > 0 && guard++ < 12) {
     const u = units.find((x) => x <= left);
-    if (!u) break;
+    if (!u) throw new Error(`Cannot notate duration without losing time: ${ticks} ticks`);
     out.push(u);
     left -= u;
   }
-  return out.length ? out : [ticks];
+  if (left !== 0 || !out.length) throw new Error(`Invalid notation duration: ${ticks}`);
+  return out;
 }
 
 const HEAD_BY_TICKS = {
@@ -82,8 +84,20 @@ function accidentalTracker(fifths) {
  * Expand one generated note into the notes actually written, splitting
  * durations that cannot be drawn as a single value into tied notes.
  */
-function writtenNotes(note, compound) {
-  const parts = splitDuration(note.duration, compound);
+function writtenNotes(note, ts) {
+  const parts = [];
+  let cursor = note.onset;
+  const end = cursor + note.duration;
+  while (cursor < end) {
+    const barEnd = (Math.floor(cursor / ts.ticks) + 1) * ts.ticks;
+    // An offbeat note tied across a beat exposes the pulse. Notes beginning
+    // on a beat may retain conventional longer values; all barlines split.
+    const beatEnd = (Math.floor(cursor / ts.beat) + 1) * ts.beat;
+    const boundary = cursor % ts.beat !== 0 ? Math.min(barEnd, beatEnd) : barEnd;
+    const duration = Math.min(end, boundary) - cursor;
+    parts.push(...splitDuration(duration, ts.compound));
+    cursor += duration;
+  }
   let t = note.onset;
   return parts.map((d, i) => {
     const w = {
@@ -183,8 +197,13 @@ function pitchXml(p) {
 
 function notationsXml(w, { slurStart, slurStop, fingering }) {
   const bits = [];
-  if (w.tieTo) bits.push('<tied type="start"/>');
-  if (w.tieFrom) bits.push('<tied type="stop"/>');
+  if (!w.rest && w.tieTo) bits.push('<tied type="start"/>');
+  if (!w.rest && w.tieFrom) bits.push('<tied type="stop"/>');
+  if (w.tuplet) {
+    const groupTicks = w.duration * 3;
+    if (w.onset % groupTicks === 0) bits.push('<tuplet type="start" number="1"/>');
+    if ((w.onset + w.duration) % groupTicks === 0) bits.push('<tuplet type="stop" number="1"/>');
+  }
   if (slurStop) bits.push('<slur number="1" type="stop"/>');
   if (slurStart) bits.push(`<slur id="${slurStart}" number="1" type="start"/>`);
   const art = w.source.articulation;
@@ -208,7 +227,7 @@ function noteXml(w, { staff, voice, hand, accidentals, slurStart, slurStop, fing
 
   if (w.rest) {
     return `<note id="${xmlRestId(hand, w.onset)}"><rest/><duration>${w.duration}</duration><voice>${voice}</voice>`
-      + `<type>${type}</type>${dots}${tuplet}<staff>${staff}</staff></note>`;
+      + `<type>${type}</type>${dots}${tuplet}<staff>${staff}</staff>${notationsXml(w, {})}</note>`;
   }
 
   return w.pitches.map((p, i) => {
@@ -249,7 +268,7 @@ export function toMusicXml(score, opts = {}) {
   const byHand = {};
   for (const h of hands) {
     const written = [];
-    for (const n of score.staves[h.hand]) written.push(...writtenNotes(n, ts.compound));
+    for (const n of score.staves[h.hand]) written.push(...writtenNotes(n, ts));
     written.sort((a, b) => a.onset - b.onset);
     assignBeams(written, ts);
     const measures = Array.from({ length: score.measures }, () => []);
@@ -272,6 +291,7 @@ export function toMusicXml(score, opts = {}) {
   for (let m = 0; m < score.measures; m++) {
     for (const h of hands) accidentals[h.hand].reset();
     const parts = [];
+    if (opts.systemBreaks?.includes(m)) parts.push('<print new-system="yes"/>');
 
     if (m === 0) {
       const clefs = hands

@@ -2,6 +2,7 @@
 // server, nothing to subscribe to. Export/import makes it portable.
 
 import { emptyProfile } from './adaptive.js';
+import { SCORING_VERSION } from './grader.js';
 
 const KEY = 'sightread.profile.v1';
 const PRESETS_KEY = 'sightread.presets.v1';
@@ -28,7 +29,7 @@ function write(key, value) {
 
 export function loadProfile() {
   const stored = read(KEY, null);
-  if (!stored || ![1, 2, 3, 4].includes(stored.version)) return emptyProfile();
+  if (!stored || ![1, 2, 3, 4, 5].includes(stored.version)) return emptyProfile();
   const blank = emptyProfile();
   // Earlier builds recorded completely silent runs as hundreds of failed
   // notes. If every stored take is unmistakably silent, keep the learner's
@@ -42,8 +43,12 @@ export function loadProfile() {
   return {
     ...blank,
     ...stored,
-    version: 4,
-    skills: { ...blank.skills, ...stored.skills },
+    version: 5,
+    scoringVersion: SCORING_VERSION,
+    // Keep every past take and previous ratings, but do not mix known-biased
+    // evidence with the corrected scorer's learning recommendations.
+    legacySkills: stored.scoringVersion === SCORING_VERSION ? stored.legacySkills : stored.skills,
+    skills: stored.scoringVersion === SCORING_VERSION ? { ...blank.skills, ...stored.skills } : blank.skills,
     seenExercises: stored.seenExercises || [],
   };
 }
@@ -75,6 +80,7 @@ export const DEFAULT_SETTINGS = {
   onboardingComplete: false,
   inputMode: 'screen',
   comfortView: false,
+  notationScale: 1,
 };
 
 export function loadSettings() {

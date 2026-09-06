@@ -76,7 +76,41 @@ export function scoreLayoutOptions(layout, pageWidth) {
       adjustPageHeight: true,
     };
   }
-  return { ...OPTIONS, pageWidth, breaks: 'auto', adjustPageWidth: false };
+  return { ...OPTIONS, pageWidth, breaks: 'smart', breaksSmartSb: 0.45, adjustPageWidth: false };
+}
+
+/** Balance engraving load, favor phrase ends, and avoid a lonely final bar. */
+export function balancedSystemBreaks(score, pageWidth) {
+  const weights = Array.from({ length: score.measures }, (_, bar) => {
+    const counts = ['rh', 'lh'].map((hand) => (score.staves[hand] || [])
+      .filter((event) => Math.floor(event.onset / score.ts.ticks) === bar)
+      .reduce((sum, event) => sum + 1 + Math.max(0, event.pitches.length - 1) * 0.2, 0));
+    return 1.2 + Math.max(...counts) * 0.25;
+  });
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  const lines = Math.min(score.measures, Math.max(1, Math.ceil(total / (pageWidth / 175))));
+  const target = total / lines;
+  const prefix = [0];
+  weights.forEach((weight) => prefix.push(prefix.at(-1) + weight));
+  const dp = Array.from({ length: lines + 1 }, () => Array(score.measures + 1).fill(null));
+  dp[0][0] = { cost: 0, breaks: [] };
+  const phraseEnds = new Set((score.form?.units || []).map((unit) => unit.bars[1] + 1));
+  for (let line = 1; line <= lines; line++) {
+    for (let end = line; end <= score.measures; end++) {
+      for (let begin = line - 1; begin < end; begin++) {
+        const prior = dp[line - 1][begin];
+        if (!prior) continue;
+        const load = prefix[end] - prefix[begin];
+        const cost = prior.cost + ((load - target) / target) ** 2
+          + (end < score.measures && !phraseEnds.has(end) ? 0.08 : 0)
+          + (end === score.measures && end - begin === 1 && score.measures >= lines * 2 ? 2 : 0);
+        if (!dp[line][end] || cost < dp[line][end].cost) {
+          dp[line][end] = { cost, breaks: [...prior.breaks, ...(begin ? [begin] : [])] };
+        }
+      }
+    }
+  }
+  return dp[lines][score.measures]?.breaks || [];
 }
 
 /**
@@ -85,7 +119,9 @@ export function scoreLayoutOptions(layout, pageWidth) {
  */
 export async function renderScoreSvg(score, opts = {}) {
   const { pageWidth = PAGE_WIDTH, layout = 'page', ...musicXmlOptions } = opts;
-  const xml = toMusicXml(score, musicXmlOptions);
+  const xml = toMusicXml(score, { ...musicXmlOptions,
+    systemBreaks: layout === 'page' ? balancedSystemBreaks(score, pageWidth) : [],
+  });
   const key = `${layout}:${pageWidth}:${musicXmlOptions.showFingerings ? 1 : 0}:${hashText(xml)}`;
   if (renderCache.has(key)) return renderCache.get(key);
 
@@ -95,7 +131,8 @@ export async function renderScoreSvg(score, opts = {}) {
     if (!toolkit.loadData(xml)) {
       throw new Error(toolkit.getLog() || 'The engraver could not read this exercise.');
     }
-    return toolkit.renderToSVG(1);
+    // Long studies and enlarged notation may span several engraved pages.
+    return Array.from({ length: toolkit.getPageCount() }, (_, index) => toolkit.renderToSVG(index + 1)).join('\n');
   });
   renderQueue = job.catch(() => {});
   renderCache.set(key, job);

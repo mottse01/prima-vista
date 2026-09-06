@@ -29,16 +29,49 @@ const STARTING_POINTS = [
   },
 ];
 
-export default function OnboardingModal({ onChoose }) {
+export default function OnboardingModal({ onChoose, onDismiss }) {
   const [selected, setSelected] = useState(1);
   const [step, setStep] = useState('level');
   const [inputMode, setInputMode] = useState('screen');
   const [comfortView, setComfortView] = useState(false);
   const headingRef = useRef(null);
+  const dialogRef = useRef(null);
 
   useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement;
+    const backdrop = dialog.parentElement;
+    const siblings = [...backdrop.parentElement.children].filter((element) => element !== backdrop);
+    const original = siblings.map((element) => ({ element, inert: element.inert }));
+    siblings.forEach((element) => { element.inert = true; });
+    const focusables = () => [...dialog.querySelectorAll('button, select, input, [href], [tabindex="0"]')]
+      .filter((element) => !element.disabled && element.getClientRects().length
+        && (element.type !== 'radio' || element.checked));
+    const keydown = (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); onDismiss?.(); return; }
+      if (event.key !== 'Tab') return;
+      const elements = focusables();
+      const first = elements[0];
+      const last = elements.at(-1);
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === headingRef.current)) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first?.focus();
+      }
+    };
+    const keepFocus = (event) => {
+      if (!dialog.contains(event.target)) headingRef.current?.focus();
+    };
+    document.addEventListener('keydown', keydown);
+    document.addEventListener('focusin', keepFocus);
+    return () => {
+      document.removeEventListener('keydown', keydown);
+      document.removeEventListener('focusin', keepFocus);
+      original.forEach(({ element, inert }) => { element.inert = inert; });
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [onDismiss]);
+  useEffect(() => { headingRef.current?.focus(); }, [step]);
 
   const startingLevel = Math.max(1, selected - 1);
   const level = levelById(startingLevel);
@@ -46,6 +79,7 @@ export default function OnboardingModal({ onChoose }) {
   return (
     <div className="sr-onboarding-backdrop">
       <section
+        ref={dialogRef}
         className="sr-onboarding"
         role="dialog"
         aria-modal="true"
@@ -53,12 +87,13 @@ export default function OnboardingModal({ onChoose }) {
         aria-describedby="sr-onboarding-description"
       >
         <span className="sr-eyebrow">Welcome · {step === 'level' ? '1 of 2' : '2 of 2'}</span>
+        <button className="sr-onboarding-close" type="button" onClick={onDismiss} aria-label="Close welcome and explore practice">×</button>
         <h2 id="sr-onboarding-title" ref={headingRef} tabIndex="-1">
           {step === 'level' ? 'Choose a comfortable starting point.' : 'How will you play today?'}
         </h2>
         <p id="sr-onboarding-description">
           {step === 'level'
-            ? 'Pick the statement that sounds most like you. A short three-read check will confirm the level without overwhelming you.'
+            ? 'Choose what feels familiar. We start one step easier, then use three fresh reads to suggest a comfortable level.'
             : 'Choose the input that matches your piano. You can change it later under Sound & keyboard.'}
         </p>
 
@@ -84,7 +119,7 @@ export default function OnboardingModal({ onChoose }) {
           </div>
 
           <div className="sr-onboarding-summary" aria-live="polite">
-            <span>Three-read check</span>
+            <span>Provisional start · Level {startingLevel}</span>
             <strong>{level.name}</strong>
             <span>{level.blurb}</span>
           </div>
@@ -92,7 +127,7 @@ export default function OnboardingModal({ onChoose }) {
           <div className="sr-input-choices" role="radiogroup" aria-label="Piano input">
             {[
               ['midi', 'Digital piano', 'Connect with MIDI for the most precise note and timing feedback.'],
-              ['microphone', 'Acoustic piano', 'Let the microphone recognize one played note at a time. Best in a quiet room.'],
+              ['microphone', 'Acoustic piano', 'Play without a score or level penalty. Optional single-note detection is experimental; chords are not assessed.'],
               ['screen', 'Screen or computer keys', 'Practice now with the on-screen keyboard or your computer keyboard.'],
             ].map(([id, label, detail]) => (
               <label key={id} className={`sr-input-choice${inputMode === id ? ' is-on' : ''}`}>

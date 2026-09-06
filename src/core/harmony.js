@@ -1,7 +1,7 @@
 // Data-driven harmonic planner. Genre vocabulary, transition probabilities,
 // cadence formulae, and licensed retrogressions all live in JSON style packs.
 
-import { chordTones, spellChordTone, tonicLetter } from './theory.js';
+import { chordTones, spellChordTone, tonicLetter, ROMAN } from './theory.js';
 import { stylePack } from './stylePacks.js';
 
 const CADENCE_LABELS = {
@@ -239,6 +239,7 @@ export function planProgression(rng, {
     const outputRoman = realisedRoman(roman, allowSevenths, allowInversions, pack);
     return {
       degree, plannedDegree: degree, plannedRoman: outputRoman, modelRoman: roman,
+      displayRoman: mode === 'minor' ? outputRoman.replace(/^[ivIV]+[°ø+]?/, ROMAN.minor[degree]) : outputRoman,
       seventh: labelledSeventh && (allowSevenths || pack.harmony.require_labelled_sevenths === true),
       inversion, inversionLocked: Boolean(mark) || inversionFor(roman) > 0,
       fn: pack.harmony.functions_by_degree[degree], index,
@@ -250,12 +251,12 @@ export function planProgression(rng, {
 
   const degrees = chords.map((chord) => chord.degree);
   for (const cadence of cadences) {
-    cadence.roman = cadence.slots.map((slot) => chords[slot].plannedRoman).join('–');
+    cadence.roman = cadence.slots.map((slot) => chords[slot].displayRoman).join('–');
   }
   const unitPlans = (form?.units || []).map((unit) => {
     const first = unit.bars[0] * chordsPerMeasure;
     const last = Math.min(chords.length, (unit.bars[1] + 1) * chordsPerMeasure);
-    return { phrase: unit.index, function: unit.role, roman: chords.slice(first, last).map((chord) => chord.plannedRoman).join('–') };
+    return { phrase: unit.index, function: unit.role, roman: chords.slice(first, last).map((chord) => chord.displayRoman).join('–') };
   });
 
   return {

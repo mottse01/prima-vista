@@ -608,7 +608,7 @@ test('score layout offers a conventional page and one continuous scrolling syste
   const page = scoreLayoutOptions('page', 1200);
   const scroll = scoreLayoutOptions('scroll', 1200);
 
-  assert.equal(page.breaks, 'auto');
+  assert.equal(page.breaks, 'smart');
   assert.equal(page.adjustPageWidth, false);
   assert.equal(scroll.breaks, 'none');
   assert.equal(scroll.adjustPageWidth, true);
@@ -866,7 +866,7 @@ test('assisted work cannot satisfy the three-first-read promotion rule', () => {
   assert.equal(profile.level, 2);
 });
 
-test('assisted practice contributes half-strength diagnostic evidence', () => {
+test('assisted practice keeps separate evidence without changing first-read ratings', () => {
   const profile = emptyProfile();
   const summary = {
     score: 90,
@@ -880,7 +880,8 @@ test('assisted practice contributes half-strength diagnostic evidence', () => {
     level: 1, summary, seed: 1, exerciseId: 'assisted', elapsedSec: 10, assisted: true,
   }).profile;
 
-  assert.equal(next.skills['notes.treble'].attempts, 5);
+  assert.equal(next.skills['notes.treble'].attempts, 0);
+  assert.equal(next.practiceSkills['notes.treble'].attempts, 10);
 });
 
 test('an abandoned or disconnected take changes no learner data', () => {

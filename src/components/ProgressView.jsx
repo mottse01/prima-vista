@@ -1,12 +1,11 @@
 import { useMemo, useRef } from 'react';
-import { SKILLS } from '../core/grader.js';
-import { recentAverage, weakestSkills } from '../core/adaptive.js';
+import { SKILLS, SCORING_VERSION } from '../core/grader.js';
+import { comparableReads, recentAverage, weakestSkills } from '../core/adaptive.js';
 import { levelById } from '../core/levels.js';
 import { CURTAIN_MODES } from '../core/curtain.js';
 import { exportAll, importAll } from '../core/storage.js';
 
-// The diagnostics page. This is the answer to "why am I still bad at this?" —
-// neither competitor tells you which specific notes and rhythms are costing you.
+// Keep first-read evidence distinct from familiar and assisted practice.
 
 const NOTE_ORDER = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B', 'Cb', 'Fb', 'E#', 'B#'];
 
@@ -17,7 +16,7 @@ const STRANDS = [
   { id: 'coordination', label: 'Two-hand coordination', skills: ['coordination.together'] },
 ];
 
-export default function ProgressView({ profile, onDrill, onResume, onReset, onReload }) {
+export default function ProgressView({ profile, onDrill, onResume, onReset, onReload, onStart }) {
   const fileRef = useRef(null);
   const avg = recentAverage(profile, 10);
   const weak = weakestSkills(profile, 3);
@@ -28,7 +27,13 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
   const strands = useMemo(() => STRANDS.map((strand) => ({ ...strand, ...strandEvidence(profile, strand.skills) })), [profile]);
   // Replays, assisted practice, and curtain takes are not clean first reads;
   // charting them together would flatter or distort the sight-reading trend.
-  const history = profile.history.filter((h) => !h.repeat && !h.assisted && !h.curtain).slice(-40);
+  const clean = comparableReads(profile);
+  const latest = clean.at(-1)?.meta?.recipe?.params;
+  const history = clean.filter((h) => {
+    const recipe = h.meta?.recipe?.params;
+    return recipe?.tempo === latest?.tempo && recipe?.timeSignature === latest?.timeSignature
+      && recipe?.hands === latest?.hands && recipe?.measures === latest?.measures;
+  }).slice(-40);
   const savedExercises = [...profile.history]
     .reverse()
     .filter((take) => take.meta?.recipe)
@@ -41,8 +46,8 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
   return (
     <div className="sr-progress">
       <section className="sr-stats">
-        <Stat label="Current level" value={profile.level} detail={level.name} />
-        <Stat label="Fresh-read average" value={avg == null ? '—' : avg} detail={avg == null ? 'no qualifying reads yet' : 'last 10 qualifying reads'} />
+        <Stat label="Selected level" value={profile.level} detail={level.name} />
+        <Stat label="Comparable fresh reads" value={avg == null ? '—' : avg} detail={avg == null ? 'building new evidence' : `Level ${profile.level} · same tempo, length, hands & meter`} />
         <Stat
           label="Practice consistency"
           value={profile.streak.count ? `${profile.streak.count} day${profile.streak.count === 1 ? '' : 's'}` : 'Start today'}
@@ -59,7 +64,9 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
             : 'Use the silent scan, keep the pulse moving, and let the first few reads reveal where practice will help most.'}</p>
         </div>
         {weak[0] && <button type="button" className="sr-btn sr-btn--primary" onClick={() => onDrill(weak[0].id)}>Start focused read</button>}
+        {!weak[0] && <button type="button" className="sr-btn sr-btn--primary" onClick={onStart}>{profile.totals.takes ? 'Continue practice' : 'Start my first read'}</button>}
       </section>
+      {profile.legacySkills && <p className="sr-hint">Scoring has improved. Your past history is preserved; current skill ratings are rebuilding from the corrected measurements.</p>}
 
       <details className="sr-progress-more">
         <summary>
@@ -173,7 +180,7 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
         <p className="sr-hint">
           Notes fade after their attack so your eyes keep moving into the phrase. Flexible adapts the
           fade distance to rhythmic density; it is a training variation, not a higher level.
-          These takes stay separate from your skill map because they measure reading fluency.
+          These takes stay separate from your skill map. They show performance with disappearing notes, not a measurement of where your eyes look.
         </p>
         <div className="sr-lookahead">
           {CURTAIN_MODES.filter((m) => m.beats !== null && !m.legacy).map((m) => {
@@ -190,7 +197,8 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
       </section>
 
       <section className="sr-panel">
-        <h3>Score history</h3>
+        <h3>Comparable first reads</h3>
+        <p className="sr-hint">Same selected level, tempo, length, hands and meter. Older scoring versions and assisted practice stay out of this trend.</p>
         {history.length < 2 ? (
           <p className="sr-hint">Two takes and a trend line appears here.</p>
         ) : (
@@ -266,6 +274,7 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
 function aggregatePitches(profile) {
   const out = {};
   for (const h of profile.history) {
+    if (h.scoringVersion !== SCORING_VERSION || h.repeat || h.assisted || h.curtain) continue;
     if (!h.meta?.pitches) continue;
     for (const [name, t] of Object.entries(h.meta.pitches)) {
       if (!out[name]) out[name] = { correct: 0, total: 0 };
@@ -279,6 +288,7 @@ function aggregatePitches(profile) {
 function aggregatePitchLocations(profile) {
   const out = {};
   for (const take of profile.history) {
+    if (take.scoringVersion !== SCORING_VERSION || take.repeat || take.assisted || take.curtain) continue;
     if (!take.meta?.pitchLocations) continue;
     for (const [id, tally] of Object.entries(take.meta.pitchLocations)) {
       if (!out[id]) out[id] = { ...tally, correct: 0, total: 0 };

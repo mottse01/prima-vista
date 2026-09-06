@@ -15,27 +15,38 @@ export function detectPitch(samples, sampleRate) {
 
   const minLag = Math.max(2, Math.floor(sampleRate / 1100));
   const maxLag = Math.min(samples.length - 2, Math.ceil(sampleRate / 55));
-  let bestLag = 0;
-  let bestClarity = -1;
-  for (let lag = minLag; lag <= maxLag; lag++) {
+  // Cumulative mean normalized difference (YIN): choose the first convincing
+  // period, not the highest correlation among its multiples. A later multiple
+  // can be marginally cleaner while identifying a completely different octave.
+  const normalized = new Float64Array(maxLag + 1);
+  normalized[0] = 1;
+  const length = samples.length - maxLag;
+  let sum = 0;
+  for (let lag = 1; lag <= maxLag; lag++) {
     let difference = 0;
-    let comparedEnergy = 0;
-    const length = samples.length - lag;
     for (let index = 0; index < length; index++) {
       const a = samples[index];
       const b = samples[index + lag];
       const delta = a - b;
       difference += delta * delta;
-      comparedEnergy += a * a + b * b;
     }
-    const clarity = comparedEnergy ? 1 - difference / comparedEnergy : 0;
-    if (clarity > bestClarity) {
-      bestClarity = clarity;
-      bestLag = lag;
-    }
+    sum += difference;
+    normalized[lag] = sum > 0 ? difference * lag / sum : 1;
   }
-  if (!bestLag || bestClarity < 0.62) return null;
-  return { frequency: sampleRate / bestLag, clarity: bestClarity, rms };
+  let bestLag = 0;
+  for (let lag = minLag; lag < maxLag; lag++) {
+    if (normalized[lag] >= 0.12) continue;
+    while (lag < maxLag && normalized[lag + 1] < normalized[lag]) lag += 1;
+    bestLag = lag;
+    break;
+  }
+  if (!bestLag) return null;
+  const a = normalized[bestLag - 1];
+  const b = normalized[bestLag];
+  const c = normalized[bestLag + 1] ?? b;
+  const denominator = a - 2 * b + c;
+  const adjustment = denominator ? Math.max(-0.5, Math.min(0.5, (a - c) / (2 * denominator))) : 0;
+  return { frequency: sampleRate / (bestLag + adjustment), clarity: 1 - b, rms };
 }
 
 export async function connectMicrophone(onEvent, onStatus = () => {}) {

@@ -1,4 +1,4 @@
-import { isChordTone, keyAlterations, tonicLetter } from './theory.js';
+import { isChordTone, isStructuralAlteration, keyAlterations, tonicLetter } from './theory.js';
 import { stylePack } from './stylePacks.js';
 
 const round = (value) => Math.round(value * 1000) / 1000;
@@ -66,8 +66,12 @@ function accidentalCount(score) {
   const signature = keyAlterations(score.key.fifths);
   return [...score.staves.rh, ...score.staves.lh]
     .filter((note) => !note.rest)
-    .flatMap((note) => note.pitches)
-    .filter((pitch) => pitch.alter !== signature[pitch.letter]).length;
+    .flatMap((note) => {
+      const chord = score.chords[Math.min(score.chords.length - 1,
+        Math.floor(note.onset / (score.ts.ticks / score.params.chordsPerMeasure)))];
+      return note.pitches.filter((pitch) => pitch.alter !== signature[pitch.letter]
+        && !isStructuralAlteration(score.key, chord, pitch));
+    }).length;
 }
 
 const STAFF_LIMITS = {

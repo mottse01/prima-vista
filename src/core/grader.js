@@ -1,8 +1,7 @@
 // Real-time grader.
 //
-// Sight Reading Factory shows you notes and hopes for the best. This module is
-// the other half of the loop: it matches what you actually played against what
-// was written, and attributes every miss to a *skill*, so practice can be aimed.
+// Match performed attacks to written music. Live colors are provisional;
+// later chord tones may revise a tentative substitution.
 
 import { TPQ, diaToY, pitchClassName } from './theory.js';
 import { xmlNoteId } from './musicxml.js';
@@ -23,7 +22,8 @@ export const SKILLS = [
   { id: 'rhythm.dotted', label: 'Dotted rhythms' },
   { id: 'rhythm.syncopation', label: 'Syncopation' },
   { id: 'rhythm.triplet', label: 'Triplets' },
-  { id: 'rhythm.rest', label: 'Rests' },
+  { id: 'rhythm.rest', label: 'Re-entry after rests' },
+  { id: 'rhythm.silence', label: 'No new notes in full rests' },
   { id: 'coordination.together', label: 'Hands together' },
 ];
 
@@ -130,6 +130,39 @@ export function analyseEvents(score) {
 // A run of this many clean attacks counts as being back in control.
 const STABLE_RUN = 2;
 
+export const SCORING_VERSION = 2;
+
+// Ordered, maximum-cardinality pitch matching with minimum total timing error.
+// Equal timestamps are canonicalized so MIDI delivery order has no effect.
+function matchSamePitch(expected, performed, window, match) {
+  const columns = performed.length + 1;
+  const values = new Float64Array((expected.length + 1) * columns);
+  const paths = new Uint8Array(values.length);
+  for (let i = 1; i <= expected.length; i++) {
+    for (let j = 1; j <= performed.length; j++) {
+      const at = i * columns + j;
+      const above = values[at - columns];
+      const left = values[at - 1];
+      values[at] = Math.max(above, left);
+      paths[at] = above >= left ? 1 : 2;
+      const distance = Math.abs(expected[i - 1].at - performed[j - 1].time);
+      const paired = values[at - columns - 1] + 1000000 - distance;
+      if (distance <= window && paired >= values[at]) {
+        values[at] = paired;
+        paths[at] = 3;
+      }
+    }
+  }
+  let i = expected.length;
+  let j = performed.length;
+  while (i && j) {
+    const path = paths[i * columns + j];
+    if (path === 3) { match(expected[--i], performed[--j], false); }
+    else if (path === 1) i -= 1;
+    else j -= 1;
+  }
+}
+
 /**
  * How long a mistake derails you.
  *
@@ -200,48 +233,48 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
   const window = Math.max(0.28, beatSec * 0.6) * toleranceScale;
   const goodTiming = Math.max(0.09, beatSec * 0.22) * toleranceScale;
 
-  const played = [];
+  const inputs = [];
+  let played = [];
   const states = {}; // note id -> 'correct' | 'late' | 'wrong' | 'missed'
   let extras = 0;
+  let finished = false;
+
+  function rematch() {
+    for (const e of expected) e.matched = null;
+    for (const key of Object.keys(states)) delete states[key];
+    played = inputs.map((input) => ({ ...input, verdict: 'extra' }))
+      .sort((a, b) => a.time - b.time || a.midi - b.midi || a.id - b.id);
+    const match = (event, input, wrong) => {
+      const delta = input.time - event.at;
+      const ok = Math.abs(delta) <= goodTiming;
+      event.matched = { time: input.time, delta, ok, ...(wrong ? { wrongPitch: input.midi } : {}) };
+      input.target = event.key;
+      input.delta = delta;
+      input.verdict = wrong ? 'wrong' : ok ? 'correct' : 'timing';
+      states[event.key] = wrong ? 'wrong' : ok ? 'correct' : 'late';
+    };
+    for (const midi of new Set(expected.map((e) => e.midi))) {
+      matchSamePitch(expected.filter((e) => e.midi === midi), played.filter((p) => p.midi === midi), window, match);
+    }
+    // Only unmatched pitches can now be substitutions. Never consume a correct
+    // chord tone simply because an extra note arrived a few messages earlier.
+    for (const input of played.filter((p) => !p.target)) {
+      const near = expected.filter((e) => !e.matched && Math.abs(e.at - input.time) <= window)
+        .sort((a, b) => Math.abs(a.at - input.time) - Math.abs(b.at - input.time)
+          || Math.abs(a.midi - input.midi) - Math.abs(b.midi - input.midi) || a.index - b.index)[0];
+      if (near) match(near, input, true);
+    }
+    extras = played.filter((p) => !p.target).length;
+    if (finished) for (const e of expected) if (!e.matched) states[e.key] = 'missed';
+  }
 
   function noteOn(midi, time) {
-    let best = null;
-    let bestDist = Infinity;
-    for (const e of expected) {
-      if (e.matched) continue;
-      if (e.midi !== midi) continue;
-      const d = Math.abs(e.at - time);
-      if (d < bestDist && d <= window) { best = e; bestDist = d; }
-    }
-
-    if (best) {
-      const delta = time - best.at;
-      const ok = Math.abs(delta) <= goodTiming;
-      best.matched = { time, delta, ok };
-      states[best.key] = ok ? 'correct' : 'late';
-      played.push({ midi, time, verdict: ok ? 'correct' : 'timing', target: best.key, delta });
-      return { verdict: ok ? 'correct' : 'timing', delta, key: best.key };
-    }
-
-    // Nothing of that pitch is due — if something else was due here, it's a
-    // wrong note rather than a spurious extra.
-    let near = null;
-    let nearDist = Infinity;
-    for (const e of expected) {
-      if (e.matched) continue;
-      const d = Math.abs(e.at - time);
-      if (d < nearDist && d <= window) { near = e; nearDist = d; }
-    }
-    if (near) {
-      near.matched = { time, delta: time - near.at, ok: false, wrongPitch: midi };
-      states[near.key] = 'wrong';
-      played.push({ midi, time, verdict: 'wrong', target: near.key });
-      return { verdict: 'wrong', key: near.key, expectedMidi: near.midi };
-    }
-
-    extras += 1;
-    played.push({ midi, time, verdict: 'extra' });
-    return { verdict: 'extra' };
+    if (finished || !Number.isFinite(time) || !Number.isFinite(midi)) return { verdict: 'ignored' };
+    const id = inputs.length;
+    inputs.push({ id, midi, time });
+    rematch();
+    const input = played.find((p) => p.id === id);
+    return { verdict: input.verdict, delta: input.delta, key: input.target };
   }
 
   function summary() {
@@ -265,7 +298,6 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
     for (const e of expected) {
       const m = e.matched;
       const pitchOk = Boolean(m && !m.wrongPitch);
-      const fullyOk = Boolean(m && m.ok && !m.wrongPitch);
       if (!m) missed += 1;
       else if (m.wrongPitch) wrong += 1;
       else if (!m.ok) { timingOff += 1; correct += 1; }
@@ -276,7 +308,10 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
         signedDelta += m.delta;
         deltaCount += 1;
       }
-      for (const s of e.skills) bump(s, fullyOk);
+      for (const s of e.skills) {
+        const timingOk = Boolean(m?.ok);
+        bump(s, s.startsWith('notes.') || s.startsWith('intervals.') ? pitchOk : timingOk);
+      }
       if (!pitchTally[e.pitchClass]) pitchTally[e.pitchClass] = { correct: 0, total: 0 };
       pitchTally[e.pitchClass].total += 1;
       if (pitchOk) pitchTally[e.pitchClass].correct += 1;
@@ -288,6 +323,26 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       }
       pitchLocations[locationName].total += 1;
       if (pitchOk) pitchLocations[locationName].correct += 1;
+    }
+
+    // Silence can be attributed without guessing a hand only where the whole
+    // score rests. This explicitly measures new attacks, not sustain/pedaling.
+    const staffEvents = ['rh', 'lh'].flatMap((hand) => playbackEvents(score, hand));
+    const boundaries = [...new Set(staffEvents.flatMap((e) => [e.onset, e.onset + e.duration]))].sort((a, b) => a - b);
+    let silentStart = null;
+    for (let i = 0; i < boundaries.length; i++) {
+      const from = boundaries[i];
+      const to = boundaries[i + 1];
+      const silent = to != null && !staffEvents.some((e) => !e.rest && e.onset < to && e.onset + e.duration > from);
+      if (silent && silentStart == null) silentStart = from;
+      if (!silent && silentStart != null) {
+        const startsAt = startTime + silentStart * secPerTick;
+        const endsAt = startTime + from * secPerTick;
+        const intrusions = inputs.some((p) => p.time >= startsAt && p.time < endsAt
+          && !expected.some((e) => e.matched?.time === p.time && e.midi === p.midi && e.matched.ok));
+        bump('rhythm.silence', !intrusions);
+        silentStart = null;
+      }
     }
 
     // Every expected note in time order, with the timing error where we have
@@ -331,6 +386,7 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
     const overall = 0.5 * pitchAccuracy + 0.3 * rhythmAccuracy + 0.2 * continuity;
 
     return {
+      scoringVersion: SCORING_VERSION,
       total, correct, wrong, missed, extras, timingOff, timedNotes: deltaCount,
       pitchAccuracy, rhythmAccuracy, continuity, overall, attackCount, attacksKept,
       meanAbsTiming: deltaCount ? absDelta / deltaCount : null,
@@ -362,7 +418,8 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
     states: () => ({ ...states }),
     /** Mark everything still unplayed once the take ends. */
     finish() {
-      for (const e of expected) if (!e.matched) states[e.key] = 'missed';
+      finished = true;
+      rematch();
       return summary();
     },
     window,

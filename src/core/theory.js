@@ -139,6 +139,13 @@ export function spellChordTone(key, chord, dia) {
   return spelled;
 }
 
+/** Required harmonic-minor spelling is not optional chromatic decoration. */
+export function isStructuralAlteration(key, chord, p) {
+  return key.mode === 'minor' && [4, 6].includes(chord?.degree)
+    && ((p.letter - tonicLetter(key) + 7) % 7) === 6
+    && p.alter === keyAlterations(key.fifths)[p.letter] + 1;
+}
+
 /** True when `dia` is a member of `chord` (octave-agnostic). */
 export function isChordTone(key, chord, dia) {
   const tl = tonicLetter(key);
