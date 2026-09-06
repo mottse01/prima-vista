@@ -1,18 +1,36 @@
+import { Suspense, lazy } from 'react';
 import { LEVELS, STAGES, levelById } from '../core/levels.js';
 import { comparableReads } from '../core/adaptive.js';
 import { waypointFor } from '../core/constellation.js';
+import { journeyProgress } from '../core/journey.js';
+
 
 // The graded path. Levels are parameter envelopes, so each one is an endless
 // supply of new material rather than a finite set of pieces to memorise.
+
+// The solar system pulls in a 3D engine, which nobody reading music needs to
+// download. It arrives when someone opens the path.
+const SolarSystem = lazy(() => import('./SolarSystem.jsx'));
 
 export default function PathView({ profile, onPick }) {
   const current = levelById(profile.level);
   const next = LEVELS.find((item) => item.id === current.id + 1);
   const demonstrated = (profile.demonstratedLevels || []).includes(current.id);
+  const progress = journeyProgress(profile);
   return (
     <div className="sr-path">
       <h2 className="sr-view-title">Your next musical step</h2>
-      <p className="sr-setup-lead">Choose a level that feels comfortable. You can try any level, any time.</p>
+      <p className="sr-setup-lead">
+        Ten levels, ten places. Drag to look around, scroll to travel outward, and choose
+        a body to practise there — any of them, any time.
+      </p>
+      <Suspense fallback={<div className="sr-orrery sr-orrery--loading" aria-hidden="true" />}>
+        <SolarSystem profile={profile} onPick={onPick} />
+      </Suspense>
+      <p className="sr-journey-line">
+        <strong>{progress.reached}</strong> of {progress.total} waypoints demonstrated ·
+        furthest reached <strong>{progress.furthest.name}</strong>
+      </p>
       <div className="sr-path-spotlight">
         <section className="sr-path-current">
           <span className="sr-eyebrow">Where you are · Level {current.id} · {waypointFor(current.id).name}</span>

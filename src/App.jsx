@@ -257,10 +257,16 @@ export default function App() {
         nextPathLevelRef.current = placementLevel;
       } else if (promoted) {
         nextPathLevelRef.current = next.level;
-        setToast({ kind: 'up', text: `Level ${next.level} unlocked — ${levelById(next.level).name}` });
+        setToast({
+          kind: 'up',
+          text: `Landed on ${waypointFor(next.level).name} — level ${next.level}, ${levelById(next.level).name}`,
+        });
       } else if (demoted) {
         nextPathLevelRef.current = next.level;
-        setToast({ kind: 'down', text: `Stepping back to level ${next.level} to rebuild.` });
+        setToast({
+          kind: 'down',
+          text: `Falling back to ${waypointFor(next.level).name} to rebuild — level ${next.level}.`,
+        });
       }
       // A transit is recorded only for a genuine first read, which is the
       // whole point of it: the streak counts cold reads, not repeats.
@@ -407,7 +413,7 @@ export default function App() {
     setRepairHand(null);
     setProfile(nextProfile);
     setParams(paramsForLevel(chosen.id, nextProfile, { seed: randomSeed(), targeting: false }));
-    setToast({ kind: 'info', text: `Level ${chosen.id} · ${chosen.name}` });
+    setToast({ kind: 'info', text: `Course set for ${waypointFor(chosen.id).name} · level ${chosen.id}, ${chosen.name}` });
     setTab('practice');
   }, [profile]);
 

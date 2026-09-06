@@ -82,26 +82,9 @@ export const CONSTELLATIONS = [
 
 const LABELS = new Map(SKILLS.map((skill) => [skill.id, skill.label]));
 
-/**
- * Ten levels as ten waypoints outward from here.
- *
- * Real objects at increasing distance, so the ladder reads as a journey with
- * a direction rather than as a number that goes up.
- */
-export const WAYPOINTS = [
-  { level: 1, name: 'Luna', note: 'The nearest light there is' },
-  { level: 2, name: 'Venus', note: 'Bright enough to cast a shadow' },
-  { level: 3, name: 'Mars', note: 'The first place with weather' },
-  { level: 4, name: 'Ceres', note: 'Largest body in the asteroid belt' },
-  { level: 5, name: 'Jupiter', note: 'A storm older than the telescope' },
-  { level: 6, name: 'Saturn', note: 'Rings you can see from a garden' },
-  { level: 7, name: 'Uranus', note: 'Turning on its side' },
-  { level: 8, name: 'Neptune', note: 'Found with mathematics before a lens' },
-  { level: 9, name: 'The Kuiper Belt', note: 'Where the map stops being crowded' },
-  { level: 10, name: 'The Heliopause', note: 'The edge of the Sun’s reach' },
-];
-
-export const waypointFor = (level) => WAYPOINTS[Math.max(0, Math.min(WAYPOINTS.length - 1, level - 1))];
+// The ten waypoints, and where each level sits in the sky, live in the journey
+// model beside the astronomy they are drawn from.
+export { WAYPOINTS, waypointFor } from './journey.js';
 
 /**
  * One star's observed state.
