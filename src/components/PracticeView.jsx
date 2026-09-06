@@ -24,6 +24,9 @@ const FOCUS_PACKS = [
   { id: 'intervals.leap', label: 'Intervals' },
   { id: 'notes.ledger', label: 'Ledger notes' },
   { id: 'coordination.together', label: 'Hands together' },
+  // The standard remedy for a weak left hand is to give it the melody and
+  // make it read the bass staff alone.
+  { id: 'notes.bass', label: 'Left hand alone' },
 ];
 
 /**
@@ -949,7 +952,10 @@ export default function PracticeView({
             </div>
           )}
         </div>
-            <details className="sr-structure">
+            {/* The analysis layer is not a setting: a reader who has reached
+                the levels where harmony and form are the point should meet it
+                open, and a beginner should not have to close it. */}
+            <details className="sr-structure" open={(level?.id || 0) >= 7}>
               <summary>Structure</summary>
               <div className="sr-structure-grid">
                 <div><span>Style & form</span><strong>{score.style?.label} · {score.form.name} · {score.form.label}</strong></div>
