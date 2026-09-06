@@ -307,7 +307,7 @@ export function paramsForLevel(level, profile, {
     if (!focusIntervals.includes('skip')) focusIntervals.push('skip');
   }
   if (weakIds.has('coordination.together') && p.hands === 'both') {
-    if (p.lhStyle === 'roots') p.lhStyle = 'blocked';
+    if (p.lhStyle === 'root_fifth') p.lhStyle = 'block_chord';
     targeted.add('coordination.together');
   }
 

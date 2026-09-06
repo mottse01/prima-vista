@@ -13,6 +13,15 @@ export function makeRng(seed) {
     int: (n) => Math.floor(next() * n),
     pick: (arr) => arr[Math.floor(next() * arr.length)],
     chance: (p) => next() < p,
+    /** A deterministic shuffle, for choosing several items without bias. */
+    shuffle(arr) {
+      const out = [...arr];
+      for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(next() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+      }
+      return out;
+    },
     /** Weighted pick. `weights[i]` corresponds to `arr[i]`. */
     weighted(arr, weights) {
       let total = 0;

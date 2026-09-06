@@ -8,7 +8,10 @@ import {
   TPQ, clamp, fromDia, isChordTone, isStructuralAlteration, keyAlterations, spellInKey, spellChordTone, tonicLetter, KEY_NAMES,
 } from './theory.js';
 import { getCell, metricWeight, resolveCells, timeSig } from './rhythm.js';
-import { planProgression, spellVoicing, voiceChordSequence } from './harmony.js';
+import { planProgression } from './harmony.js';
+import {
+  buildAccompaniment, normaliseTexture, playableTextures, resolveTexture,
+} from './accompaniment.js';
 import { reviewMusicality } from './musicality.js';
 import { validateExercise } from './validator.js';
 import { makeRng } from './rng.js';
@@ -226,6 +229,80 @@ function shapeMusicalRests(rng, events, {
 }
 
 /**
+ * Let one idea carry over a barline.
+ *
+ * A note attacked before the barline and held through it is the commonest
+ * rhythmic tension in tonal music and the one device this generator could not
+ * write: rhythm cells fill a measure exactly, so every attack landed inside
+ * its own bar. Merging a bar's last event with the next bar's downbeat makes
+ * the anticipation real; the engraver already splits the result into tied
+ * notes at the barline.
+ *
+ * Cadence arrivals, phrase openings and the final bar are left alone — the
+ * point is tension inside a phrase, not a blurred phrase boundary.
+ */
+function tieAcrossBarlines(rng, events, {
+  ts, form, measures, minDuration = 1, chance = 0, maximum = 2,
+}) {
+  if (!chance || measures < 4 || !rng.chance(chance)) return events;
+  const sorted = [...events].sort((a, b) => a.onset - b.onset);
+  const soundedInBar = new Map();
+  for (const event of sorted) {
+    if (event.rest) continue;
+    const bar = Math.floor(event.onset / ts.ticks);
+    soundedInBar.set(bar, (soundedInBar.get(bar) || 0) + 1);
+  }
+
+  const candidates = [];
+  for (let index = 0; index < sorted.length - 1; index++) {
+    const event = sorted[index];
+    const next = sorted[index + 1];
+    if (event.rest || next.rest) continue;
+    const bar = Math.floor(event.onset / ts.ticks);
+    if (bar >= measures - 2) continue;
+    const barline = (bar + 1) * ts.ticks;
+    if (event.onset + event.duration !== barline || next.onset !== barline) continue;
+    // Anticipating a downbeat is a within-phrase gesture. Across a formal
+    // seam it reads as a mistake rather than as syncopation.
+    if ((form?.plan?.[bar]?.unitIndex ?? 0) !== (form?.plan?.[bar + 1]?.unitIndex ?? 0)) continue;
+    if (event.cadenceArrival || next.cadenceArrival) continue;
+    if (event.tags?.includes('phrase-end') || next.tags?.includes('phrase-end')) continue;
+    if ((soundedInBar.get(bar + 1) || 0) < 2) continue;
+    if (event.duration >= ts.beat && event.onset % ts.beat === 0) continue;
+    if (event.duration + next.duration < minDuration) continue;
+    candidates.push(index);
+  }
+  if (!candidates.length) return events;
+
+  const chosen = new Set();
+  const barsUsed = new Set();
+  for (const index of rng.shuffle(candidates)) {
+    if (chosen.size >= maximum) break;
+    const bar = Math.floor(sorted[index].onset / ts.ticks);
+    if (barsUsed.has(bar) || barsUsed.has(bar - 1) || barsUsed.has(bar + 1)) continue;
+    barsUsed.add(bar);
+    chosen.add(index);
+  }
+  if (!chosen.size) return events;
+
+  const removed = new Set();
+  const out = [];
+  for (let index = 0; index < sorted.length; index++) {
+    if (removed.has(index)) continue;
+    if (!chosen.has(index)) { out.push(sorted[index]); continue; }
+    const event = sorted[index];
+    const next = sorted[index + 1];
+    removed.add(index + 1);
+    out.push({
+      ...event,
+      duration: event.duration + next.duration,
+      tags: [...new Set([...(event.tags || []), 'tied-over-barline', 'syncopation'])],
+    });
+  }
+  return out;
+}
+
+/**
  * Give an exercise an audible form before choosing any notes.
  *
  * Each four-bar phrase states a two-bar idea and answers it. Longer exercises
@@ -237,15 +314,40 @@ export function planMusicalForm(measures, styleId = 'classical_early', rng = nul
   return formForStyle(styleId, measures, rng, level);
 }
 
-function realiseCadenceAttack(events) {
+/**
+ * Realise a cadence bar.
+ *
+ * The final event of the bar always sounds — that is the arrival. When the
+ * arrival is shorter than a beat it also absorbs the note before it, so the
+ * phrase ending is heard as a broadening rather than as one more note of the
+ * prevailing rhythm. Cadential broadening is how a phrase end is written.
+ */
+function realiseCadenceAttack(events, ts, minDuration = 1, broaden = true) {
   if (!events.length) return events;
-  const last = events.length - 1;
-  return events.map((event, index) => index === last ? {
+  const mark = (event) => ({
     ...event,
     rest: false,
-    tags: [...event.tags, 'cadence-arrival'],
+    tags: [...new Set([...event.tags, 'cadence-arrival'])],
     cadenceArrival: true,
-  } : event);
+  });
+  const last = events.length - 1;
+  const previous = events[last - 1];
+  const arrival = events[last];
+  const contiguous = previous && previous.onset + previous.duration === arrival.onset;
+  const canBroaden = broaden && contiguous && !previous.rest
+    && events.filter((event) => !event.rest).length >= 3
+    && arrival.duration < ts.beat
+    && previous.duration + arrival.duration >= minDuration;
+  if (!canBroaden) return events.map((event, index) => index === last ? mark(event) : event);
+  return [
+    ...events.slice(0, last - 1),
+    mark({
+      ...arrival,
+      onset: previous.onset,
+      duration: previous.duration + arrival.duration,
+      tags: [...new Set([...arrival.tags, 'cadential-broadening'])],
+    }),
+  ];
 }
 
 /** Give continuation/chorus phrases perceptibly greater rhythmic momentum. */
@@ -307,6 +409,8 @@ function buildRhythm(
   fragmentShift = 0,
   style = null,
   minDuration = 1,
+  sequenceChance = 0,
+  tieChance = 0,
 ) {
   if (!Number.isInteger(chordsPerMeasure) || chordsPerMeasure < 1) {
     throw new Error('Harmonic slots per measure must be a positive integer');
@@ -358,6 +462,16 @@ function buildRhythm(
     return events.map((event, motifIndex) => ({ ...event, motifIndex: `${index}:${motifIndex}` }));
   });
 
+  // A sequence — the same figure restated one diatonic step higher or lower —
+  // is the strongest memorability device in tonal melody and one of the
+  // easiest things to read, because the eye recognises a shape it has already
+  // seen. Restating bar one as bar two keeps the motif memory intact and
+  // carries a shift with it.
+  if (prototypes.length >= 2 && !fragment && rng.chance(sequenceChance)) {
+    const step = rng.chance(0.55) ? 1 : -1;
+    prototypes[1] = prototypes[0].map((event) => ({ ...event, sequenceShift: step }));
+  }
+
   for (let m = 0; m < measures; m++) {
     const offsetTicks = m * ts.ticks;
     const spec = form.plan[m];
@@ -382,11 +496,11 @@ function buildRhythm(
       ],
     }));
     if (spec.cadence) {
-      measureEvents = realiseCadenceAttack(measureEvents);
+      measureEvents = realiseCadenceAttack(measureEvents, ts, minDuration, m > 0);
     }
     out.push(...measureEvents);
   }
-  const withRests = shapeMusicalRests(rng, out, {
+  const withRests = tieAcrossBarlines(rng, shapeMusicalRests(rng, out, {
     ts,
     form,
     restRate,
@@ -394,7 +508,7 @@ function buildRhythm(
     enabled: cellIds.some((id) => getCell(id)?.tags.includes('rest')),
     forced: focusTags.includes('rest'),
     minDuration,
-  });
+  }), { ts, form, measures, minDuration, chance: tieChance });
   Object.defineProperty(withRests, 'motifPlan', {
     enumerable: false,
     value: Object.freeze({
@@ -446,7 +560,7 @@ function assignPitches(rng, opts) {
     key, ts, chords, chordsPerMeasure, rhythm, measures,
     lowDia, highDia, maxLeap, stepwiseBias, nonChordRate, chromaticRate,
     focusIntervals = [], cadences = [], compositionStyle = null, form = null,
-    chromaticBudget = null,
+    chromaticBudget = null, stepFirst = false,
   } = opts;
 
   const styledStepwiseBias = clamp(
@@ -461,6 +575,7 @@ function assignPitches(rng, opts) {
   let prev = null;
   let lastLeap = 0;
   let lastLeapDir = 0;
+  let repeatRun = 0;
   let focusIndex = 0;
   let prevChord = null;
   const motifPitches = new Map();
@@ -563,7 +678,7 @@ function assignPitches(rng, opts) {
       + (phraseSpec?.registerShift || 0);
     const motifId = ev.motifKey ? `${ev.motifKey}:${ev.motifIndex}` : null;
     const remembered = motifId ? motifPitches.get(motifId) : null;
-    let motifTarget = remembered == null ? null : remembered + (ev.motifShift || 0);
+    let motifTarget = remembered == null ? null : remembered + (ev.motifShift || 0) + (ev.sequenceShift || 0);
     if (motifTarget != null && motifAnchor != null && ev.formalTransform === 'invert') {
       motifTarget = motifAnchor - (remembered - motifAnchor);
     } else if (motifTarget != null && motifAnchor != null && ev.formalTransform === 'expand_intervals') {
@@ -573,7 +688,10 @@ function assignPitches(rng, opts) {
     // Decide whether this slot must be a chord tone.
     let requireChordTone;
     if (isLast || isCadenceArrival || weight === 2 || phraseStartIndices.has(i) || i === climaxIndex) requireChordTone = true;
-    else if (weight === 1) requireChordTone = rng.chance(1 - styledNonChordRate * 0.5);
+    // Reading levels built on scale motion need beats that are free to hold a
+    // passing or neighbour tone. Requiring a chord tone on every beat inside a
+    // five-finger position leaves only unisons and thirds to choose from.
+    else if (weight === 1) requireChordTone = rng.chance(stepFirst ? 0.45 : 1 - styledNonChordRate * 0.5);
     else requireChordTone = rng.chance(1 - styledNonChordRate);
     if (lastLeap >= 3 && !isCadenceArrival && !isLast) {
       requireChordTone = false; // a leap wants a stepwise answer
@@ -708,9 +826,11 @@ function assignPitches(rng, opts) {
           return back ? 6 : 0.4;
         }
         let w;
-        if (dist === 0) w = 0.15;
-        else if (dist === 1) w = styledStepwiseBias * 6;
-        else if (dist === 2) w = (1 - styledStepwiseBias) * 5;
+        // A repeated note is a deliberate device, not a resting place. Two in
+        // a row is a figure; three is a dead bar.
+        if (dist === 0) w = repeatRun >= 1 ? 0.012 : 0.15;
+        else if (dist === 1) w = styledStepwiseBias * (stepFirst ? 9 : 6);
+        else if (dist === 2) w = (1 - styledStepwiseBias) * (stepFirst ? 2.6 : 5);
         else w = (1 - styledStepwiseBias) * 3 / dist;
         // Pull toward the phrase arch.
         w *= Math.exp(-Math.abs(d - target) / 5);
@@ -726,6 +846,7 @@ function assignPitches(rng, opts) {
 
     lastLeapDir = prev ? Math.sign(chosen - prev.dia) : 0;
     lastLeap = prev ? Math.abs(chosen - prev.dia) : 0;
+    repeatRun = prev && chosen === prev.dia ? repeatRun + 1 : 0;
 
     // Spell it. Chromatic inflection turns a stepwise passing tone into an
     // accidental, which is how accidentals actually appear in real music.
@@ -827,7 +948,10 @@ function annotateMelodicFunctions(notes, key, chords, ts, chordsPerMeasure) {
     }
 
     const degree = scaleDegree(key, note.pitches[0].dia);
-    const chordalSeventh = chord.seventh && degree === (chord.degree + 6) % 7;
+    // A blues dominant seventh is a colour, not a tendency: every chord in the
+    // idiom carries one and none of them are obliged to resolve downward.
+    const chordalSeventh = chord.seventh && !chord.bluesDominant
+      && degree === (chord.degree + 6) % 7;
     const leadingTone = degree === 6 && chord.fn === 'D';
     if (leadingTone || chordalSeventh) {
       const expected = leadingTone ? note.pitches[0].dia + 1 : note.pitches[0].dia - 1;
@@ -854,114 +978,6 @@ function nearest(pool, ref) {
 // ---------------------------------------------------------------------------
 // Left-hand textures
 // ---------------------------------------------------------------------------
-
-/** Largest offered subdivision that divides the slot exactly. */
-function pickUnit(slotTicks, candidates) {
-  for (const u of candidates) if (slotTicks % u === 0) return u;
-  return candidates[candidates.length - 1];
-}
-
-function buildLeftHand(rng, opts) {
-  const {
-    key, ts, chords, chordsPerMeasure, measures, style, lowDia, highDia, form, compositionStyle,
-    maxSimultaneous = 5, upperStaff = [],
-    chromaticBudget = null,
-  } = opts;
-  const notes = [];
-  const slotTicks = ts.ticks / chordsPerMeasure;
-  let spelledFallback = null;
-  const voicings = voiceChordSequence(key, chords, {
-    lowDia, highDia, upperStaff, slotTicks,
-    forbidOuterParallels: compositionStyle?.pack.validator.forbid_outer_parallels,
-  });
-
-  for (let m = 0; m < measures; m++) {
-    for (let s = 0; s < chordsPerMeasure; s++) {
-      const chord = chords[Math.min(chords.length - 1, m * chordsPerMeasure + s)];
-      const onset = m * ts.ticks + s * slotTicks;
-      const voicing = voicings[Math.min(voicings.length - 1, m * chordsPerMeasure + s)];
-      const spelled = spellVoicing(key, chord, voicing).slice(0, maxSimultaneous);
-      spelledFallback = spelled[0];
-      const isFinal = m === measures - 1;
-      const phraseSpec = form?.plan?.[m] || null;
-      const sectionLift = compositionStyle?.id === 'pop_contemporary' && (phraseSpec?.energy || 1) >= 3;
-
-      if (isFinal || style === 'sustained') {
-        notes.push(mk(onset, slotTicks, spelled, ['blocked']));
-        continue;
-      }
-
-      switch (style) {
-        case 'roots':
-          notes.push(mk(onset, slotTicks, [spelled[0]], ['root']));
-          if (sectionLift && spelled.at(-1)?.midi !== spelled[0]?.midi) {
-            notes[notes.length - 1].pitches = [spelled[0], spelled.at(-1)];
-            notes[notes.length - 1].tags.push('section-lift');
-          }
-          break;
-        case 'blocked':
-          notes.push(mk(onset, slotTicks, spelled, ['blocked']));
-          break;
-        case 'alberti': {
-          // low - high - middle - high, the classical figure.
-          const order = [0, spelled.length - 1, Math.min(1, spelled.length - 1), spelled.length - 1];
-          const unit = pickUnit(slotTicks, [TPQ / 2, TPQ]);
-          tile(onset, slotTicks, unit, (i) => [spelled[order[i % order.length]]], 'alberti');
-          break;
-        }
-        case 'broken': {
-          const unit = pickUnit(slotTicks, ts.compound ? [TPQ * 1.5, TPQ / 2] : [TPQ, TPQ / 2]);
-          tile(onset, slotTicks, unit, (i) => [spelled[i % 2 === 0 ? 0 : Math.min(2, spelled.length - 1)]], 'broken');
-          break;
-        }
-        case 'waltz': {
-          // Needs at least a two-note upper chord; a cramped range gives none.
-          const upper = spelled.length > 1 ? spelled.slice(1) : spelled;
-          if (ts.beats === 3 && !ts.compound) {
-            notes.push(mk(onset, ts.beat, [spelled[0]], ['bass']));
-            notes.push(mk(onset + ts.beat, ts.beat, upper, ['chord']));
-            notes.push(mk(onset + 2 * ts.beat, ts.beat, upper, ['chord']));
-          } else {
-            notes.push(mk(onset, slotTicks, spelled, ['blocked']));
-          }
-          break;
-        }
-        default:
-          notes.push(mk(onset, slotTicks, spelled, ['blocked']));
-      }
-    }
-  }
-
-  // Merge repeated blocked chords across a bar so ties/held notes read cleanly.
-  return notes.sort((a, b) => a.onset - b.onset);
-
-  function mk(onset, duration, pitches, tags) {
-    const signature = keyAlterations(key.fifths);
-    const chord = chords[Math.min(chords.length - 1, Math.floor(onset / (ts.ticks / chordsPerMeasure)))];
-    const constrained = (pitches.length ? pitches : [spelledFallback]).map((pitch) => {
-      if (!chromaticBudget || pitch.alter === signature[pitch.letter] || isStructuralAlteration(key, chord, pitch)) return pitch;
-      if (chromaticBudget.remaining > 0) {
-        chromaticBudget.remaining -= 1;
-        return pitch;
-      }
-      return spellInKey(key, pitch.dia);
-    });
-    return {
-      onset, duration, rest: false, tags, cellId: 'lh',
-      pitches: constrained,
-    };
-  }
-
-  /** Repeat a figure across a slot, never spilling past its end. */
-  function tile(onset, slotTicks, unit, pick, tag) {
-    let t = 0;
-    for (let i = 0; t < slotTicks; i++) {
-      const d = Math.min(unit, slotTicks - t);
-      notes.push(mk(onset + t, d, pick(i), [tag]));
-      t += d;
-    }
-  }
-}
 
 /** An independent left-hand melodic line, for two-voice contrapuntal levels. */
 function buildLeftHandMelody(rng, opts) {
@@ -997,6 +1013,64 @@ function addDynamics(rng, notes, ts, measures, style) {
       mid.dynamic = rng.pick(others);
     }
   }
+}
+
+const DYNAMIC_LADDER = ['pp', 'p', 'mp', 'mf', 'f', 'ff'];
+
+/** One step quieter, for an accompaniment under a melody. */
+function softer(dynamic) {
+  const index = DYNAMIC_LADDER.indexOf(dynamic);
+  return index > 0 ? DYNAMIC_LADDER[index - 1] : dynamic;
+}
+
+/**
+ * Mark the second staff. An accompaniment sits under the melody it supports;
+ * an independent line carries the same dynamic as its partner.
+ */
+function addStaffDynamic(staff, lead, accompanying) {
+  const first = staff.find((note) => !note.rest);
+  if (!first) return;
+  const leadDynamic = lead.find((note) => note.dynamic)?.dynamic || 'mf';
+  first.dynamic = accompanying ? softer(leadDynamic) : leadDynamic;
+}
+
+/**
+ * Write the shape the melody already has.
+ *
+ * The generator chooses one structural climax. A crescendo into it and a
+ * diminuendo out of it turn that plan into an instruction the reader can see,
+ * which is what makes a phrase get shaped rather than merely played.
+ */
+function addHairpins(notes, ts, form) {
+  const sounded = notes.filter((note) => !note.rest);
+  const climaxIndex = sounded.findIndex((note) => note.structural === 'climax');
+  if (climaxIndex < 2) return 0;
+  const climax = sounded[climaxIndex];
+  const measure = Math.floor(climax.onset / ts.ticks);
+  const unit = (form.units || []).find((item) => measure >= item.bars[0] && measure <= item.bars[1]);
+  if (!unit) return 0;
+
+  const unitStart = unit.bars[0] * ts.ticks;
+  const unitEnd = (unit.bars[1] + 1) * ts.ticks;
+  const rise = sounded.find((note) => note.onset >= unitStart && note.onset < climax.onset);
+  const fall = [...sounded].reverse().find((note) => note.onset > climax.onset && note.onset < unitEnd);
+  let count = 0;
+  if (rise && rise.onset < climax.onset) {
+    rise.wedge = 'crescendo';
+    climax.wedgeStop = true;
+    count += 1;
+  }
+  if (fall && fall.onset > climax.onset) {
+    climax.wedge = climax.wedge === 'crescendo' ? climax.wedge : 'diminuendo';
+    if (count) {
+      // The crescendo closes on the climax and the diminuendo opens there.
+      climax.wedgeStop = true;
+      climax.wedge = 'diminuendo';
+    }
+    fall.wedgeStop = true;
+    count += 1;
+  }
+  return count;
 }
 
 function motifSlot(note) {
@@ -1092,7 +1166,7 @@ function addOrnaments(rng, notes, level, style) {
   }
 }
 
-function buildSlurs(notes, ts, form) {
+function buildSlurs(notes, ts, form, hand = 'rh') {
   const slurs = [];
   for (const unit of form.units || []) {
     const start = unit.bars[0] * ts.ticks;
@@ -1100,7 +1174,7 @@ function buildSlurs(notes, ts, form) {
     const within = notes.filter((note) => note.onset >= start && note.onset < end);
     let run = [];
     const finishRun = () => {
-      if (run.length > 1) slurs.push({ hand: 'rh', from: run[0].onset, to: run.at(-1).onset });
+      if (run.length > 1) slurs.push({ hand, from: run[0].onset, to: run.at(-1).onset });
       run = [];
     };
     for (const event of within) {
@@ -1136,7 +1210,7 @@ function addFingerings(notes, low, high, hand = 'rh') {
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_PARAMS = {
-  generatorVersion: 2,
+  generatorVersion: 3,
   sourceMode: 'generated',
   repertoireId: 'beethoven-ode-to-joy-theme',
   compositionStyle: 'auto',
@@ -1199,7 +1273,11 @@ function planNotationRepeat(rng, form, level, measures) {
 }
 
 export function composeCandidate(userParams = {}, attempt = 0) {
-  const params = { ...DEFAULT_PARAMS, ...userParams };
+  const merged = { ...DEFAULT_PARAMS, ...userParams };
+  // Texture ids are the vocabulary the levels, the style packs and the critic
+  // all speak. Older saved values are translated once, here, so nothing
+  // downstream has to know two names for the same figure.
+  const params = { ...merged, lhStyle: normaliseTexture(merged.lhStyle) };
   const seed = params.seed >>> 0;
   const candidateSeed = attempt === 0 ? seed : (seed + Math.imul(attempt, 0x9e3779b9)) >>> 0;
   const rng = makeRng(candidateSeed);
@@ -1282,7 +1360,7 @@ export function composeCandidate(userParams = {}, attempt = 0) {
   let motifPlan = null;
   const wantsRh = params.hands === 'both' || params.hands === 'rh';
   const wantsLh = params.hands === 'both' || params.hands === 'lh';
-  const accompanimentReserve = wantsRh && wantsLh && params.lhStyle !== 'melodic'
+  const accompanimentReserve = wantsRh && wantsLh && params.lhStyle !== 'contrapuntal'
     ? Math.min(constraints.chromatic_notes, Math.max(1, Math.ceil(measures / 4)))
     : 0;
   const chromaticBudget = {
@@ -1290,10 +1368,19 @@ export function composeCandidate(userParams = {}, attempt = 0) {
     reservedForAccompaniment: accompanimentReserve,
   };
 
+  // Sequences need a stated idea long enough to restate, and a reader who has
+  // met a second phrase before.
+  const sequenceChance = level >= 3 && measures >= 8 ? 0.38 : 0;
+  const stepFirst = level <= 4;
+  // Holding a note through a barline is the level-7 skill the curriculum
+  // already names — "ties and syncopation" — so it arrives with that
+  // vocabulary rather than as a surprise.
+  const tieChance = (params.rhythmTags || []).includes('syncopation') ? 0.55 : 0;
+
   if (wantsRh) {
     const rhythm = buildRhythm(
       rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form, chordsPerMeasure,
-      fragment, fragmentShift, style, constraints.smallest_ticks,
+      fragment, fragmentShift, style, constraints.smallest_ticks, sequenceChance, tieChance,
     );
     motifPlan = rhythm.motifPlan;
     staves.rh = assignPitches(rng, {
@@ -1306,11 +1393,12 @@ export function composeCandidate(userParams = {}, attempt = 0) {
       compositionStyle: style,
       form,
       chromaticBudget,
+      stepFirst,
     });
   }
 
   if (wantsLh) {
-    if (params.lhStyle === 'melodic') {
+    if (params.lhStyle === 'contrapuntal') {
       staves.lh = buildLeftHandMelody(rng, {
         key, ts, chords, chordsPerMeasure, measures,
         cellIds: params.lhCells || cells,
@@ -1324,12 +1412,13 @@ export function composeCandidate(userParams = {}, attempt = 0) {
         form,
         minDuration: constraints.smallest_ticks,
         chromaticBudget,
+        stepFirst,
       });
     } else if (params.hands === 'lh') {
       // Left hand alone gets the melody, not an accompaniment pattern.
       const rhythm = buildRhythm(
         rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form, chordsPerMeasure,
-        fragment, fragmentShift, style, constraints.smallest_ticks,
+        fragment, fragmentShift, style, constraints.smallest_ticks, sequenceChance, tieChance,
       );
       motifPlan = rhythm.motifPlan;
       staves.lh = assignPitches(rng, {
@@ -1344,12 +1433,33 @@ export function composeCandidate(userParams = {}, attempt = 0) {
         chromaticBudget,
       });
     } else {
-      staves.lh = buildLeftHand(rng, {
+      const allowedTextures = playableTextures(
+        constraints.lh_textures?.length
+          ? constraints.lh_textures
+          : style.pack.lh_textures.filter((item) => item.min_level <= level).map((item) => item.id),
+        {
+          ts,
+          minDuration: constraints.smallest_ticks,
+          handSpan: constraints.hand_span,
+          slotTicks: ts.ticks / chordsPerMeasure,
+        },
+      );
+      // Label the study with the figure it will actually play. A texture that
+      // this meter or subdivision cannot carry is resolved here, and the
+      // resolved id is what the exercise, the critic and a shared link carry.
+      params.lhStyle = resolveTexture(params.lhStyle, allowedTextures);
+      staves.lh = buildAccompaniment(rng, {
         key, ts, chords, chordsPerMeasure, measures,
-        style: params.lhStyle, lowDia: params.lhLow, highDia: params.lhHigh,
+        texture: params.lhStyle, lowDia: params.lhLow, highDia: params.lhHigh,
         form, compositionStyle: style, maxSimultaneous: constraints.simultaneous_notes,
         upperStaff: staves.rh,
         chromaticBudget,
+        minDuration: constraints.smallest_ticks,
+        handSpan: constraints.hand_span,
+        allowInversions: params.allowInversions,
+        allowChromatic: constraints.chromatic_notes > 0,
+        allowedTextures,
+        breathChance: (params.rhythmTags || []).includes('rest') ? 0.55 : 0,
       });
     }
   }
@@ -1363,14 +1473,33 @@ export function composeCandidate(userParams = {}, attempt = 0) {
   const motifStart = motifUnit.bars[0] * ts.ticks;
   const motifEnd = (motifUnit.bars[1] + 1) * ts.ticks;
   const motifLead = lead.filter((note) => !note.rest && note.onset >= motifStart && note.onset < motifEnd);
-  if (params.dynamics) addDynamics(rng, lead, ts, measures, style);
-  if (params.articulations) addArticulations(lead, ts, style, form);
+  const accompanying = staves.rh.length > 0 && staves.lh.length > 0
+    && params.lhStyle !== 'contrapuntal';
+  if (params.dynamics) {
+    addDynamics(rng, lead, ts, measures, style);
+    // The second staff is a part, and a part has a dynamic. An accompaniment
+    // is marked one step under the melody it supports, which is the balance
+    // instruction a pianist actually needs; an independent line is marked in
+    // its own right.
+    if (staves.lh.length && lead !== staves.lh) {
+      addStaffDynamic(staves.lh, lead, accompanying);
+    }
+  }
+  if (params.articulations) {
+    addArticulations(lead, ts, style, form);
+    if (staves.lh.length && lead !== staves.lh) addArticulations(staves.lh, ts, style, form);
+  }
   addOrnaments(rng, lead, level, style);
+  if (params.dynamics) addHairpins(lead, ts, form);
   if (params.fingerings) {
     addFingerings(staves.rh, params.rhLow, params.rhHigh, 'rh');
     addFingerings(staves.lh, params.lhLow, params.lhHigh, 'lh');
   }
-  const slurs = params.slurs && staves.rh.length ? buildSlurs(staves.rh, ts, form) : [];
+  const slurs = [
+    ...(params.slurs && staves.rh.length ? buildSlurs(staves.rh, ts, form) : []),
+    ...(params.slurs && params.lhStyle === 'contrapuntal' && staves.lh.length
+      ? buildSlurs(staves.lh, ts, form, 'lh') : []),
+  ];
 
   const keyName = KEY_NAMES[key.mode][String(key.fifths)];
   const title = `${style.title} in ${key.mode === 'minor' ? keyName.toUpperCase() : keyName} ${key.mode}, ${ORDINALS[seed % ORDINALS.length]}`;
@@ -1405,7 +1534,7 @@ export function composeCandidate(userParams = {}, attempt = 0) {
     slurs,
     title,
     params,
-    generatorVersion: 2,
+    generatorVersion: 3,
     stylePackVersion: style.version,
     development: {
       motif: {

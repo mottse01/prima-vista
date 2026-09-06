@@ -320,6 +320,20 @@ export function toMusicXml(score, opts = {}) {
             + `</direction-type><staff>${h.staff}</staff></direction>`,
           );
         }
+        // Hairpins close before they open, so a note that ends one wedge and
+        // begins the next writes both directions in that order.
+        if (w.source.wedgeStop && !w.tieFrom) {
+          parts.push(
+            `<direction placement="below"><direction-type><wedge type="stop" number="1"/>`
+            + `</direction-type><staff>${h.staff}</staff></direction>`,
+          );
+        }
+        if (w.source.wedge && !w.tieFrom) {
+          parts.push(
+            `<direction placement="below"><direction-type><wedge type="${w.source.wedge}" number="1"/>`
+            + `</direction-type><staff>${h.staff}</staff></direction>`,
+          );
+        }
         const accs = w.rest || w.tieFrom
           ? []
           : w.pitches.map((p) => accidentals[h.hand].needed(p));

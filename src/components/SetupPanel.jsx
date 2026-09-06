@@ -4,6 +4,7 @@ import { TIME_SIGNATURES } from '../core/rhythm.js';
 import { codeToSeed, randomSeed, seedToCode } from '../core/rng.js';
 import { STYLE_OPTIONS, styleSetupPatch } from '../core/compositionStyles.js';
 import { REPERTOIRE_OPTIONS } from '../core/repertoire.js';
+import { TEXTURES } from '../core/accompaniment.js';
 
 const FIFTHS = [-7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
 
@@ -16,15 +17,7 @@ const RHYTHM_OPTIONS = [
   { id: 'triplet', label: 'Triplets' },
 ];
 
-const LH_STYLES = [
-  { id: 'roots', label: 'Single bass notes' },
-  { id: 'blocked', label: 'Blocked triads' },
-  { id: 'alberti', label: 'Alberti bass' },
-  { id: 'broken', label: 'Broken chords' },
-  { id: 'waltz', label: 'Waltz (bass–chord–chord)' },
-  { id: 'sustained', label: 'Sustained chords' },
-  { id: 'melodic', label: 'Independent melody (two voices)' },
-];
+const LH_STYLES = TEXTURES.map((texture) => ({ id: texture.id, label: texture.label }));
 
 const diaName = (dia) => `${LETTERS[((dia % 7) + 7) % 7]}${Math.floor(dia / 7)}`;
 

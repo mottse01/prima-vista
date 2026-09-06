@@ -67,8 +67,11 @@ function accidentalCount(score) {
   return [...score.staves.rh, ...score.staves.lh]
     .filter((note) => !note.rest)
     .flatMap((note) => {
+      // The realised harmonic rhythm, not the requested one: a style pack can
+      // clamp the slots per bar, and looking the chord up in the wrong slot
+      // misreads which alterations belong to the harmony.
       const chord = score.chords[Math.min(score.chords.length - 1,
-        Math.floor(note.onset / (score.ts.ticks / score.params.chordsPerMeasure)))];
+        Math.floor(note.onset / (score.ts.ticks / score.chordsPerMeasure)))];
       return note.pitches.filter((pitch) => pitch.alter !== signature[pitch.letter]
         && !isStructuralAlteration(score.key, chord, pitch));
     }).length;
@@ -89,7 +92,7 @@ export function ledgerLines(hand, dia) {
 
 function melodicStaffs(score) {
   if (score.params.hands === 'lh') return ['lh'];
-  if (score.params.hands === 'both' && score.params.lhStyle === 'melodic') return ['rh', 'lh'];
+  if (score.params.hands === 'both' && score.params.lhStyle === 'contrapuntal') return ['rh', 'lh'];
   return ['rh'];
 }
 
@@ -121,37 +124,32 @@ function handShifts(score, hand) {
   return Math.max(0, Math.ceil(span / 5) - 1);
 }
 
-const TEXTURE_IDS = {
-  roots: 'root_fifth', blocked: 'block_chord', sustained: 'block_chord',
-  alberti: 'alberti', broken: 'broken_octave', waltz: 'stride', melodic: 'contrapuntal',
-};
-
+/**
+ * Every tick of the exercise is accounted for exactly once, per hand.
+ *
+ * This is a timeline check rather than a per-bar one, because a note may now
+ * be attacked before a barline and held through it. What must never happen is
+ * a gap, an overlap, or a hand that stops before the final barline.
+ */
 function coverageErrors(score, hand, staff) {
   const errors = [];
-  for (let bar = 0; bar < score.measures; bar++) {
-    const from = bar * score.ts.ticks;
-    const to = from + score.ts.ticks;
-    const events = staff
-      .filter((event) => event.onset >= from && event.onset < to)
-      .sort((a, b) => a.onset - b.onset);
-    if (!events.length) {
-      errors.push(`${hand} bar ${bar + 1} is empty`);
-      continue;
+  const total = score.measures * score.ts.ticks;
+  const events = [...staff].sort((a, b) => a.onset - b.onset);
+  if (!events.length) return [`${hand} has no music`];
+  let cursor = 0;
+  for (const event of events) {
+    if (!Number.isFinite(event.duration) || event.duration <= 0) {
+      errors.push(`${hand} has a non-positive duration in bar ${Math.floor(event.onset / score.ts.ticks) + 1}`);
+      return errors;
     }
-    let cursor = from;
-    for (const event of events) {
-      if (event.onset !== cursor) {
-        errors.push(`${hand} bar ${bar + 1} has a ${event.onset < cursor ? 'overlap' : 'gap'}`);
-        break;
-      }
-      if (!Number.isFinite(event.duration) || event.duration <= 0) {
-        errors.push(`${hand} bar ${bar + 1} has a non-positive duration`);
-        break;
-      }
-      cursor = event.onset + event.duration;
+    if (event.onset !== cursor) {
+      const bar = Math.floor(Math.min(event.onset, cursor) / score.ts.ticks) + 1;
+      errors.push(`${hand} bar ${bar} has a ${event.onset < cursor ? 'overlap' : 'gap'}`);
+      return errors;
     }
-    if (cursor !== to) errors.push(`${hand} bar ${bar + 1} has an invalid duration`);
+    cursor = event.onset + event.duration;
   }
+  if (cursor !== total) errors.push(`${hand} does not fill the exercise`);
   return errors;
 }
 
@@ -350,10 +348,17 @@ export function validateExercise(score, constraints, { relaxation = 0 } = {}) {
   if (!constraints.meters.includes(score.ts.name)) hardErrors.push('meter is not permitted at this level');
   if (score.tempo < constraints.tempo[0] || score.tempo > constraints.tempo[1]) hardErrors.push('tempo is outside the level range');
   if (!pack.meters.some((meter) => meter.value === score.ts.name)) hardErrors.push('meter is not supported by the style pack');
-  if (score.params.hands === 'both') {
-    const texture = TEXTURE_IDS[score.params.lhStyle] || score.params.lhStyle;
-    if (constraints.lh_textures.length && !constraints.lh_textures.includes(texture)) {
-      hardErrors.push('left-hand texture is not permitted at this level');
+  // Check the figures that were actually played, not the one that was asked
+  // for. A texture that could not be realised must fail here rather than reach
+  // the reader as something else under the requested name.
+  if (score.params.hands === 'both' && constraints.lh_textures?.length) {
+    const played = new Set(score.staves.lh.map((note) => note.texture).filter(Boolean));
+    const permitted = new Set([...constraints.lh_textures, 'block_chord']);
+    for (const texture of played) {
+      if (!permitted.has(texture)) {
+        hardErrors.push(`left-hand texture ${texture} is not permitted at this level`);
+        break;
+      }
     }
   }
   hardErrors.push(...melodicIntervalErrors(score, constraints));

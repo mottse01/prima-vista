@@ -295,6 +295,14 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
     let deltaCount = 0;
     let signedDelta = 0;
 
+    // Rhythm strands are shared between the hands, so a strand score can never
+    // say which hand was late. These per-hand tallies can, which is what makes
+    // "your left hand is rushing" a thing the app can actually tell you.
+    const hands = {
+      rh: { total: 0, pitchCorrect: 0, onTime: 0, timed: 0, absDelta: 0, signedDelta: 0, skills: {} },
+      lh: { total: 0, pitchCorrect: 0, onTime: 0, timed: 0, absDelta: 0, signedDelta: 0, skills: {} },
+    };
+
     for (const e of expected) {
       const m = e.matched;
       const pitchOk = Boolean(m && !m.wrongPitch);
@@ -308,6 +316,25 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
         signedDelta += m.delta;
         deltaCount += 1;
       }
+
+      const hand = hands[e.hand];
+      if (hand) {
+        hand.total += 1;
+        if (pitchOk) hand.pitchCorrect += 1;
+        if (m?.ok) hand.onTime += 1;
+        if (m && !m.wrongPitch) {
+          hand.timed += 1;
+          hand.absDelta += Math.abs(m.delta);
+          hand.signedDelta += m.delta;
+        }
+        for (const s of e.skills) {
+          if (!hand.skills[s]) hand.skills[s] = { correct: 0, total: 0 };
+          hand.skills[s].total += 1;
+          const ok = s.startsWith('notes.') || s.startsWith('intervals.') ? pitchOk : Boolean(m?.ok);
+          if (ok) hand.skills[s].correct += 1;
+        }
+      }
+
       for (const s of e.skills) {
         const timingOk = Boolean(m?.ok);
         bump(s, s.startsWith('notes.') || s.startsWith('intervals.') ? pitchOk : timingOk);
@@ -392,6 +419,14 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       meanAbsTiming: deltaCount ? absDelta / deltaCount : null,
       meanSignedTiming: deltaCount ? signedDelta / deltaCount : null,
       skills: skillTally,
+      hands: Object.fromEntries(Object.entries(hands).map(([hand, data]) => [hand, {
+        notes: data.total,
+        pitchAccuracy: data.total ? data.pitchCorrect / data.total : null,
+        rhythmAccuracy: data.total ? data.onTime / data.total : null,
+        meanAbsTiming: data.timed ? data.absDelta / data.timed : null,
+        meanSignedTiming: data.timed ? data.signedDelta / data.timed : null,
+        skills: data.skills,
+      }])),
       pitches: pitchTally,
       pitchLocations,
       played,

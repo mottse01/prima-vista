@@ -125,10 +125,14 @@ function cadenceChoice(rng, pack, requested, final) {
   return pickObject(rng, available);
 }
 
-function melodicArrival(cadenceId, degrees) {
+function melodicArrival(rng, cadenceId, degrees) {
   if (cadenceId === 'half' || cadenceId === 'blues_turnaround' && degrees.at(-1) === 4) return 4;
   if (cadenceId === 'deceptive') return 5;
   if (cadenceId === 'subdominant_turn') return 3;
+  // An imperfect authentic cadence is defined by its melody: the third or the
+  // fifth above the tonic, never the tonic itself. Choosing between them is
+  // what gives a study several distinguishable phrase endings.
+  if (cadenceId === 'imperfect' && degrees.at(-1) === 0) return rng.chance(0.6) ? 2 : 4;
   return degrees.at(-1) === 0 ? 0 : degrees.at(-1);
 }
 
@@ -201,7 +205,7 @@ export function planProgression(rng, {
     cadences.push({
       id, name, short, measure, final,
       slots: applied.map((_, index) => startSlot + index), degrees,
-      melodyDegree: melodicArrival(id, degrees),
+      melodyDegree: melodicArrival(rng, id, degrees),
       strength: planBar?.cadenceStrength || (final ? 'strong' : 'weak'),
       phraseFunction: planBar?.phraseFunction || null,
       roman: applied.join('–'),
@@ -272,10 +276,18 @@ export function planProgression(rng, {
   };
 }
 
-function voicingCandidates(key, chord, { lowDia, highDia }) {
+/** Which chord member is in the bass: 0 root, 2 third, 4 fifth, 6 seventh. */
+export function bassInversionOffset(key, chord, bassDia) {
+  const rootClass = ((chord.degree + tonicLetter(key)) % 7 + 7) % 7;
+  const bassClass = ((bassDia % 7) + 7) % 7;
+  return ((bassClass - rootClass) % 7 + 7) % 7;
+}
+
+function voicingCandidates(key, chord, { lowDia, highDia, rootPositionOnly = false }) {
   const centre = Math.round((lowDia + highDia) / 2);
   const base = chordTones(key, chord, centre - 2);
   const candidates = [];
+  const relaxed = [];
   for (let rotation = 0; rotation < base.length; rotation++) {
     for (let octave = -1; octave <= 1; octave++) {
       const voicing = base.map((_, index) => {
@@ -287,9 +299,17 @@ function voicingCandidates(key, chord, { lowDia, highDia }) {
         const bassDegree = ((voicing[0] - tonicLetter(key)) % 7 + 7) % 7;
         if (bassDegree !== (chord.degree + chord.inversion * 2) % 7) continue;
       }
+      // A level that has not introduced inversions should not quietly read
+      // them in the bass staff. Root position is preferred, not enforced: a
+      // locked cadence chord or a cramped range still gets a legal voicing.
+      if (rootPositionOnly && !chord.inversionLocked && bassInversionOffset(key, chord, voicing[0]) !== 0) {
+        relaxed.push(voicing);
+        continue;
+      }
       candidates.push(voicing);
     }
   }
+  if (!candidates.length && relaxed.length) return relaxed;
   if (!candidates.length) {
     const desired = (chord.degree + chord.inversion * 2) % 7;
     const choices = Array.from({ length: highDia - lowDia + 1 }, (_, index) => lowDia + index)
@@ -310,13 +330,30 @@ export function voiceChord(key, chord, prevVoicing, range) {
   return candidates.sort((a, b) => cost(a) - cost(b))[0];
 }
 
-function transitionCost(previous, current) {
-  const movement = current.reduce((sum, pitch, index) => (
-    sum + Math.abs(pitch - previous[Math.min(index, previous.length - 1)])
+/**
+ * Cost of moving one voicing to the next.
+ *
+ * The upper voices want to move as little as possible and to hold common
+ * tones. The bass wants the opposite: a bass line is a line, so a step is
+ * cheaper than standing still, and only wide leaps are expensive. Scoring the
+ * two groups the same way is what produces a bass that never moves.
+ */
+function transitionCost(previous, current, preferStepwiseBass = false) {
+  const upperMovement = current.slice(1).reduce((sum, pitch, index) => (
+    sum + Math.abs(pitch - previous[Math.min(index + 1, previous.length - 1)])
   ), 0);
   const previousClasses = new Set(previous.map((pitch) => ((pitch % 7) + 7) % 7));
   const retained = current.filter((pitch) => previousClasses.has(((pitch % 7) + 7) % 7)).length;
-  return movement - retained * 1.35 + Math.abs(current[0] - previous[0]) * 0.35;
+  const distance = Math.abs(current[0] - previous[0]);
+  let bass;
+  if (!preferStepwiseBass) {
+    bass = distance * 1.35;
+  } else if (distance === 1) bass = -1.7;
+  else if (distance === 0) bass = 1.1;
+  else if (distance === 2) bass = 0.1;
+  else if (distance <= 4) bass = 0.85;
+  else bass = 0.85 + (distance - 4) * 1.1;
+  return upperMovement - retained * 1.35 + bass;
 }
 
 /**
@@ -326,8 +363,9 @@ function transitionCost(previous, current) {
  */
 export function voiceChordSequence(key, chords, {
   lowDia, highDia, upperStaff = [], slotTicks = 48, forbidOuterParallels = false,
+  preferStepwiseBass = false, rootPositionOnly = false,
 }) {
-  const layers = chords.map((chord) => voicingCandidates(key, chord, { lowDia, highDia }));
+  const layers = chords.map((chord) => voicingCandidates(key, chord, { lowDia, highDia, rootPositionOnly }));
   const topAt = (onset) => {
     const pitches = upperStaff.filter((event) => (
       !event.rest && event.onset <= onset && event.onset + event.duration > onset
@@ -340,16 +378,29 @@ export function voiceChordSequence(key, chords, {
   for (let slot = 1; slot < layers.length; slot++) {
     const previousTop = topAt((slot - 1) * slotTicks);
     const currentTop = topAt(slot * slotTicks);
+    const chord = chords[slot];
     states = layers[slot].map((voicing, index) => {
       let best = null;
+      // A six-four is a specific device — cadential, passing, or over a pedal —
+      // not a general-purpose voicing. Cadence chords declare their own.
+      const sixFour = preferStepwiseBass && !chord.inversionLocked
+        && bassInversionOffset(key, chord, voicing[0]) === 4 ? 3.2 : 0;
       for (const state of states) {
-        let cost = state.cost + transitionCost(state.voicing, voicing);
-        if (forbidOuterParallels && previousTop != null && currentTop != null) {
+        let cost = state.cost + transitionCost(state.voicing, voicing, preferStepwiseBass) + sixFour;
+        if (previousTop != null && currentTop != null) {
           const topMove = Math.sign(currentTop - previousTop);
           const bassMove = Math.sign(voicing[0] - state.voicing[0]);
-          const before = ((previousTop - state.voicing[0]) % 7 + 7) % 7;
-          const after = ((currentTop - voicing[0]) % 7 + 7) % 7;
-          if (topMove && topMove === bassMove && [0, 4].includes(before) && before === after) cost += 18;
+          if (forbidOuterParallels) {
+            const before = ((previousTop - state.voicing[0]) % 7 + 7) % 7;
+            const after = ((currentTop - voicing[0]) % 7 + 7) % 7;
+            if (topMove && topMove === bassMove && [0, 4].includes(before) && before === after) cost += 18;
+          }
+          // Outer voices moving against each other is what makes two staves
+          // sound like two parts rather than one chord with a melody on top.
+          if (preferStepwiseBass && topMove) {
+            if (bassMove && topMove !== bassMove) cost -= 1.25;
+            else if (!bassMove) cost -= 0.35;
+          }
         }
         if (!best || cost < best.cost) best = { cost, path: [...state.path, index], voicing };
       }

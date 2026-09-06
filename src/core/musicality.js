@@ -32,7 +32,7 @@ function leadNotes(score) {
 }
 
 function bassAtSlot(score, slot) {
-  if (score.params.hands !== 'both' || score.params.lhStyle === 'melodic') return null;
+  if (score.params.hands !== 'both' || score.params.lhStyle === 'contrapuntal') return null;
   const onset = slot * score.ts.ticks / score.chordsPerMeasure;
   const attacks = score.staves.lh.filter((note) => !note.rest && note.onset === onset);
   const pitches = attacks.flatMap((note) => note.pitches || []);
@@ -142,6 +142,10 @@ function reviewMelody(score, notes) {
   const intervals = notes.slice(1).map((note, i) => note.pitches[0].dia - notes[i].pitches[0].dia);
   const smallMotion = intervals.length
     ? intervals.filter((interval) => Math.abs(interval) <= 2).length / intervals.length : 1;
+  // Steps are steps. Counting thirds and repeated notes as "small motion" is
+  // what let beginner levels pass with almost no scale motion in them.
+  const stepRatio = intervals.length
+    ? intervals.filter((interval) => Math.abs(interval) === 1).length / intervals.length : 1;
   const repeated = intervals.length
     ? intervals.filter((interval) => interval === 0).length / intervals.length : 0;
   let leaps = 0;
@@ -173,6 +177,7 @@ function reviewMelody(score, notes) {
 
   return {
     smallMotion,
+    stepRatio,
     repeated,
     leapResolution: leaps ? resolved / leaps : 1,
     uniqueClimax,
@@ -247,38 +252,173 @@ function reviewForm(score, notes) {
   };
 }
 
-function reviewVoiceLeading(score) {
-  if (score.params.hands !== 'both' || score.params.lhStyle === 'melodic') {
-    return { score: 1, averageBassMove: 0, largestBassMove: 0, parallelBlocks: 0 };
+/**
+ * The bass line, sampled once per harmony rather than once per attack.
+ *
+ * A repeated-bass figure restates the same note several times inside one
+ * chord; that is the texture, not the line. Sampling at the harmonic slot is
+ * what makes "does the bass move" a question about the line.
+ */
+function bassLine(score) {
+  const slotTicks = score.ts.ticks / score.chordsPerMeasure;
+  const total = score.measures * score.chordsPerMeasure;
+  const out = [];
+  for (let slot = 0; slot < total; slot++) {
+    const from = slot * slotTicks;
+    const to = from + slotTicks;
+    const within = (score.staves.lh || []).filter((note) => (
+      !note.rest && note.pitches?.length && note.onset >= from && note.onset < to
+    ));
+    if (!within.length) continue;
+    const first = within.reduce((best, note) => (note.onset < best.onset ? note : best));
+    out.push([first.onset, Math.min(...first.pitches.map((pitch) => pitch.dia))]);
   }
+  return out;
+}
+
+/** The melody note sounding at a given tick, for outer-voice comparisons. */
+function topAt(score, onset) {
+  const pitches = (score.staves.rh || [])
+    .filter((note) => !note.rest && note.onset <= onset && note.onset + note.duration > onset)
+    .flatMap((note) => note.pitches || []);
+  return pitches.length ? Math.max(...pitches.map((pitch) => pitch.dia)) : null;
+}
+
+/**
+ * Review the left hand as a part, not as a harmonic label.
+ *
+ * A bass line is judged the way a line is judged: does it move, does it move
+ * mostly by step, does it move against the melody, and does the realised
+ * figure match the texture the exercise claims to be teaching. Parallel
+ * perfect intervals and unplayable leaps remain faults.
+ */
+function reviewLeftHand(score) {
+  const empty = {
+    score: 1, stepwiseBass: 0, contraryMotion: 0, staticBass: 0,
+    largestBassMove: 0, parallelBlocks: 0, textureFidelity: 1, textures: [],
+  };
+  if (score.params.hands !== 'both') return empty;
+
+  const line = bassLine(score);
+  if (line.length < 2) return empty;
+
+  let steps = 0;
+  let statics = 0;
+  let largest = 0;
+  let contrary = 0;
+  let outerPairs = 0;
+  for (let index = 1; index < line.length; index++) {
+    const [previousOnset, previousDia] = line[index - 1];
+    const [onset, dia] = line[index];
+    const move = dia - previousDia;
+    const distance = Math.abs(move);
+    largest = Math.max(largest, distance);
+    if (distance === 1) steps += 1;
+    if (distance === 0) statics += 1;
+    const before = topAt(score, previousOnset);
+    const after = topAt(score, onset);
+    if (before != null && after != null && after !== before) {
+      outerPairs += 1;
+      if (move && Math.sign(move) !== Math.sign(after - before)) contrary += 1;
+    }
+  }
+  const moves = line.length - 1;
+  const stepwiseBass = steps / moves;
+  const staticBass = statics / moves;
+  const contraryMotion = outerPairs ? contrary / outerPairs : 0;
+
+  // Parallel motion of a whole voicing, which no keyboard texture should make
+  // audible between successive harmonies.
   const slotTicks = score.ts.ticks / score.chordsPerMeasure;
   const voicings = [];
   for (let slot = 0; slot < score.chords.length; slot++) {
     const onset = slot * slotTicks;
-    const pitches = score.staves.lh
+    const pitches = (score.staves.lh || [])
       .filter((note) => !note.rest && note.onset === onset)
       .flatMap((note) => note.pitches || [])
       .map((pitch) => pitch.dia)
       .sort((a, b) => a - b);
-    if (pitches.length) voicings.push(pitches);
+    if (pitches.length > 1) voicings.push(pitches);
   }
-  if (voicings.length < 2) return { score: 1, averageBassMove: 0, largestBassMove: 0, parallelBlocks: 0 };
-  const moves = voicings.slice(1).map((voicing, i) => Math.abs(voicing[0] - voicings[i][0]));
-  const averageBassMove = moves.reduce((sum, move) => sum + move, 0) / moves.length;
-  const largestBassMove = Math.max(...moves);
+  // A triad shifting as a block is ordinary keyboard writing, and octaves,
+  // open fifths and broken octaves are parallel by definition — that is the
+  // figure. Parallel perfect intervals inside a chordal texture are the fault
+  // worth naming.
+  const parallelByDesign = new Set(['octave_bass', 'broken_octave', 'pad', 'root_fifth']);
   let parallelBlocks = 0;
-  for (let i = 1; i < voicings.length; i++) {
-    const a = voicings[i - 1];
-    const b = voicings[i];
+  for (let index = 1; index < voicings.length; index++) {
+    const a = voicings[index - 1];
+    const b = voicings[index];
     const offsets = b.map((pitch, voice) => pitch - a[Math.min(voice, a.length - 1)]);
-    if (offsets.length > 1 && offsets.every((offset) => offset === offsets[0]) && offsets[0] !== 0) parallelBlocks += 1;
+    if (offsets.length < 2 || offsets[0] === 0) continue;
+    if (!offsets.every((offset) => offset === offsets[0])) continue;
+    const before = a.at(-1) - a[0];
+    const after = b.at(-1) - b[0];
+    if (before !== after || (before !== 4 && before !== 7)) continue;
+    const texture = (score.staves.lh || []).find((note) => (
+      !note.rest && note.pitches?.length && Math.min(...note.pitches.map((pitch) => pitch.dia)) === b[0]
+    ))?.texture;
+    if (!parallelByDesign.has(texture)) parallelBlocks += 1;
   }
+
+  // Every accompaniment note records the figure that produced it. A study that
+  // asked for a walking bass and fell back to block chords is not a walking
+  // bass study, and should not win the candidate search by default.
+  const played = (score.staves.lh || []).filter((note) => note.texture);
+  const requested = score.params.lhStyle;
+  const textures = [...new Set(played.map((note) => note.texture))];
+  const openingBars = score.form?.units?.[0]?.bars || [0, 0];
+  const opening = played.filter((note) => {
+    const measure = Math.floor(note.onset / score.ts.ticks);
+    return measure >= openingBars[0] && measure <= openingBars[1];
+  });
+  const statedInOpening = opening.some((note) => note.texture === requested);
+  const share = played.length
+    ? played.filter((note) => note.texture === requested).length / played.length : 0;
+  // A study may change figure between sections — that is what a second
+  // section is for — but the figure it is named after has to be the one the
+  // reader meets first and hears most.
+  const textureFidelity = requested === 'contrapuntal' || !played.length
+    ? 1
+    : clamp((statedInOpening ? 0.55 : 0.15) + 0.45 * clamp(share / 0.5));
+
+  // What counts as a good bass depends on what the figure is for. A walking
+  // bass or an independent line is judged as a line, so stepwise motion is the
+  // measure. A chordal accompaniment is judged on whether the harmony moves at
+  // all — a blues bass leaping between I, IV and V is doing its job. A pedal
+  // point is a held note by definition and is exempt.
+  const LINE_TEXTURES = new Set([
+    'walking', 'contrapuntal', 'boogie', 'arpeggio_wide', 'broken_octave', 'alberti', 'broken_chord',
+  ]);
+  const lineShare = played.length
+    ? played.filter((note) => LINE_TEXTURES.has(note.texture)).length / played.length : 0;
+  const pedalShare = played.length
+    ? played.filter((note) => note.texture === 'pedal').length / played.length : 0;
+  const motion = pedalShare > 0.5
+    ? 1
+    : lineShare >= 0.5
+      ? clamp(stepwiseBass / 0.42)
+      : clamp((1 - staticBass) / 0.75);
+
   const scoreValue = clamp(
-    1 - Math.max(0, averageBassMove - 2.7) * 0.11
-      - Math.max(0, largestBassMove - 7) * 0.06
-      - parallelBlocks * 0.08,
+    motion * 0.3
+    + clamp(contraryMotion / 0.42) * 0.22
+    + textureFidelity * 0.3
+    + clamp(1 - Math.max(0, largest - 7) * 0.12) * 0.1
+    + 0.08
+    - parallelBlocks * 0.07,
   );
-  return { score: scoreValue, averageBassMove, largestBassMove, parallelBlocks };
+  return {
+    score: scoreValue,
+    lineShare,
+    stepwiseBass,
+    contraryMotion,
+    staticBass,
+    largestBassMove: largest,
+    parallelBlocks,
+    textureFidelity,
+    textures,
+  };
 }
 
 function reviewPlayability(score) {
@@ -331,20 +471,23 @@ export function reviewMusicality(score) {
   const motifs = reviewMotifs(score, notes);
   const melody = reviewMelody(score, notes);
   const formReview = reviewForm(score, notes);
-  const voiceLeading = reviewVoiceLeading(score);
+  const leftHand = reviewLeftHand(score);
   const playability = reviewPlayability(score);
   const styleCoherence = reviewStyle(score, notes, melody, motifs, formReview);
 
   const benchmark = styleBenchmark(score.style?.id);
   const motionScore = inRange(melody.smallMotion, benchmark.smallMotion);
   const repetitionScore = inRange(melody.repeated, benchmark.repeatedNotes);
-  const melodicScore = strongHarmony * 0.16 + melody.leapResolution * 0.17
-    + motionScore * 0.12 + repetitionScore * 0.08 + melody.uniqueClimax * 0.15
-    + melody.tendencyResolution * 0.14 + melody.ornamentClarity * 0.08 + melody.anchorHarmony * 0.1;
+  // Early levels are supposed to be scale reading. Hold them to real steps.
+  const stepFloor = (score.params.level || 10) <= 4 ? 0.38 : 0.26;
+  const stepScore = clamp(melody.stepRatio / stepFloor);
+  const melodicScore = strongHarmony * 0.14 + melody.leapResolution * 0.15
+    + motionScore * 0.09 + repetitionScore * 0.07 + stepScore * 0.09 + melody.uniqueClimax * 0.13
+    + melody.tendencyResolution * 0.13 + melody.ornamentClarity * 0.08 + melody.anchorHarmony * 0.12;
   const motifScore = motifs.recognition * 0.72 + motifs.variation * 0.28;
   const harmonyScore = cadence.score * 0.68 + progressionConsistency * 0.32;
-  const overall = formReview.score * 0.18 + harmonyScore * 0.23 + motifScore * 0.14
-    + melodicScore * 0.24 + voiceLeading.score * 0.07 + playability * 0.06 + styleCoherence * 0.08;
+  const overall = formReview.score * 0.16 + harmonyScore * 0.21 + motifScore * 0.12
+    + melodicScore * 0.22 + leftHand.score * 0.16 + playability * 0.05 + styleCoherence * 0.08;
 
   const errors = [...cadence.errors];
   if (progressionConsistency < 1) errors.push('the harmonic pattern loses its stated progression');
@@ -357,6 +500,10 @@ export function reviewMusicality(score) {
   if (motifs.recognition < benchmark.motifRecognition) issues.push('the returning idea is not recognisable enough');
   if (formReview.contrast < benchmark.sectionContrast && score.form?.phrases?.length > 1) issues.push('contrasting sections are not audibly distinct');
   if (styleCoherence < 0.72) issues.push('the realised music does not strongly fit the selected style');
+  if (melody.stepRatio < stepFloor) issues.push('the melody has too little stepwise motion for this level');
+  if (leftHand.textureFidelity < 0.8) issues.push('the left hand does not play the texture the study claims');
+  if (leftHand.staticBass > 0.55) issues.push('the bass repeats the same note too often to read as a line');
+  if (leftHand.parallelBlocks) issues.push('the accompaniment moves in parallel blocks');
 
   const scoreValue = Math.round(overall * 100);
   return {
@@ -377,7 +524,12 @@ export function reviewMusicality(score) {
       leapResolution: rounded(melody.leapResolution),
       tendencyResolution: rounded(melody.tendencyResolution),
       uniqueClimax: rounded(melody.uniqueClimax),
-      voiceLeading: rounded(voiceLeading.score),
+      stepRatio: rounded(melody.stepRatio),
+      leftHand: rounded(leftHand.score),
+      stepwiseBass: rounded(leftHand.stepwiseBass),
+      contraryMotion: rounded(leftHand.contraryMotion),
+      staticBass: rounded(leftHand.staticBass),
+      textureFidelity: rounded(leftHand.textureFidelity),
       playability: rounded(playability),
       styleCoherence: rounded(styleCoherence),
     },

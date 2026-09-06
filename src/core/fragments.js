@@ -1,4 +1,5 @@
 import classical from '../data/fragments/classical_early.json' with { type: 'json' };
+import { normaliseTexture } from './accompaniment.js';
 
 function validate(fragment) {
   if (!fragment.id || !fragment.genre || fragment.bars !== 2 || !fragment.provenance?.source_id) {
@@ -23,13 +24,8 @@ function validate(fragment) {
 
 export const FRAGMENTS = Object.freeze(classical.map(validate));
 
-const TEXTURE_IDS = {
-  roots: 'root_fifth', blocked: 'block_chord', sustained: 'block_chord',
-  alberti: 'alberti', broken: 'broken_octave', waltz: 'stride', melodic: 'contrapuntal',
-};
-
 export function chooseFragment(rng, { meter, level, genre, lhStyle }) {
-  const texture = TEXTURE_IDS[lhStyle] || lhStyle;
+  const texture = normaliseTexture(lhStyle);
   const eligible = FRAGMENTS.filter((fragment) => (
     fragment.meter === meter
     && fragment.level <= level

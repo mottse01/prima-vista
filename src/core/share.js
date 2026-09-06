@@ -7,6 +7,7 @@
 import { DEFAULT_PARAMS } from './generator.js';
 import { seedToCode } from './rng.js';
 import { STYLE_IDS } from './compositionStyles.js';
+import { TEXTURE_IDS } from './accompaniment.js';
 
 const EXTRA_KEYS = new Set(['level', 'targeted', 'focusRhythmTags', 'focusIntervals']);
 const ALLOWED_KEYS = new Set([...Object.keys(DEFAULT_PARAMS), ...EXTRA_KEYS]);
@@ -16,7 +17,9 @@ const ENUMS = {
   keyMode: new Set(['major', 'minor']),
   hands: new Set(['both', 'rh', 'lh']),
   timeSignature: new Set(['4/4', '3/4', '2/4', '5/4', '2/2', '3/8', '6/8', '9/8', '12/8']),
-  lhStyle: new Set(['roots', 'blocked', 'alberti', 'broken', 'waltz', 'sustained', 'melodic']),
+  // Legacy ids stay accepted so links shared before textures were realised
+  // individually still open; the generator translates them on the way in.
+  lhStyle: new Set([...TEXTURE_IDS, 'roots', 'blocked', 'broken', 'melodic']),
   compositionStyle: new Set(STYLE_IDS),
 };
 const BOUNDS = {

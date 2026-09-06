@@ -3,11 +3,6 @@
 
 import { STYLE_PACK_LIST, stylePack, weightedPick } from './stylePacks.js';
 
-const TEXTURE_TO_UI = {
-  block_chord: 'blocked', root_fifth: 'roots', broken_octave: 'broken',
-  contrapuntal: 'melodic', walking: 'broken', stride: 'waltz',
-};
-
 function publicProfile(pack) {
   return Object.freeze({
     id: pack.id, label: pack.display_name, description: pack.description,
@@ -49,11 +44,16 @@ export function resolveCompositionStyle(rng, requested, context = {}) {
     pack.meters.some((meter) => meter.value === context.timeSignature)
     && pack.forms.some((form) => form.min_level <= (context.level || 1))
   ));
-  const pool = compatible.filter((pack) => pack.provenance.model === 'bootstrap-hand-audited');
-  if (!pool.length) throw new Error(`No audited style pack supports ${context.timeSignature}`);
-  const weighted = pool.map((pack) => ({
+  if (!compatible.length) throw new Error(`No style pack supports ${context.timeSignature}`);
+  // Every enabled pack is reachable from Auto. A hand-audited pack is still
+  // the likelier choice, because its grammar has been checked by a person —
+  // but a learner who only ever meets two dialects never learns to read a
+  // third, and the idioms that make a left hand interesting all live in the
+  // packs that were previously unreachable.
+  const weighted = compatible.map((pack) => ({
     pack,
-    weight: pack.meters.find((meter) => meter.value === context.timeSignature)?.weight || 0.08,
+    weight: (pack.meters.find((meter) => meter.value === context.timeSignature)?.weight || 0.08)
+      * (pack.provenance.model === 'bootstrap-hand-audited' ? 2.2 : 1),
   }));
   return compositionStyle(weightedPick(rng, weighted).pack.id);
 }
@@ -73,7 +73,7 @@ export function styleSetupPatch(id, params = {}) {
     compositionStyle: pack.id,
     ...(meter ? { timeSignature: meter } : {}),
     ...(bestForm ? { measures: bestForm.bars } : {}),
-    ...(params.hands === 'both' && texture ? { lhStyle: TEXTURE_TO_UI[texture] || texture } : {}),
+    ...(params.hands === 'both' && texture ? { lhStyle: texture } : {}),
   };
 }
 
