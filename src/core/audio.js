@@ -286,7 +286,11 @@ export function renderReferenceWav(score, {
     for (let i = 0; i < count; i++) {
       const t = i / sampleRate;
       const attack = Math.min(1, t / 0.007);
-      const body = 0.7 * Math.exp(-2.25 * t) + 0.3 * Math.exp(-0.48 * t);
+      // A reference playback exists to be listened to, so a held note has to
+      // still be there at the end of its value. The old envelope had lost
+      // more than half its level within half a second, which left long notes
+      // and inner voices under the metronome rather than in front of it.
+      const body = 0.62 * Math.exp(-1.9 * t) + 0.38 * Math.exp(-0.36 * t);
       const releaseGain = t <= hold ? 1 : Math.max(0, 1 - (t - hold) / release);
       const phase = Math.PI * 2 * frequency * t;
       const tone = Math.sin(phase)
@@ -297,16 +301,22 @@ export function renderReferenceWav(score, {
     }
   };
 
-  const addClick = (start, accent) => {
+  const addClick = (start, accent, level = 1) => {
     const startSample = Math.max(0, Math.floor(start * sampleRate));
     const count = Math.min(mix.length - startSample, Math.ceil(0.065 * sampleRate));
     const frequency = accent ? 1560 : 1040;
     for (let i = 0; i < count; i++) {
       const t = i / sampleRate;
       const env = Math.exp(-68 * t);
-      mix[startSample + i] += Math.sin(Math.PI * 2 * frequency * t) * env * (accent ? 0.34 : 0.22);
+      mix[startSample + i] += Math.sin(Math.PI * 2 * frequency * t) * env * (accent ? 0.34 : 0.22) * level;
     }
   };
+
+  // A click is a sharp transient and reads far louder than a piano tone of the
+  // same peak. Under music it is a guide and sits behind; during a count-in,
+  // or a take where the notes are deliberately silent, it is the only thing
+  // there and keeps its full level.
+  const clickLevel = playScore ? 0.44 : 1;
 
   if (playScore) {
     for (const hand of ['rh', 'lh']) {
@@ -317,7 +327,7 @@ export function renderReferenceWav(score, {
             exerciseStart + note.onset * secPerTick,
             pitch.midi,
             note.duration * secPerTick,
-            hand === 'lh' ? 0.38 : 0.5,
+            hand === 'lh' ? 0.5 : 0.66,
           );
         }
       }
@@ -329,7 +339,7 @@ export function renderReferenceWav(score, {
   }
   if (metronome) {
     for (let tick = 0; tick <= performanceTicks(score); tick += score.ts.beat) {
-      addClick(exerciseStart + tick * secPerTick, tick % score.ts.ticks === 0);
+      addClick(exerciseStart + tick * secPerTick, tick % score.ts.ticks === 0, clickLevel);
     }
   }
 

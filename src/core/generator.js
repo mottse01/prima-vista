@@ -1198,34 +1198,85 @@ function addArticulations(notes, ts, style, form) {
   }
 }
 
-function addOrnaments(rng, notes, level, style) {
+/**
+ * Ornaments belong on notes that can carry one.
+ *
+ * A turn or a mordent needs room and a reason: it decorates a structurally
+ * important note, not whichever note a coin flip landed on. Candidates are
+ * long enough to hear the figure inside them, on a strong beat, and away from
+ * a cadence arrival, which should sound plain. Two per study is plenty.
+ */
+function addOrnaments(rng, notes, level, style, ts) {
   const policy = style.pack.expression.ornaments;
   const supported = policy.allowed.filter((name) => ['turn', 'mordent'].includes(name));
-  if (level < policy.min_level || !supported.length) return;
-  for (const note of notes) {
-    if (!note.rest && note.chordTone && rng.chance(policy.density)) note.ornament = rng.pick(supported);
-  }
+  if (level < policy.min_level || !supported.length || !policy.density) return;
+
+  const candidates = notes.filter((note) => (
+    !note.rest
+    && note.chordTone
+    && note.pitches?.length
+    && note.duration >= ts.beat
+    && !note.cadence
+    && note.articulation !== 'staccato'
+    && metricWeight(ts, note.onset % ts.ticks) > 0
+  ));
+  if (!candidates.length) return;
+
+  const wanted = Math.min(2, Math.max(1, Math.round(candidates.length * policy.density)));
+  for (const note of rng.shuffle(candidates).slice(0, wanted)) note.ornament = rng.pick(supported);
 }
 
+// A fourth or wider asks for a new hand position, so a phrase mark stops
+// there; eight notes or two bars is as far as one legato gesture reaches.
+const SLUR_LEAP = 4;
+const SLUR_MAX_NOTES = 8;
+const SLUR_MAX_BARS = 2;
+
+/**
+ * Phrase marks that follow the music.
+ *
+ * A slur is a legato instruction for one gesture, not a bracket around
+ * everything that happens between two rests. It breaks where a pianist's hand
+ * and ear break it: at a rest, at a leap wide enough to need a hand move, at a
+ * repeated pitch, which has to be re-struck and so cannot be slurred, at a
+ * note already marked staccato, and at a cadence arrival, which ends a gesture
+ * rather than continuing through it. A long line is divided at a barline
+ * instead of being drawn as one arc across the system.
+ */
 function buildSlurs(notes, ts, form, hand = 'rh') {
   const slurs = [];
+  const ordered = [...notes].sort((a, b) => a.onset - b.onset);
+
   for (const unit of form.units || []) {
     const start = unit.bars[0] * ts.ticks;
     const end = (unit.bars[1] + 1) * ts.ticks;
-    const within = notes.filter((note) => note.onset >= start && note.onset < end);
+    const within = ordered.filter((note) => note.onset >= start && note.onset < end);
+
     let run = [];
-    const finishRun = () => {
+    const finish = () => {
       if (run.length > 1) slurs.push({ hand, from: run[0].onset, to: run.at(-1).onset });
       run = [];
     };
-    for (const event of within) {
-      if (event.rest) {
-        finishRun();
-      } else {
-        run.push(event);
+
+    for (const note of within) {
+      if (note.rest || note.articulation === 'staccato' || !note.pitches?.length) {
+        finish();
+        continue;
       }
+      const previous = run.at(-1);
+      if (previous) {
+        const step = Math.abs(note.pitches[0].dia - previous.pitches[0].dia);
+        const bars = Math.floor(note.onset / ts.ticks) - Math.floor(run[0].onset / ts.ticks);
+        if (step === 0
+          || step >= SLUR_LEAP
+          || previous.cadence
+          || run.length >= SLUR_MAX_NOTES
+          || bars >= SLUR_MAX_BARS) finish();
+      }
+      run.push(note);
+      if (note.cadence) finish();
     }
-    finishRun();
+    finish();
   }
   return slurs;
 }
@@ -1538,7 +1589,7 @@ export function composeCandidate(userParams = {}, attempt = 0) {
     addArticulations(lead, ts, style, form);
     if (staves.lh.length && lead !== staves.lh) addArticulations(staves.lh, ts, style, form);
   }
-  addOrnaments(rng, lead, level, style);
+  addOrnaments(rng, lead, level, style, ts);
   if (params.dynamics) addHairpins(lead, ts, form);
   if (params.fingerings) {
     addFingerings(staves.rh, params.rhLow, params.rhHigh, 'rh');
