@@ -210,7 +210,11 @@ function repeatedRun(notes) {
 function softMelodyChecks(score, pack) {
   const notes = leadNotes(score);
   const intervals = notes.slice(1).map((note, index) => note.pitches[0].dia - notes[index].pitches[0].dia);
+  // The style band is calibrated on conjunct motion, which includes a repeated
+  // note. True steps are counted separately, because a line that only repeats
+  // and skips can otherwise sit inside the band with no scale motion in it.
   const steps = intervals.filter((value) => Math.abs(value) <= 1).length / Math.max(1, intervals.length);
+  const trueSteps = intervals.filter((value) => Math.abs(value) === 1).length / Math.max(1, intervals.length);
   let unrecovered = 0;
   for (let index = 0; index < intervals.length - 1; index++) {
     if (Math.abs(intervals[index]) <= 2) continue;
@@ -232,13 +236,15 @@ function softMelodyChecks(score, pack) {
   const target = pack.melody.step_ratio_target;
   const tolerance = pack.melody.step_ratio_tolerance;
   if (steps < target - tolerance || steps > target + tolerance) errors.push('step ratio is outside the style band');
+  // Early levels are scale reading. Hold them to actual steps.
+  if ((score.params.level || 10) <= 4 && trueSteps < 0.34) errors.push('too little stepwise motion for a beginner level');
   if (notes.length > 4 && apexCount !== 1) errors.push('the melody does not have exactly one global maximum');
   if (unrecovered) errors.push('a non-triadic leap is not recovered by contrary step');
   if ((score.params.level || 1) < 6 && repeatedRun(notes) > 3) errors.push('too many consecutive repeated pitches');
   if (pack.validator.forbid_outer_parallels && outerParallelCount(score)) {
     errors.push('outer voices contain parallel fifths or octaves');
   }
-  return { errors, steps, apexCount, unrecovered };
+  return { errors, steps, trueSteps, apexCount, unrecovered };
 }
 
 function chordAt(score, onset) {
@@ -382,7 +388,7 @@ export function validateExercise(score, constraints, { relaxation = 0 } = {}) {
   return {
     passed, hardPassed: hardErrors.length === 0, hardErrors: [...new Set(hardErrors)],
     softErrors: soft.errors, relaxation,
-    metrics: { coherence: round(coherence), stepRatio: round(soft.steps), apexCount: soft.apexCount, unrecoveredLeaps: soft.unrecovered },
+    metrics: { coherence: round(coherence), conjunctRatio: round(soft.steps), stepRatio: round(soft.trueSteps), apexCount: soft.apexCount, unrecoveredLeaps: soft.unrecovered },
   };
 }
 

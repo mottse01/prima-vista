@@ -452,6 +452,56 @@ export function addAccompanimentBreath(rng, notes, {
   } : note));
 }
 
+/**
+ * Push a chord in front of its own downbeat.
+ *
+ * The anticipation — the left hand arriving an eighth early and holding
+ * through the barline — is the gesture that makes pop, gospel and Latin
+ * accompaniments feel like they are pulling the music forward. It needs a
+ * chord attacked before the barline it belongs to, which is only possible now
+ * that an accompaniment event may outlive its own bar.
+ */
+export function anticipateDownbeat(rng, notes, {
+  ts, form, measures, minDuration = 1, chance = 0,
+}) {
+  const push = ts.beat / 2;
+  if (!chance || push < minDuration || !rng.chance(chance)) return notes;
+  const sorted = [...notes].sort((a, b) => a.onset - b.onset);
+
+  const candidates = [];
+  for (let index = 1; index < sorted.length; index++) {
+    const arrival = sorted[index];
+    const previous = sorted[index - 1];
+    if (arrival.rest || previous.rest) continue;
+    const bar = arrival.onset / ts.ticks;
+    if (!Number.isInteger(bar) || bar < 1 || bar >= measures - 1) continue;
+    // Anticipating across a formal seam blurs the seam; inside a phrase it is
+    // a groove. A cadence bar keeps its downbeat.
+    if ((form?.plan?.[bar - 1]?.unitIndex ?? 0) !== (form?.plan?.[bar]?.unitIndex ?? 0)) continue;
+    if (form?.plan?.[bar]?.cadence || form?.plan?.[bar - 1]?.cadence) continue;
+    if (previous.onset + previous.duration !== arrival.onset) continue;
+    if (previous.duration - push < minDuration) continue;
+    candidates.push(index);
+  }
+  if (!candidates.length) return notes;
+
+  const index = rng.pick(candidates);
+  const previous = sorted[index - 1];
+  const arrival = sorted[index];
+  return sorted.map((note) => {
+    if (note === previous) return { ...note, duration: note.duration - push };
+    if (note === arrival) {
+      return {
+        ...note,
+        onset: note.onset - push,
+        duration: note.duration + push,
+        tags: [...new Set([...(note.tags || []), 'anticipation', 'syncopation'])],
+      };
+    }
+    return note;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -467,7 +517,7 @@ export function buildAccompaniment(rng, opts) {
     key, ts, chords, chordsPerMeasure, measures, texture, lowDia, highDia, form,
     compositionStyle, maxSimultaneous = 5, upperStaff = [], chromaticBudget = null,
     minDuration = 1, handSpan = 8, allowedTextures = null, allowChromatic = false,
-    allowInversions = true, breathChance = 0,
+    allowInversions = true, breathChance = 0, anticipationChance = 0,
   } = opts;
 
   const slotTicks = ts.ticks / chordsPerMeasure;
@@ -528,8 +578,11 @@ export function buildAccompaniment(rng, opts) {
     }
   }
 
-  return addAccompanimentBreath(rng, notes.sort((a, b) => a.onset - b.onset), {
+  const breathed = addAccompanimentBreath(rng, notes.sort((a, b) => a.onset - b.onset), {
     ts, form, measures, chance: breathChance,
+  });
+  return anticipateDownbeat(rng, breathed, {
+    ts, form, measures, minDuration, chance: anticipationChance,
   });
 
   /** Raise a diatonic step by a half step for a chromatic approach note. */

@@ -229,6 +229,45 @@ function shapeMusicalRests(rng, events, {
 }
 
 /**
+ * Enter after the downbeat.
+ *
+ * Beginning on beat one every time is the one thing no real melody does
+ * reliably, and finding a beat that has already gone past is a distinct
+ * reading skill: the eye has to locate the entry rather than start with the
+ * bar. The opening of a phrase gives up its first attack, so the line enters
+ * on a later beat of the bar it belongs to.
+ *
+ * This is a delayed entry inside a full bar, not a partial-measure anacrusis:
+ * every bar keeps its full length, so the engraver, the repeat plan and the
+ * playhead all continue to see uniform measures.
+ */
+function openOnUpbeat(rng, events, { ts, form, measures, chance = 0 }) {
+  if (!chance || measures < 4 || !rng.chance(chance)) return events;
+  const sorted = [...events].sort((a, b) => a.onset - b.onset);
+
+  const opening = (form?.units || []).filter((unit) => unit.bars[0] < measures - 1).slice(0, 1);
+  const chosen = new Set();
+  for (const unit of opening) {
+    const from = unit.bars[0] * ts.ticks;
+    const to = from + ts.ticks;
+    const inBar = sorted.filter((event) => event.onset >= from && event.onset < to);
+    const sounded = inBar.filter((event) => !event.rest);
+    const first = inBar[0];
+    if (sounded.length < 3 || !first || first.rest) continue;
+    if (first.onset !== from || first.duration > ts.beat) continue;
+    if (first.cadenceArrival) continue;
+    chosen.add(first);
+  }
+  if (!chosen.size) return events;
+
+  return sorted.map((event) => (chosen.has(event) ? {
+    ...event,
+    rest: true,
+    tags: [...new Set([...(event.tags || []), 'rest', 'upbeat-entry'])],
+  } : event));
+}
+
+/**
  * Let one idea carry over a barline.
  *
  * A note attacked before the barline and held through it is the commonest
@@ -411,6 +450,7 @@ function buildRhythm(
   minDuration = 1,
   sequenceChance = 0,
   tieChance = 0,
+  upbeatChance = 0,
 ) {
   if (!Number.isInteger(chordsPerMeasure) || chordsPerMeasure < 1) {
     throw new Error('Harmonic slots per measure must be a positive integer');
@@ -509,7 +549,8 @@ function buildRhythm(
     forced: focusTags.includes('rest'),
     minDuration,
   }), { ts, form, measures, minDuration, chance: tieChance });
-  Object.defineProperty(withRests, 'motifPlan', {
+  const opened = openOnUpbeat(rng, withRests, { ts, form, measures, chance: upbeatChance });
+  Object.defineProperty(opened, 'motifPlan', {
     enumerable: false,
     value: Object.freeze({
       id: fragment?.id || `motif:${primaryCellId || 'derived'}`,
@@ -521,7 +562,7 @@ function buildRhythm(
       }))),
     }),
   });
-  return withRests;
+  return opened;
 }
 
 // ---------------------------------------------------------------------------
@@ -983,7 +1024,7 @@ function nearest(pool, ref) {
 function buildLeftHandMelody(rng, opts) {
   const rhythm = buildRhythm(
     rng, opts.ts, opts.cellIds, opts.measures, opts.restRate, [], opts.form, opts.chordsPerMeasure,
-    null, 0, opts.compositionStyle, opts.minDuration,
+    null, 0, opts.compositionStyle, opts.minDuration, opts.sequenceChance, opts.tieChance,
   );
   // The cadence plan specifies the soprano arrival. An independent bass line
   // is governed by the cadence harmony instead of being forced onto the same
@@ -1376,11 +1417,15 @@ export function composeCandidate(userParams = {}, attempt = 0) {
   // already names — "ties and syncopation" — so it arrives with that
   // vocabulary rather than as a surprise.
   const tieChance = (params.rhythmTags || []).includes('syncopation') ? 0.55 : 0;
+  // Entering after the downbeat is a level-3 reading skill: the eye has to
+  // find a beat that has already passed.
+  const upbeatChance = level >= 3 && (params.rhythmTags || []).includes('rest') ? 0.34 : 0;
 
   if (wantsRh) {
     const rhythm = buildRhythm(
       rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form, chordsPerMeasure,
       fragment, fragmentShift, style, constraints.smallest_ticks, sequenceChance, tieChance,
+      upbeatChance,
     );
     motifPlan = rhythm.motifPlan;
     staves.rh = assignPitches(rng, {
@@ -1413,12 +1458,15 @@ export function composeCandidate(userParams = {}, attempt = 0) {
         minDuration: constraints.smallest_ticks,
         chromaticBudget,
         stepFirst,
+        sequenceChance,
+        tieChance,
       });
     } else if (params.hands === 'lh') {
       // Left hand alone gets the melody, not an accompaniment pattern.
       const rhythm = buildRhythm(
         rng, ts, cells, measures, params.restRate, params.focusRhythmTags, form, chordsPerMeasure,
         fragment, fragmentShift, style, constraints.smallest_ticks, sequenceChance, tieChance,
+        upbeatChance,
       );
       motifPlan = rhythm.motifPlan;
       staves.lh = assignPitches(rng, {
@@ -1460,6 +1508,7 @@ export function composeCandidate(userParams = {}, attempt = 0) {
         allowChromatic: constraints.chromatic_notes > 0,
         allowedTextures,
         breathChance: (params.rhythmTags || []).includes('rest') ? 0.55 : 0,
+        anticipationChance: (params.rhythmTags || []).includes('syncopation') ? 0.45 : 0,
       });
     }
   }

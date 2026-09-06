@@ -1111,6 +1111,7 @@ export function ResultPanel({
   const timing = result.meanSignedTiming;
   const rec = result.recovery;
   const coach = coachingFor(result);
+  const hands = handNote(result);
   const tone = result.score >= 88 ? 'good' : result.score >= 65 ? 'steady' : 'rebuild';
   const repairTempo = suggestedRepairTempo(result, tempo);
   const shouldRepair = result.score < 88;
@@ -1121,6 +1122,7 @@ export function ResultPanel({
         <p className="sr-observed-strength">{observedStrength(result)}</p>
         <strong>{coach.title}</strong>
         <p>{coach.detail}</p>
+        {hands && <p className="sr-hand-note">{hands}</p>}
       </div>
       <div className="sr-result-actions">
         {placement?.active ? (
@@ -1269,6 +1271,38 @@ function suggestedRepairTempo(result, tempo) {
   if (result.continuity < 0.78 || result.score < 60) factor = 0.8;
   else if (result.rhythmAccuracy < 0.78 || result.score < 78) factor = 0.9;
   return Math.max(30, Math.round((tempo * factor) / 2) * 2);
+}
+
+/**
+ * What the two hands did differently.
+ *
+ * Rhythm strands are shared between the hands, so a strand score can never say
+ * which hand was late. The grader records per-hand accuracy and timing, and
+ * this turns a real gap between them into one sentence a pianist can act on.
+ * Nothing is said unless the gap is large enough to be worth practising.
+ */
+function handNote(result) {
+  const rh = result.hands?.rh;
+  const lh = result.hands?.lh;
+  if (!rh || !lh || rh.notes < 6 || lh.notes < 6) return null;
+
+  const drift = (hand) => (hand.meanSignedTiming == null ? 0 : hand.meanSignedTiming);
+  const gap = drift(lh) - drift(rh);
+  const ms = Math.round(Math.abs(gap) * 1000);
+  if (ms >= 55) {
+    return gap > 0
+      ? `Your left hand is landing about ${ms} ms behind your right. Try counting the bass in and letting the melody follow it.`
+      : `Your left hand is running about ${ms} ms ahead of your right. Let the melody set the beat and place the bass under it.`;
+  }
+
+  const accuracy = (hand) => (hand.pitchAccuracy == null ? 1 : hand.pitchAccuracy);
+  const difference = accuracy(rh) - accuracy(lh);
+  if (Math.abs(difference) >= 0.18) {
+    return difference > 0
+      ? `The bass staff cost more notes than the treble this time — ${Math.round(accuracy(lh) * 100)}% against ${Math.round(accuracy(rh) * 100)}%. A left-hand-only read is the fastest way to close that.`
+      : `The treble staff cost more notes than the bass this time — ${Math.round(accuracy(rh) * 100)}% against ${Math.round(accuracy(lh) * 100)}%.`;
+  }
+  return null;
 }
 
 function observedStrength(result) {

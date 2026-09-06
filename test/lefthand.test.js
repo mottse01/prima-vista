@@ -91,7 +91,16 @@ test('a walking bass walks: quarter notes, mostly by step or small approach', ()
   const score = generateExercise(params);
   const walking = score.staves.lh.filter((note) => note.texture === 'walking' && !note.rest);
   assert.ok(walking.length >= 8, 'the walking figure was not realised');
-  assert.ok(walking.every((note) => note.duration === score.ts.beat), 'a walking bass moves in beats');
+  // A walking bass moves in beats. The exception is an anticipation, which
+  // lengthens one note and shortens the one before it on purpose.
+  const offGrid = walking.filter((note) => note.duration !== score.ts.beat);
+  assert.ok(
+    offGrid.every((note) => note.tags?.includes('anticipation')
+      || walking.some((other) => other.tags?.includes('anticipation')
+        && other.onset === note.onset + note.duration)),
+    'a walking bass moves in beats unless it is anticipating the next chord',
+  );
+  assert.ok(offGrid.length / walking.length < 0.2, 'a walking bass is mostly on the beat');
 
   const steps = walking.slice(1).filter((note, index) => (
     Math.abs(note.pitches[0].dia - walking[index].pitches[0].dia) <= 2

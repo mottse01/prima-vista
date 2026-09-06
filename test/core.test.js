@@ -291,7 +291,11 @@ test('a targeted rest drill always contains a musically placed rest', () => {
     }));
     const rests = score.staves.rh.filter((event) => event.rest);
     assert.ok(rests.length > 0);
-    assert.ok(rests.every((rest) => rest.tags.includes('phrase-breath') || rest.tags.includes('motivic-rest')));
+    // Every silence is a named device: a breath after a cadence, a rest that
+    // belongs to the motif, or a delayed entry after the downbeat.
+    assert.ok(rests.every((rest) => rest.tags.includes('phrase-breath')
+      || rest.tags.includes('motivic-rest')
+      || rest.tags.includes('upbeat-entry')));
   }
 });
 
