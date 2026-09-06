@@ -34,6 +34,29 @@ const resultProps = (overrides = {}) => ({
   ...overrides,
 });
 
+test('a scored take draws a star chart of the reading and offers the exact link', () => {
+  const timeline = [
+    { onset: 0, hand: 'rh', midi: 60, delta: 0.01, verdict: 'correct' },
+    { onset: 48, hand: 'lh', midi: 43, delta: 0.2, verdict: 'timing' },
+    { onset: 96, hand: 'rh', midi: 64, delta: null, verdict: 'missed' },
+    { onset: 144, hand: 'rh', midi: 62, delta: null, verdict: 'wrong' },
+  ];
+  const html = render(Result, resultProps({
+    result: { ...result, timeline, totalTicks: 192, window: 0.3, goodTiming: 0.1 },
+  }));
+  assert.match(html, /class="sr-trace"/);
+  assert.match(html, /Time runs left to right, pitch bottom to top/);
+  // Four attacks: one on time, one late, one never sounded, one wrong.
+  assert.match(html, /sr-trace-missed/);
+  assert.match(html, /sr-trace-wrong/);
+  assert.match(html, /Challenge a friend/);
+});
+
+test('an unplayed take draws no star chart', () => {
+  const html = render(Result, resultProps({ result: { ...result, timeline: [] } }));
+  assert.doesNotMatch(html, /class="sr-trace"/);
+});
+
 test('Path highlights current and next skills without locking any of ten levels', () => {
   for (const level of [1, 4, 10]) {
     const html = render(Path, { profile: { ...emptyProfile(), level }, onPick: noop });

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Score from './Score.jsx';
 import Keyboard from './Keyboard.jsx';
 import TimingStrip from './TimingStrip.jsx';
+import ReadingTrace from './ReadingTrace.jsx';
+import ShareChallenge from './ShareChallenge.jsx';
 import { createGrader, SKILLS } from '../core/grader.js';
 import { TPQ, keyLabel } from '../core/theory.js';
 import {
@@ -1146,6 +1148,7 @@ export function ResultPanel({
             <button type="button" className="sr-btn" onClick={onAgain}>Repeat for fluency</button>
           </>
         )}
+        {score && !placement?.active && <ShareChallenge score={score} />}
       </div>
       <div className="sr-learning-review">
         <div className="sr-pattern-insight">
@@ -1212,6 +1215,7 @@ export function ResultPanel({
       </div>
       <TimingStrip result={result} />
       </details>
+      <ReadingTrace result={result} title={score?.title || 'this study'} />
     </section>
   );
 }

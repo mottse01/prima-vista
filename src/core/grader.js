@@ -384,6 +384,7 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       return {
         onset: e.onset,
         hand: e.hand,
+        midi: e.midi,
         delta: m && !m.wrongPitch ? m.delta : null,
         verdict,
       };

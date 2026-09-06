@@ -1894,6 +1894,30 @@ html.sr-stand-mode .sr-studio-header .sr-transport, html.sr-practice-running .sr
   font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint);
 }
 .sr-level-badge em { font-style: normal; opacity: .68; margin-left: 6px; }
+.sr-challenge { margin-left: auto; }
+
+/* ---------- reading trace ---------- */
+
+.sr-trace { margin: 16px 0 0; }
+.sr-trace svg {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+}
+.sr-trace-ground { fill: #060a14; }
+.sr-trace-trail {
+  fill: none; stroke: hsl(var(--trace-hue) 60% 62%); stroke-width: .8;
+  opacity: .22; stroke-linejoin: round;
+}
+.sr-trace-star { fill: hsl(var(--trace-hue) 78% calc(var(--trace-light) * 1%)); }
+.sr-trace-halo { fill: hsl(var(--trace-hue) 80% 70%); }
+.sr-trace-missed {
+  fill: none; stroke: hsl(var(--trace-hue) 30% 52%); stroke-width: .9; opacity: .55;
+}
+.sr-trace-wrong line { stroke: var(--bad); stroke-width: 1.2; opacity: .8; }
+.sr-trace figcaption {
+  margin-top: 8px; font-size: 12.5px; color: var(--ink-faint); max-width: 74ch;
+}
+
 .sr-hand-note {
   margin: 8px 0 0; padding: 9px 12px; border-left: 2px solid var(--accent);
   background: var(--accent-soft); border-radius: 0 8px 8px 0;
