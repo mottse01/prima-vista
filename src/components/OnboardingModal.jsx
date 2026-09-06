@@ -1,31 +1,34 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { levelById } from '../core/levels.js';
+import { emptyProfile, paramsForLevel } from '../core/adaptive.js';
+import { generateExercise } from '../core/generator.js';
+import Score from './Score.jsx';
 
 const STARTING_POINTS = [
   {
     level: 1,
-    label: 'New to reading',
-    cue: 'I am still learning staff notes and steady quarter-note pulse.',
+    label: 'First notes',
+    cue: 'I’m learning where the notes are and how to keep a beat.',
   },
   {
     level: 3,
-    label: 'Early reader',
-    cue: 'I can read both staves, eighth notes, and easy pieces in a few familiar keys.',
+    label: 'Simple pieces',
+    cue: 'I can read easy music with both hands in familiar keys.',
   },
   {
     level: 5,
-    label: 'Developing',
-    cue: 'I can keep going through position changes, minor keys, and compound beat.',
+    label: 'Changing positions',
+    cue: 'I can move around the keyboard while keeping the music going.',
   },
   {
     level: 7,
-    label: 'Confident',
-    cue: 'I read sixteenth notes, ties, syncopation, and several keys.',
+    label: 'Varied rhythms',
+    cue: 'I can read faster notes and off-beat rhythms in several keys.',
   },
   {
     level: 9,
-    label: 'Advanced',
-    cue: 'I am comfortable with triplets, independent lines, and chromatic harmony.',
+    label: 'Independent lines',
+    cue: 'I can follow different melodies in each hand and more complex harmony.',
   },
 ];
 
@@ -34,6 +37,8 @@ export default function OnboardingModal({ onChoose, onDismiss }) {
   const [step, setStep] = useState('level');
   const [inputMode, setInputMode] = useState('screen');
   const [comfortView, setComfortView] = useState(false);
+  const [preparationTips, setPreparationTips] = useState(true);
+  const [showExample, setShowExample] = useState(false);
   const headingRef = useRef(null);
   const dialogRef = useRef(null);
 
@@ -93,7 +98,7 @@ export default function OnboardingModal({ onChoose, onDismiss }) {
         </h2>
         <p id="sr-onboarding-description">
           {step === 'level'
-            ? 'Choose what feels familiar. We start one step easier, then use three fresh reads to suggest a comfortable level.'
+            ? 'What feels familiar today? Start here whether you’re new to piano or returning to it. You can change levels any time.'
             : 'Choose the input that matches your piano. You can change it later under Sound & keyboard.'}
         </p>
 
@@ -118,10 +123,15 @@ export default function OnboardingModal({ onChoose, onDismiss }) {
             })}
           </div>
 
+          <details className="sr-onboarding-example" onToggle={(event) => setShowExample(event.currentTarget.open)}>
+            <summary>See music at level {selected}</summary>
+            {showExample && <LevelExample level={selected} />}
+          </details>
+
           <div className="sr-onboarding-summary" aria-live="polite">
-            <span>Provisional start · Level {startingLevel}</span>
+            <span>Your starting level · {startingLevel}</span>
             <strong>{level.name}</strong>
-            <span>{level.blurb}</span>
+            <span>{selected > 1 ? 'We begin one step easier. ' : 'Begin with one hand and a steady beat. '}Three pieces you haven’t played before help us suggest a comfortable level.</span>
           </div>
         </> : <>
           <div className="sr-input-choices" role="radiogroup" aria-label="Piano input">
@@ -142,21 +152,33 @@ export default function OnboardingModal({ onChoose, onDismiss }) {
             <input type="checkbox" checked={comfortView} onChange={(event) => setComfortView(event.target.checked)} />
             <span><strong>Comfort view</strong><small>Larger text, roomier controls, and stronger contrast.</small></span>
           </label>
+          <label className="sr-comfort-choice">
+            <input type="checkbox" checked={preparationTips} onChange={(event) => setPreparationTips(event.target.checked)} />
+            <span><strong>Preparation tips</strong><small>Optional help looking over the music before you play.</small></span>
+          </label>
         </>}
 
         <div className="sr-onboarding-actions">
-          <span>{step === 'level' ? 'Every guided study is at least eight bars.' : 'A five-minute daily practice is ready for you.'}</span>
+          <span>{step === 'level' ? 'Not sure? First notes is a good place to begin.' : 'Start with five minutes. Come back when it suits you.'}</span>
           <div className="sr-row">
             {step === 'input' && <button type="button" className="sr-btn" onClick={() => setStep('level')}>Back</button>}
             <button
               type="button" className="sr-btn sr-btn--primary sr-btn--large"
               onClick={() => step === 'level'
                 ? setStep('input')
-                : onChoose(startingLevel, { inputMode, comfortView })}
-            >{step === 'level' ? 'Next: choose your piano' : `Start level ${startingLevel} check`}</button>
+                : onChoose(startingLevel, { inputMode, comfortView, preparationTips })}
+            >{step === 'level' ? 'Next: choose your piano' : 'Let’s play'}</button>
           </div>
         </div>
       </section>
     </div>
   );
+}
+
+function LevelExample({ level }) {
+  const score = useMemo(() => generateExercise(paramsForLevel(level, emptyProfile(), { seed: 4100 + level, targeting: false })), [level]);
+  return <div className="sr-level-example">
+    <p className="sr-hint">An example, not a test. Scroll sideways to see more of the music.</p>
+    <Score score={score} layout="scroll" showFingerings={level === 1} />
+  </div>;
 }

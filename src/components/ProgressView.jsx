@@ -45,23 +45,25 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
 
   return (
     <div className="sr-progress">
+      <h2 className="sr-view-title">Every time you play adds up</h2>
+      <p className="sr-setup-lead">A few minutes or a longer session—make room for music in your own way.</p>
       <section className="sr-stats">
         <Stat label="Selected level" value={profile.level} detail={level.name} />
         <Stat label="Comparable fresh reads" value={avg == null ? '—' : avg} detail={avg == null ? 'building new evidence' : `Level ${profile.level} · same tempo, length, hands & meter`} />
         <Stat
-          label="Practice consistency"
-          value={profile.streak.count ? `${profile.streak.count} day${profile.streak.count === 1 ? '' : 's'}` : 'Start today'}
-          detail={`${profile.totals.notes.toLocaleString()} notes · ${Math.round(profile.totals.minutes)} minutes`}
+          label="Completed practice reads"
+          value={profile.totals.takes}
+          detail={`${Math.round(profile.totals.minutes)} minutes of playing${profile.streak.count ? ` · ${profile.streak.count}-day streak` : ''}`}
         />
       </section>
 
       <section className="sr-nextstep">
         <div>
           <span className="sr-eyebrow">Next useful step</span>
-          <strong>{weak[0] ? `Give ${weak[0].label.toLowerCase()} one focused read.` : 'Complete a fresh read to establish your baseline.'}</strong>
+          <strong>{weak[0] ? `Spend a little time with ${weak[0].label.toLowerCase()}.` : 'Start with one piece you haven’t played before.'}</strong>
           <p>{weak[0]
-            ? `This is the clearest skill to revisit from your recent evidence. The next study can emphasize it without adding unrelated difficulty.`
-            : 'Use the silent scan, keep the pulse moving, and let the first few reads reveal where practice will help most.'}</p>
+            ? 'Your recent playing suggests this is a useful next step. Try a piece with a little more of this skill.'
+            : 'Take a moment to look over the music, then aim to keep a steady beat. Your first few pieces will help us suggest what to try next.'}</p>
         </div>
         {weak[0] && <button type="button" className="sr-btn sr-btn--primary" onClick={() => onDrill(weak[0].id)}>Start focused read</button>}
         {!weak[0] && <button type="button" className="sr-btn sr-btn--primary" onClick={onStart}>{profile.totals.takes ? 'Continue practice' : 'Start my first read'}</button>}

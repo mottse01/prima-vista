@@ -80,6 +80,7 @@ export const DEFAULT_SETTINGS = {
   onboardingComplete: false,
   inputMode: 'screen',
   comfortView: false,
+  preparationTips: true,
   notationScale: 1,
 };
 

@@ -268,7 +268,7 @@ export default function App() {
         setPlacement({ ...placement, scores: placementScores, remaining: placement.total - placementScores.length });
       }
     } else if (placement?.active) {
-      setToast({ kind: 'info', text: 'Practice saved. Choose New study for the next unassisted level-check read.' });
+      setToast({ kind: 'info', text: 'Practice saved. Choose New music for the next independent level-check read.' });
     }
   }, [params.level, placement, score, scoreId]);
 
@@ -358,6 +358,7 @@ export default function App() {
       sessionMinutes: 5,
       inputMode: preferences.inputMode || 'screen',
       comfortView: Boolean(preferences.comfortView),
+      preparationTips: preferences.preparationTips !== false,
       curtain: 'off',
       guideKeys: false,
     }));
@@ -417,26 +418,12 @@ export default function App() {
       <header className="sr-header">
         <div className="sr-brand">
           <svg className="sr-logo" viewBox="0 0 48 48" aria-hidden="true">
-            <defs>
-              <linearGradient id="sr-logo-field" x1="6" y1="4" x2="43" y2="45" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#182c63" />
-                <stop offset="0.56" stopColor="#225a8f" />
-                <stop offset="1" stopColor="#087f88" />
-              </linearGradient>
-              <linearGradient id="sr-logo-sightline" x1="23" y1="36" x2="41" y2="12" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#6ee7e0" />
-                <stop offset="1" stopColor="#d5fff6" />
-              </linearGradient>
-            </defs>
-            <rect x="1" y="1" width="46" height="46" rx="14" fill="url(#sr-logo-field)" />
-            <path d="M13.5 35V13.5h7.8c6.1 0 9.7 2.9 9.7 7.6 0 4.9-3.8 7.8-10.1 7.8h-7.4" fill="none" stroke="#fff" strokeWidth="3.7" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="m24.1 27.2 6.8 8.1 9.2-22.2" fill="none" stroke="url(#sr-logo-sightline)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M8.8 39.5h30.4" stroke="#fff" strokeOpacity="0.18" strokeWidth="1.2" strokeLinecap="round" />
-            <path d="M8.8 9.5h22" stroke="#fff" strokeOpacity="0.13" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M9 37V11h9c8 0 12 3.6 12 9s-4.7 9-12 9H9" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="m22 27 8 10 12-26" fill="none" stroke="var(--accent)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <div>
             <h1>Prima <span>Vista</span></h1>
-            <p>Build confidence, one fresh score at a time</p>
+            <p>A little music. A little more confidence.</p>
           </div>
         </div>
         <nav className="sr-tabs" aria-label="Sections">

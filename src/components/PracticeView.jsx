@@ -68,6 +68,7 @@ export default function PracticeView({
   const unscoredRef = useRef(false);
   const freshAtStartRef = useRef(false);
   const calibrationRef = useRef(null);
+  const practiceToolsRef = useRef(null);
 
   const secPerTick = 60 / score.tempo / TPQ;
 
@@ -576,35 +577,14 @@ export default function PracticeView({
           </span>
         ))}
       </nav>
+      <div className="sr-studio-header">
       <section className={`sr-practice-dock is-compact${level ? '' : ' is-custom'}`} aria-label="Practice controls">
         <div className="sr-practice-dock-current">
-          <span>{level ? `Level ${level.id}` : 'Custom exercise'}</span>
-          <strong>{level?.name || 'Your chosen settings'}</strong>
-          <small>{level ? `${strongReads}/3 secure fresh reads` : 'Build controls set the challenge'}</small>
+          <span>{level ? `Level ${difficultyDraft}` : 'Custom exercise'}</span>
+          <strong>{level ? draftLevel.name : 'Your chosen settings'}</strong>
+          <small>{level ? `${strongReads}/3 strong first reads` : 'Your choice of musical challenge'}</small>
         </div>
-        <details className="sr-practice-tools">
-          <summary>Level &amp; aids</summary>
-          <div className="sr-practice-tools-panel">
-        <div className="sr-practice-session">
-          <label aria-label="Practice session length">
-            <select
-              value={settings.sessionMinutes || 0}
-              onChange={(event) => onSettings({ sessionMinutes: Number(event.target.value) })}
-              disabled={busy}
-            >
-              <option value={0}>Open practice</option>
-              <option value={5}>Daily 5-minute practice</option>
-              <option value={10}>Daily 10-minute practice</option>
-            </select>
-          </label>
-          {session?.minutes > 0 && <strong>{sessionLabel}</strong>}
-        </div>
-          {level ? (
-            <div className="sr-difficulty-control">
-            <div className="sr-dock-heading">
-              <span>Difficulty</span>
-              <strong>Level {difficultyDraft} · {draftLevel.name}</strong>
-            </div>
+        {level && <div className="sr-quick-level">
             <input
               type="range" min="1" max={LEVELS.length} step="1" value={difficultyDraft}
               aria-label="Difficulty level"
@@ -617,6 +597,41 @@ export default function PracticeView({
             />
             <div className="sr-difficulty-scale" aria-hidden="true">
               <span>Foundations</span><span>Fluency</span><span>Advanced</span>
+            </div>
+        </div>}
+        <details className="sr-practice-tools" ref={practiceToolsRef} onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault(); event.stopPropagation();
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector('summary')?.focus();
+          }
+        }}>
+          <summary>Settings</summary>
+          <div className="sr-practice-tools-panel">
+            <div className="sr-settings-heading"><strong>Make it your practice</strong><button type="button" className="sr-btn sr-btn--ghost" onClick={() => {
+              practiceToolsRef.current.open = false;
+              practiceToolsRef.current.querySelector('summary')?.focus();
+            }}>Done</button></div>
+        <div className="sr-practice-session">
+          <label aria-label="Practice session length">
+            <select
+              value={settings.sessionMinutes || 0}
+              onChange={(event) => onSettings({ sessionMinutes: Number(event.target.value) })}
+              disabled={busy}
+            >
+              <option value={0}>Open practice</option>
+              <option value={2}>2-minute practice</option>
+              <option value={5}>5-minute practice</option>
+              <option value={10}>10-minute practice</option>
+            </select>
+          </label>
+          {session?.minutes > 0 && <strong>{sessionLabel}</strong>}
+        </div>
+          {level ? (
+            <div className="sr-difficulty-control">
+            <div className="sr-dock-heading">
+              <span>Difficulty</span>
+              <strong>Level {difficultyDraft} · {draftLevel.name}</strong>
             </div>
             <label className="sr-field"><span>Choose a level</span>
               <select aria-label="Choose a level" value={difficultyDraft} disabled={busy} onChange={(event) => { setDifficultyDraft(Number(event.target.value)); commitDifficulty(event.target.value); }}>
@@ -631,6 +646,11 @@ export default function PracticeView({
             </div>
           )}
 
+        <div className="sr-view-preferences">
+          <label className="sr-toggle"><input type="checkbox" checked={settings.preparationTips !== false} disabled={busy} onChange={(event) => onSettings({ preparationTips: event.target.checked })} /><span>Preparation tips</span></label>
+          <p className="sr-hint">A short scan and a suggested practice sequence. Turn off for a quieter view.</p>
+          <label className="sr-toggle"><input type="checkbox" checked={Boolean(settings.comfortView)} disabled={busy} onChange={(event) => onSettings({ comfortView: event.target.checked })} /><span>Comfort view · larger text and controls</span></label>
+        </div>
         <fieldset className="sr-lookahead-control" disabled={busy}>
           <legend>
             <span>Disappearing notes</span>
@@ -660,127 +680,12 @@ export default function PracticeView({
             <button type="button" className="sr-recheck-level" onClick={onRecheckLevel}>Recheck my level</button>
           </div>
         </fieldset>
-          </div>
-        </details>
-      </section>
-
-      <section className="sr-practice-summary" aria-label="Practice plan">
-        <div className="sr-practice-summary-main">
-          <span className={`sr-statuspill${qualifies ? ' is-fresh' : ' is-practice'}`}>
-            {repairHand ? `${repairHand === 'rh' ? 'Right' : 'Left'}-hand repair`
-              : acousticPractice ? 'Acoustic · unscored'
-              : placement?.active ? `Level check · ${placement.remaining} left`
-              : dailyStep === 0 ? 'Warm-up read'
-                : dailyStep === 1 ? 'Fresh read'
-                  : dailyStep === 2 ? 'Try a different study'
-                    : settings.curtain !== 'off' ? 'Reading-ahead drill' : qualifies ? 'Fresh read' : 'Practice take'}
-          </span>
-          <span>Focus: <strong>{focusLabels.length ? focusLabels.join(' · ') : 'clean baseline'}</strong></span>
-        </div>
-
-      </section>
-
-      {session?.minutes > 0 && !placement?.active && (
-        <ol className="sr-daily-plan" aria-label="Daily practice plan">
-          {['Find the pulse', 'Read something fresh', 'Apply it to new music'].map((label, index) => (
-            <li key={label} className={index === dailyStep ? 'is-current' : index < dailyStep ? 'is-done' : ''}>
-              <span>{index < dailyStep ? '✓' : index + 1}</span>{label}
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {freshRead && !result && (
-        <section className={`sr-preparation is-${preparation.phase}`} aria-label="Silent preparation">
-          <div className="sr-preparation-head">
-            <div>
-              <strong>{preparation.phase === 'idle'
-                ? 'Notice the key, pulse and a repeating shape.'
-                : preparation.phase === 'ready'
-                  ? 'Your scan is complete.'
-                  : preparation.phase === 'active'
-                    ? `${preparation.remaining} seconds to notice the structure.`
-                    : 'Prepared for this first read.'}</strong>
-            </div>
-            {preparation.phase === 'idle' && (
-              <button type="button" className="sr-btn sr-btn--small" onClick={beginPreparation}>Optional 30-second scan</button>
-            )}
-          </div>
-          {preparation.phase !== 'idle' && (
-            <div className="sr-preparation-body">
-              <div className="sr-preparation-grid">
-                {prepItems.map((item) => {
-                  const checked = preparation.checks.includes(item.id);
-                  return (
-                    <button
-                      key={item.id} type="button"
-                      className={`sr-preparation-item${checked ? ' is-checked' : ''}`}
-                      aria-pressed={checked}
-                      onClick={() => togglePreparationCheck(item.id)}
-                    >
-                      <span aria-hidden="true">{checked ? '✓' : item.step}</span>
-                      <div><b>{item.label}</b><small>{item.detail}</small></div>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="sr-pulse-practice" aria-live="polite">
-                <button type="button" onClick={tapPulse}>
-                  <span aria-hidden="true">{pulseTap.times.length ? '●'.repeat(pulseTap.times.length) : '○○○○'}</span>
-                  Tap pulse
-                </button>
-                <p>{pulseTap.message}</p>
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {settings.scoreLayout !== 'scroll' && (
-        <aside className="sr-landscape-tip">
-          <div><strong>Turn this into a music stand</strong><span>Scrolling view keeps the next notes in sight on a landscape phone.</span></div>
-          <button type="button" className="sr-btn sr-btn--primary" onClick={() => { onSettings({ scoreLayout: 'scroll' }); toggleStandMode(); }}>Use scrolling stand</button>
-        </aside>
-      )}
-
-      <div className="sr-transport">
-        <div className="sr-transport-main">
-          {phase === 'playing' || phase === 'countin' ? (
-            <button type="button" className="sr-btn sr-btn--stop" onClick={stop}>Stop</button>
-          ) : (
-            <button
-              type="button" className="sr-btn sr-btn--primary sr-btn--start"
-              onPointerDown={primeAudioGesture}
-              onClick={start}
-              disabled={busy}
-            >
-              <span className="sr-btn-icon" aria-hidden="true">▶</span>
-              {audioBusy ? 'Turning on sound…'
-                : result ? 'Play again'
-                    : qualifies && preparation.phase === 'active' ? `Start when ready · ${preparation.remaining}s`
-                      : qualifies ? 'Start read' : 'Start practice'}
-            </button>
-          )}
-          <button
-            type="button" className="sr-btn" onClick={onRegenerate} disabled={busy}
-          >
-            New study
-          </button>
-          <button
-            type="button" className="sr-btn sr-btn--ghost" onClick={listening ? stopReference : listen}
-            onPointerDown={primeAudioGesture} disabled={busy && !listening}
-            title={freshRead && !previewed ? 'Hearing the exercise first makes the next take practice-only.' : undefined}
-          >
-            <span className="sr-btn-icon sr-btn-icon--sound" aria-hidden="true">♪</span>
-            {listening ? 'Stop playback' : 'Hear score'}
-          </button>
-        </div>
-
         <details className="sr-playback-options">
-          <summary>Playback settings</summary>
+          <summary>Sound, tempo &amp; feedback</summary>
         <div className="sr-transport-settings">
           <button type="button" className="sr-input-ready" disabled={busy} onClick={() => {
             const panel = document.querySelector('.sr-device-panel');
+            if (practiceToolsRef.current) practiceToolsRef.current.open = false;
             if (panel) { panel.open = !panel.open; if (panel.open) panel.scrollIntoView({ block: 'nearest', behavior: 'instant' }); }
           }}>{acousticPractice ? 'Acoustic · unscored' : midi.status === 'connected' ? 'MIDI connected' : 'Sound & input'}</button>
           <label className="sr-field sr-field--slider">
@@ -857,8 +762,128 @@ export default function PracticeView({
           </details>
         </div>
         </details>
+          </div>
+        </details>
+      </section>
+
+      <div className="sr-transport">
+        <div className="sr-transport-main">
+          {phase === 'playing' || phase === 'countin' ? (
+            <button type="button" className="sr-btn sr-btn--stop" onClick={stop}>Stop</button>
+          ) : (
+            <button
+              type="button" className="sr-btn sr-btn--primary sr-btn--start"
+              onPointerDown={primeAudioGesture}
+              onClick={start}
+              disabled={busy}
+            >
+              <span className="sr-btn-icon" aria-hidden="true">▶</span>
+              {audioBusy ? 'Turning on sound…'
+                : result ? 'Play again'
+                    : qualifies && preparation.phase === 'active' ? `Start when ready · ${preparation.remaining}s`
+                      : 'Start practice'}
+            </button>
+          )}
+          <button
+            type="button" className="sr-btn" onClick={onRegenerate} disabled={busy}
+          >
+            New music
+          </button>
+          <button
+            type="button" className="sr-btn sr-btn--ghost" onClick={listening ? stopReference : listen}
+            onPointerDown={primeAudioGesture} disabled={busy && !listening}
+            title={freshRead && !previewed ? 'Hearing the exercise first makes the next take practice-only.' : undefined}
+          >
+            <span className="sr-btn-icon sr-btn-icon--sound" aria-hidden="true">♪</span>
+            {listening ? 'Stop listening' : 'Listen'}
+          </button>
+        </div>
+
         {standMode && <button type="button" className="sr-btn sr-btn--small sr-exit-stand" onClick={toggleStandMode}>Exit stand</button>}
       </div>
+
+      <section className="sr-practice-summary" aria-label="Practice plan">
+        <div className="sr-practice-summary-main">
+          <span className={`sr-statuspill${qualifies ? ' is-fresh' : ' is-practice'}`}>
+            {repairHand ? `${repairHand === 'rh' ? 'Right' : 'Left'}-hand practice`
+              : acousticPractice ? 'Acoustic · unscored'
+              : settings.curtain !== 'off' ? 'Reading-ahead drill'
+              : !qualifies ? 'Practice only'
+              : placement?.active ? `Level check · ${placement.remaining} left`
+              : dailyStep === 0 ? 'Warm-up read'
+                : dailyStep === 1 ? 'First read'
+                  : dailyStep === 2 ? 'Try a different study'
+                    : 'First read'}
+          </span>
+          <span>Focus: <strong>{focusLabels.length ? focusLabels.join(' · ') : 'keep a steady beat'}</strong></span>
+        </div>
+        {settings.preparationTips !== false && freshRead && !result && preparation.phase === 'idle' && <button type="button" className="sr-btn sr-btn--ghost sr-prep-toggle" onClick={beginPreparation} disabled={busy}>30-second preparation</button>}
+      </section>
+
+      </div>
+
+      {settings.preparationTips !== false && session?.minutes > 0 && !placement?.active && (
+        <ol className="sr-daily-plan" aria-label="Daily practice plan">
+          {['Find the pulse', 'Read something fresh', 'Apply it to new music'].map((label, index) => (
+            <li key={label} className={index === dailyStep ? 'is-current' : index < dailyStep ? 'is-done' : ''}>
+              <span>{index < dailyStep ? '✓' : index + 1}</span>{label}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {settings.preparationTips !== false && freshRead && !result && preparation.phase !== 'idle' && (
+        <section className={`sr-preparation is-${preparation.phase}`} aria-label="Silent preparation">
+          <div className="sr-preparation-head">
+            <div>
+              <strong>{preparation.phase === 'idle'
+                ? 'Notice the key, pulse and a repeating shape.'
+                : preparation.phase === 'ready'
+                  ? 'Your scan is complete.'
+                  : preparation.phase === 'active'
+                    ? `${preparation.remaining} seconds to notice the structure.`
+                    : 'Prepared for this first read.'}</strong>
+            </div>
+            {preparation.phase === 'idle' && (
+              <button type="button" className="sr-btn sr-btn--small" onClick={beginPreparation}>Optional 30-second scan</button>
+            )}
+          </div>
+          {preparation.phase !== 'idle' && (
+            <div className="sr-preparation-body">
+              <div className="sr-preparation-grid">
+                {prepItems.map((item) => {
+                  const checked = preparation.checks.includes(item.id);
+                  return (
+                    <button
+                      key={item.id} type="button"
+                      className={`sr-preparation-item${checked ? ' is-checked' : ''}`}
+                      aria-pressed={checked}
+                      onClick={() => togglePreparationCheck(item.id)}
+                    >
+                      <span aria-hidden="true">{checked ? '✓' : item.step}</span>
+                      <div><b>{item.label}</b><small>{item.detail}</small></div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="sr-pulse-practice" aria-live="polite">
+                <button type="button" onClick={tapPulse}>
+                  <span aria-hidden="true">{pulseTap.times.length ? '●'.repeat(pulseTap.times.length) : '○○○○'}</span>
+                  Tap pulse
+                </button>
+                <p>{pulseTap.message}</p>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {settings.scoreLayout !== 'scroll' && (
+        <aside className="sr-landscape-tip">
+          <div><strong>Turn this into a music stand</strong><span>Scrolling view keeps the next notes in sight on a landscape phone.</span></div>
+          <button type="button" className="sr-btn sr-btn--primary" onClick={() => { onSettings({ scoreLayout: 'scroll' }); toggleStandMode(); }}>Use scrolling stand</button>
+        </aside>
+      )}
 
       <div className="sr-scorecard">
         <div className="sr-scorehead">
@@ -1056,7 +1081,7 @@ export default function PracticeView({
   );
 }
 
-function ResultPanel({
+export function ResultPanel({
   result, onAgain, onNext, onRepair, tempo, repeat, assisted, curtain,
   score, focusIds, reflection, onReflect, placement, repairHand, onRepairHand,
 }) {
@@ -1074,8 +1099,8 @@ function ResultPanel({
     return (
       <section className="sr-result sr-result--invalid" aria-live="polite">
         <div className="sr-result-coach">
-          <span className="sr-eyebrow">Nothing counted</span>
-          <strong>We did not receive enough notes to assess this read.</strong>
+          <span className="sr-eyebrow">Let’s check your connection</span>
+          <strong>We couldn’t receive enough notes to give feedback.</strong>
           <p>Check the MIDI connection or open the on-screen keyboard, then try again. Your progress and streak were not changed.</p>
         </div>
         <button type="button" className="sr-btn sr-btn--primary" onClick={onAgain}>Try this first read again</button>
@@ -1091,14 +1116,78 @@ function ResultPanel({
   const shouldRepair = result.score < 88;
   return (
     <section className="sr-result" aria-live="polite">
+      <div className="sr-result-coach">
+        <span className="sr-eyebrow">Practice complete</span>
+        <p className="sr-observed-strength">{observedStrength(result)}</p>
+        <strong>{coach.title}</strong>
+        <p>{coach.detail}</p>
+      </div>
+      <div className="sr-result-actions">
+        {placement?.active ? (
+          <>
+            <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>Next level-check read</button>
+            <button type="button" className="sr-btn" onClick={onAgain}>Repeat for confidence</button>
+          </>
+        ) : placement?.complete ? (
+          <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>Start at level {placement.recommended}</button>
+        ) : shouldRepair ? (
+          <>
+            <button
+              type="button" className="sr-btn sr-btn--primary"
+              onClick={() => repairTempo < tempo ? onRepair(repairTempo) : onAgain()}
+            >Try again at {repairTempo} bpm</button>
+            <button type="button" className="sr-btn" onClick={onNext}>New first read</button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>New first read</button>
+            <button type="button" className="sr-btn" onClick={onAgain}>Repeat for fluency</button>
+          </>
+        )}
+      </div>
+      <div className="sr-learning-review">
+        <div className="sr-pattern-insight">
+          <span className="sr-eyebrow">See the pattern</span>
+          <strong>{patternInsight(score)}</strong>
+          <p>{score.form?.label || 'Follow the phrase shape'} · {score.harmony?.cadencePlan || 'listen for the cadence'}</p>
+        </div>
+        <fieldset className="sr-reflection">
+          <legend>What would you like to practice next?</legend>
+          <div>
+            {reflectionChoices(focusIds).map((choice) => (
+              <button
+                type="button" key={choice.label}
+                className={reflection === choice.label ? 'is-on' : ''}
+                aria-pressed={reflection === choice.label}
+                onClick={() => onReflect(choice)}
+              >{choice.label}</button>
+            ))}
+          </div>
+          <small>{reflection ? 'Your next fresh study will take this into account.' : 'Your answer helps choose the next fresh study.'}</small>
+        </fieldset>
+      </div>
+      {!placement?.active && !placement?.complete && !repairHand && score.staves.rh?.length > 0 && score.staves.lh?.length > 0 && (
+        <div className="sr-hand-repair">
+          <span>You can also try one hand at a time:</span>
+          <button type="button" onClick={() => onRepairHand?.('rh', repairTempo)}>Right hand only</button>
+          <button type="button" onClick={() => onRepairHand?.('lh', repairTempo)}>Left hand only</button>
+        </div>
+      )}
+      {(placement?.active || placement?.complete || repeat || assisted || curtain.beats !== null) && (
+        <p className="sr-result-note">
+          {placement?.active || placement?.complete
+            ? 'Level-check read — used to recommend a comfortable starting point, not to advance the learning path.'
+            : curtain.beats !== null
+            ? `Flexible look-ahead take (${curtain.label}) — tracked under reading ahead, and it does not move your skill map or level.`
+            : assisted
+              ? 'Assisted practice — saved separately from your first-read skill ratings and cannot advance your level.'
+              : 'Replay — useful practice, saved separately from first-read skill ratings and cannot advance your level.'}
+        </p>
+      )}
+      <details className="sr-result-details"><summary>Notes, timing &amp; score</summary>
       <div className="sr-result-score">
         <div className={`sr-bigscore is-${tone}`}>{result.score}</div>
         <div className="sr-bigscore-label">out of 100</div>
-      </div>
-      <div className="sr-result-coach">
-        <span className="sr-eyebrow">Next best move</span>
-        <strong>{coach.title}</strong>
-        <p>{coach.detail}</p>
       </div>
       <div className="sr-result-grid">
         <Metric label="Right notes" value={pct(result.pitchAccuracy)} detail={`${result.correct} of ${result.total}${result.extras ? ` · ${result.extras} extra` : ''}`} />
@@ -1120,68 +1209,7 @@ function ResultPanel({
         <Metric label="Recovery" value={recoveryValue(rec)} detail={recoveryDetail(rec)} />
       </div>
       <TimingStrip result={result} />
-      <div className="sr-learning-review">
-        <div className="sr-pattern-insight">
-          <span className="sr-eyebrow">See the pattern</span>
-          <strong>{patternInsight(score)}</strong>
-          <p>{score.form?.label || 'Follow the phrase shape'} · {score.harmony?.cadencePlan || 'listen for the cadence'}</p>
-        </div>
-        <fieldset className="sr-reflection">
-          <legend>What broke first?</legend>
-          <div>
-            {reflectionChoices(focusIds).map((choice) => (
-              <button
-                type="button" key={choice.label}
-                className={reflection === choice.label ? 'is-on' : ''}
-                aria-pressed={reflection === choice.label}
-                onClick={() => onReflect(choice)}
-              >{choice.label}</button>
-            ))}
-          </div>
-          <small>{reflection ? 'Your next fresh study will take this into account.' : 'Your answer helps choose the next fresh study.'}</small>
-        </fieldset>
-      </div>
-      <div className="sr-result-actions">
-        {placement?.active ? (
-          <>
-            <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>Next level-check read</button>
-            <button type="button" className="sr-btn" onClick={onAgain}>Repeat for confidence</button>
-          </>
-        ) : placement?.complete ? (
-          <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>Start at level {placement.recommended}</button>
-        ) : shouldRepair ? (
-          <>
-            <button
-              type="button" className="sr-btn sr-btn--primary"
-              onClick={() => repairTempo < tempo ? onRepair(repairTempo) : onAgain()}
-            >Repair at {repairTempo} bpm</button>
-            <button type="button" className="sr-btn" onClick={onNext}>New first read</button>
-          </>
-        ) : (
-          <>
-            <button type="button" className="sr-btn sr-btn--primary" onClick={onNext}>New first read</button>
-            <button type="button" className="sr-btn" onClick={onAgain}>Repeat for fluency</button>
-          </>
-        )}
-      </div>
-      {!placement?.active && !placement?.complete && !repairHand && score.staves.rh?.length > 0 && score.staves.lh?.length > 0 && (
-        <div className="sr-hand-repair">
-          <span>Isolate the coordination before returning to the full score:</span>
-          <button type="button" onClick={() => onRepairHand?.('rh', repairTempo)}>Right hand only</button>
-          <button type="button" onClick={() => onRepairHand?.('lh', repairTempo)}>Left hand only</button>
-        </div>
-      )}
-      {(placement?.active || placement?.complete || repeat || assisted || curtain.beats !== null) && (
-        <p className="sr-result-note">
-          {placement?.active || placement?.complete
-            ? 'Level-check read — used to recommend a comfortable starting point, not to advance the learning path.'
-            : curtain.beats !== null
-            ? `Flexible look-ahead take (${curtain.label}) — tracked under reading ahead, and it does not move your skill map or level.`
-            : assisted
-              ? 'Assisted practice — saved separately from your first-read skill ratings and cannot advance your level.'
-              : 'Replay — useful practice, saved separately from first-read skill ratings and cannot advance your level.'}
-        </p>
-      )}
+      </details>
     </section>
   );
 }
@@ -1192,9 +1220,9 @@ function preparationItems(score) {
   const leftHand = (score.params?.lhStyle || 'simple').replace('_', ' ');
   return [
     { id: 'frame', step: '1', label: 'Key & metre', detail: `${keyLabel(score.key)} · ${score.ts.name}` },
-    { id: 'rhythm', step: '2', label: 'Tap the hardest cell', detail: `${rhythmLabel} pattern · feel the pulse first` },
+    { id: 'rhythm', step: '2', label: 'Tap the trickiest rhythm', detail: `${rhythmLabel} pattern · feel the pulse first` },
     { id: 'hands', step: '3', label: 'Place your hands', detail: `${leftHand} left hand · find the widest move` },
-    { id: 'phrase', step: '4', label: 'Hear the opening silently', detail: `${score.form?.label || 'follow the phrase'} · notice the final cadence` },
+    { id: 'phrase', step: '4', label: 'Imagine the opening sound', detail: `${score.form?.label || 'follow the phrase'} · notice how the music ends` },
   ];
 }
 
@@ -1206,7 +1234,7 @@ function reflectionChoices(focusIds = []) {
     { label: 'Notes or key', skillId: pitchSkill },
     { label: 'Left-hand pattern', skillId: 'notes.bass' },
     { label: 'Hands together', skillId: 'coordination.together' },
-    { label: 'Kept control', skillId: null },
+    { label: 'Ready for new music', skillId: null },
   ];
 }
 
@@ -1243,18 +1271,25 @@ function suggestedRepairTempo(result, tempo) {
   return Math.max(30, Math.round((tempo * factor) / 2) * 2);
 }
 
+function observedStrength(result) {
+  if (result.continuity >= 0.95) return 'You kept going through the music.';
+  if (result.rhythmAccuracy >= 0.85) return 'Most of your notes landed with the beat.';
+  if (result.pitchAccuracy >= 0.85) return 'You found most of the written notes.';
+  return 'You’ve completed a practice read. Let’s choose one small next step.';
+}
+
 function coachingFor(result) {
   if (result.score >= 92 && result.continuity >= 0.95) {
-    return { title: 'Move on while it is still new.', detail: 'The read was accurate and continuous. A new exercise will give you better evidence than polishing this one.' };
+    return { title: 'You’re ready for new music.', detail: 'Try another piece at this level and bring the same steady beat.' };
   }
   if (result.continuity < 0.78) {
     return { title: 'Protect the pulse after a slip.', detail: 'Do not correct backward. Drop the missed note, find the next beat, and re-enter while the metronome keeps moving.' };
   }
   if (result.pitchAccuracy + 0.08 < result.rhythmAccuracy) {
-    return { title: 'Scan the notes before you retry.', detail: 'Pitch recognition is the limiter. Mark the widest leap and any accidentals, then try once more 8–12 bpm slower.' };
+    return { title: 'Scan the notes before you retry.', detail: 'Find the biggest jumps and any sharps or flats first. Then try again at a comfortable tempo.' };
   }
   if (result.rhythmAccuracy + 0.08 < result.pitchAccuracy) {
-    return { title: 'Keep the notes; simplify the pulse.', detail: 'Pitch is secure, but attacks drifted. Tap the smallest subdivision once, keep the metronome on, and retry slower.' };
+    return { title: 'Keep the notes; simplify the pulse.', detail: 'Tap the trickiest rhythm before playing it. Let the metronome help you keep a steady beat.' };
   }
   if (result.meanSignedTiming != null && result.meanSignedTiming > 0.055) {
     return { title: 'Read one beat farther ahead.', detail: 'You consistently landed late. Look at the next beat while your hands finish the current one.' };
@@ -1263,7 +1298,7 @@ function coachingFor(result) {
     return { title: 'Let the count-in set the ceiling.', detail: 'You consistently rushed. Feel the full space between clicks before starting the next note.' };
   }
   return { title: result.score >= 80 ? 'Take the win and read something new.' : 'Retry once, slightly slower.', detail: result.score >= 80
-    ? 'The skills are balanced enough that fresh music is the most useful next test.'
+    ? 'Take what you learned into a piece you haven’t played before.'
     : 'Lower the tempo just enough to keep moving; the goal is a continuous read, not a perfect correction.' };
 }
 
