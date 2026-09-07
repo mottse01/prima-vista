@@ -34,7 +34,7 @@ const FOCUS_PACKS = [
  * which is what resets the transport, the colouring and the last result.
  */
 export default function PracticeView({
-  score, settings, onSettings, onResult, onRegenerate, level, debrief,
+  score, settings, onSettings, onResult, onRegenerate, level, debrief, onUnscoredComplete,
   onDifficultyChange,
   openLevel = 10,
   midi, onConnectMidi, microphone, onConnectMicrophone, showKeyboard, onToggleKeyboard,
@@ -94,6 +94,7 @@ export default function PracticeView({
     if (unscoredRef.current) {
       setNoteStates({});
       setResult({ unscored: true, takeIndex: takeCountRef.current });
+      onUnscoredComplete?.();
       setPhaseBoth('done');
       onPreview?.();
       return;
@@ -124,7 +125,7 @@ export default function PracticeView({
       assisted: assistedRef.current,
       fresh: freshAtStartRef.current,
     });
-  }, [onNotify, onPreview, onResult, settings.curtain, stopEverything]);
+  }, [onNotify, onPreview, onResult, onUnscoredComplete, settings.curtain, stopEverything]);
 
   /** Which notes are due at the playhead, for the optional keyboard guide. */
   const refreshGuide = useCallback((t) => {

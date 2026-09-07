@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AdventureView from './components/AdventureView.jsx';
 import ExpeditionDebrief from './components/ExpeditionDebrief.jsx';
 import ExpeditionView from './components/ExpeditionView.jsx';
 import PracticeView from './components/PracticeView.jsx';
@@ -25,8 +26,8 @@ import {
 } from './core/storage.js';
 
 const TABS = [
-  { id: 'expedition', label: 'Expedition', short: 'Explore' },
-  { id: 'practice', label: 'Practice', short: 'Practice' },
+  { id: 'adventure', label: 'Explore station', short: 'Explore' },
+    { id: 'practice', label: 'Practice', short: 'Practice' },
   { id: 'path', label: 'Star atlas', short: 'Atlas' },
   { id: 'custom', label: 'Music lab', short: 'Lab' },
   { id: 'progress', label: 'Flight log', short: 'Log' },
@@ -63,13 +64,15 @@ export default function App() {
   const [profile, setProfile] = useState(loadProfile);
   const [settings, setSettings] = useState(loadSettings);
   const [presets, setPresets] = useState(loadPresets);
-  const [tab, setTab] = useState(() => exerciseFromUrl().seed != null ? 'practice' : 'expedition');
+  const [tab, setTab] = useState(() => exerciseFromUrl().seed != null ? 'practice' : 'adventure');
   const [showKeyboard, setShowKeyboard] = useState(() => (loadSettings().inputMode || 'screen') === 'screen');
   const [repairHand, setRepairHand] = useState(null);
   const [transitActive, setTransitActive] = useState(false);
   const [placement, setPlacement] = useState(null);
   const [toast, setToast] = useState(null);
   const [receipt, setReceipt] = useState(null);
+  const adventureResultRef = useRef(null);
+  const registerAdventureResult = useCallback((handler) => { adventureResultRef.current = handler; }, []);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const nextPathLevelRef = useRef(null);
   const preparedExerciseRef = useRef(null);
@@ -208,7 +211,7 @@ export default function App() {
     setParams(canUsePrepared
       ? prepared.params
       : paramsForLevel(levelId, profile, { seed: randomSeed(), ...opts }));
-    setTab('practice');
+    setTab((current) => current === 'adventure' ? 'adventure' : 'practice');
   }, [profile]);
 
   const regenerate = useCallback(() => {
@@ -222,6 +225,7 @@ export default function App() {
   }, [nextFromLevel, params]);
 
   const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain, assisted, fresh }) => {
+    adventureResultRef.current?.(summary);
     const eligible = eligibleFirstRead({ summary, takeIndex, curtain, assisted, fresh });
     setReceipt({ scoreId, level: params.level, eligible: eligible && !placement?.active,
       before: params.level ? missionState(profile, params.level) : null,
@@ -359,7 +363,7 @@ export default function App() {
   const drillSkill = useCallback((skillId) => {
     setRepairHand(null);
     setParams(paramsForLevel(profile.level, profile, { seed: randomSeed(), targetSkill: skillId }));
-    setTab('practice');
+    setTab((current) => current === 'adventure' ? 'adventure' : 'practice');
   }, [profile]);
 
   const practiceSettings = useCallback((patch) => {
@@ -441,13 +445,13 @@ export default function App() {
     setParams(paramsForLevel(chosen.id, nextProfile, { seed: randomSeed(), targeting: false }));
     setToast({ kind: 'info', text: `Course set for ${waypointFor(chosen.id).name} · level ${chosen.id}, ${chosen.name}` });
     setSettings((current) => ({ ...current, curtain: 'off', guideKeys: false }));
-    setTab('practice');
+    setTab((current) => current === 'adventure' ? 'adventure' : 'practice');
   }, [profile]);
 
   // Compose and engrave the likely next adaptive study while the learner is
   // reading this one. The same score is then ready when “New study” is tapped.
   useEffect(() => {
-    if (!params.level) return undefined;
+    if (!params.level || tab !== 'practice') return undefined;
     let cancelled = false;
     const prepare = () => {
       if (cancelled) return;
@@ -467,13 +471,51 @@ export default function App() {
       if (window.cancelIdleCallback) window.cancelIdleCallback(idle);
       else window.clearTimeout(idle);
     };
-  }, [params.level, profile, scoreId, settings.showFingerings]);
+  }, [params.level, profile, scoreId, settings.showFingerings, tab]);
 
   const customParams = useMemo(() => customisableParams(params), [params]);
   const nightsObserved = useMemo(() => transitStreak(profile), [profile]);
 
+  const practiceElement = (
+          <PracticeView
+            key={`${score.seed}:${score.tempo}:${repairHand || 'both'}`}
+            score={practiceScore}
+            debrief={receipt?.scoreId === scoreId && receipt.level && <ExpeditionDebrief receipt={receipt} profile={profile} onExplore={() => setTab('expedition')} onLaunch={changeDifficulty} />}
+            settings={settings}
+            onSettings={practiceSettings}
+            onResult={handleResult}
+            onUnscoredComplete={() => adventureResultRef.current?.({ unscored: true })}
+            onRegenerate={regenerate}
+            onDifficultyChange={changeDifficulty}
+            openLevel={openThrough(profile)}
+            level={level}
+            midi={midi}
+            onConnectMidi={handleConnectMidi}
+            microphone={microphoneState}
+            onConnectMicrophone={handleConnectMicrophone}
+            showKeyboard={showKeyboard}
+            onToggleKeyboard={() => setShowKeyboard((v) => !v)}
+            freshRead={!seenBefore}
+            strongReads={strongReads}
+            onPreview={handlePreview}
+            onReflect={handleReflection}
+            onNotify={notify}
+            session={sessionInfo}
+            onSessionStart={startSession}
+            placement={placement}
+            onFocus={drillSkill}
+            onRecheckLevel={() => setShowOnboarding(true)}
+            repairHand={repairHand}
+            onRepairHand={(hand, tempo) => {
+              setRepairHand(hand);
+              setParams((current) => ({ ...current, tempo }));
+              setTab((current) => current === 'adventure' ? 'adventure' : 'practice');
+            }}
+          />
+  );
+
   return (
-    <div className="sr-app">
+    <div className={`sr-app${tab === 'adventure' ? ' is-adventure' : ''}`}>
       <div className="sr-starfield" aria-hidden="true" />
       <a className="sr-skip" href="#practice-main">Skip to practice</a>
       <header className="sr-header">
@@ -519,6 +561,10 @@ export default function App() {
       </header>
 
       <main className="sr-main" id="practice-main">
+        {tab === 'adventure' && <AdventureView practice={practiceElement} level={profile.level}
+          registerResult={registerAdventureResult} onTools={setTab}
+          onPrepareMusic={() => { nextFromLevel(profile.level); setTab('adventure'); setReceipt(null); setPlacement(null); setTransitActive(false); setSettings((s) => ({ ...s, curtain: 'off' })); }} />}
+
         {tab === 'expedition' && <ExpeditionView profile={profile}
           onLaunch={(id) => { if (!settings.onboardingComplete && !profile.totals.takes) setShowOnboarding(true); else changeDifficulty(id); }}
           onTransit={readTransit} onPractice={() => setTab('practice')}
@@ -532,42 +578,7 @@ export default function App() {
             <TransitCard profile={profile} active={transitActive} onRead={readTransit} onLeave={leaveTransit} />
           </div></details>
         </div>}
-        {tab === 'practice' && (
-          <PracticeView
-            key={`${score.seed}:${score.tempo}:${repairHand || 'both'}`}
-            score={practiceScore}
-            debrief={receipt?.scoreId === scoreId && receipt.level && <ExpeditionDebrief receipt={receipt} profile={profile} onExplore={() => setTab('expedition')} onLaunch={changeDifficulty} />}
-            settings={settings}
-            onSettings={practiceSettings}
-            onResult={handleResult}
-            onRegenerate={regenerate}
-            onDifficultyChange={changeDifficulty}
-            openLevel={openThrough(profile)}
-            level={level}
-            midi={midi}
-            onConnectMidi={handleConnectMidi}
-            microphone={microphoneState}
-            onConnectMicrophone={handleConnectMicrophone}
-            showKeyboard={showKeyboard}
-            onToggleKeyboard={() => setShowKeyboard((v) => !v)}
-            freshRead={!seenBefore}
-            strongReads={strongReads}
-            onPreview={handlePreview}
-            onReflect={handleReflection}
-            onNotify={notify}
-            session={sessionInfo}
-            onSessionStart={startSession}
-            placement={placement}
-            onFocus={drillSkill}
-            onRecheckLevel={() => setShowOnboarding(true)}
-            repairHand={repairHand}
-            onRepairHand={(hand, tempo) => {
-              setRepairHand(hand);
-              setParams((current) => ({ ...current, tempo }));
-              setTab('practice');
-            }}
-          />
-        )}
+        {tab === 'practice' && practiceElement}
 
         {tab === 'path' && (
           <PathView profile={profile} onPick={changeDifficulty} />
