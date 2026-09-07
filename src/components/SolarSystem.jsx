@@ -4,6 +4,7 @@ import {
   SCENE_RADIUS, bodyRadius, journeyState, orbitPosition, orbitRadius,
 } from '../core/journey.js';
 import { skyState } from '../core/constellation.js';
+import { createStage, prefersReducedMotion, supportsWebGL } from '../core/stage.js';
 import { isOpen, lockReason, missionState } from '../core/missions.js';
 
 // The journey, flown.
@@ -24,22 +25,6 @@ const GALAXY_FADE_IN = 190;
 const GALAXY_RADIUS = 920;
 
 const CRAFT_TRAVEL_SECONDS = 1.8;
-
-/** Is the reader asking for less motion? Checked once, and honoured throughout. */
-const prefersReducedMotion = () => (
-  typeof window !== 'undefined'
-  && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-);
-
-function supportsWebGL() {
-  if (typeof document === 'undefined') return false;
-  try {
-    const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
-  } catch {
-    return false;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Scene construction
@@ -322,11 +307,9 @@ export default function SolarSystem({ profile, onPick }) {
     const reduced = prefersReducedMotion();
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 4000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(0x000000, 0);
-    mount.appendChild(renderer.domElement);
-    renderer.domElement.className = 'sr-orrery-canvas';
+    const stage = createStage(mount, { camera, clearColor: 0x000000, className: 'sr-orrery-canvas' });
+    if (!stage) return undefined;
+    const { renderer } = stage;
 
     const texture = glowTexture();
     const disposables = [texture];
@@ -474,16 +457,6 @@ export default function SolarSystem({ profile, onPick }) {
     let lastX = 0;
     let lastY = 0;
 
-    const setSize = () => {
-      const width = mount.clientWidth || 1;
-      const height = mount.clientHeight || 1;
-      renderer.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    };
-    setSize();
-    const resize = new ResizeObserver(setSize);
-    resize.observe(mount);
 
     const onPointerDown = (event) => {
       dragging = true;
@@ -528,9 +501,7 @@ export default function SolarSystem({ profile, onPick }) {
     element.addEventListener('wheel', onWheel, { passive: false });
 
     // --- animation --------------------------------------------------------
-    const clock = new THREE.Clock();
     let elapsed = 0;
-    let frame = 0;
     const projected = new THREE.Vector3();
     const travel = { from: null, to: null, t: 1 };
     const state = {
@@ -546,9 +517,7 @@ export default function SolarSystem({ profile, onPick }) {
       return new THREE.Vector3(x, y, z);
     };
 
-    const render = () => {
-      frame = requestAnimationFrame(render);
-      const delta = Math.min(0.05, clock.getDelta());
+    const render = (delta) => {
       if (!reduced) elapsed += delta;
 
       for (const record of bodyRecords) {
@@ -682,7 +651,7 @@ export default function SolarSystem({ profile, onPick }) {
     // Browsers already stop serving animation frames to a hidden page, so
     // there is nothing to pause by hand — and pausing by hand risks leaving
     // two loops running when the page comes back.
-    frame = requestAnimationFrame(render);
+    stage.run(render);
 
     engineRef.current = {
       travelTo(nextLevel) {
@@ -706,15 +675,12 @@ export default function SolarSystem({ profile, onPick }) {
     };
 
     return () => {
-      cancelAnimationFrame(frame);
-      resize.disconnect();
       element.removeEventListener('pointerdown', onPointerDown);
       element.removeEventListener('pointermove', onPointerMove);
       element.removeEventListener('pointerup', onPointerUp);
       element.removeEventListener('wheel', onWheel);
-      for (const item of disposables) item.dispose?.();
-      renderer.dispose();
-      element.remove();
+      stage.track(...disposables);
+      stage.dispose();
       engineRef.current = null;
     };
     // The scene is built from the shape of the journey, not from the reader's

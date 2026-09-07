@@ -596,7 +596,11 @@ export default function App() {
           <>
             <ExpeditionView profile={profile}
               onLaunch={(id) => { if (!settings.onboardingComplete && !profile.totals.takes) setShowOnboarding(true); else changeDifficulty(id); }}
-              onTransit={readTransit} onPractice={() => setTab('practice')}
+              onTransit={readTransit}
+              onPractice={(level) => {
+                if (level) changeDifficulty(level, { alongRoute: false });
+                setTab('practice');
+              }}
               onProgress={() => setTab('progress')} onPlacement={() => setShowOnboarding(true)} />
             <PathView profile={profile} onPick={changeDifficulty} />
           </>

@@ -37,10 +37,22 @@ export default function ExpeditionView({ profile, onLaunch, onTransit, onPractic
           {Array.from({ length: first.need }, (_, i) => <span key={i} className={i < first.have ? 'is-lit' : ''} />)}
           <b>{first.have} / {first.need} first reads</b>
         </div>
-        <button type="button" className="pv-launch" onClick={() => open ? onLaunch(selected) : onLaunch(openThrough(profile))}>
-          <span aria-hidden="true">↗</span> {open ? reads.length ? 'Continue expedition' : 'Launch mission' : `Return to ${WAYPOINTS[openThrough(profile) - 1].name}`} <span aria-hidden="true">→</span>
+        {/* The route is earned; the piano is not. A destination that is not
+            charted yet can still be practised at — so the screen offers that
+            rather than treating a deliberate choice as a wrong turn. */}
+        <button type="button" className="pv-launch" onClick={() => open ? onLaunch(selected) : onPractice(selected)}>
+          <span aria-hidden="true">↗</span> {open ? reads.length ? 'Continue expedition' : 'Launch mission' : `Practise at ${place.name}`} <span aria-hidden="true">→</span>
         </button>
-        <p className="pv-launch-note">{open ? `${levelById(selected).params.measures} bars · your own pace · fresh music every flight` : lockReason(profile, selected)}</p>
+        <p className="pv-launch-note">
+          {open
+            ? `${levelById(selected).params.measures} bars · your own pace · fresh music every flight`
+            : `Not charted yet — ${lockReason(profile, selected)} You can read here any time in open practice.`}
+        </p>
+        {!open && (
+          <button type="button" className="pv-launch-secondary" onClick={() => onLaunch(openThrough(profile))}>
+            Return to {WAYPOINTS[openThrough(profile) - 1].name} and continue the route
+          </button>
+        )}
       </div>
       <div className="pv-coordinate" aria-hidden="true">PRIMA VISTA EXPLORATION PROGRAM<br />HOME SYSTEM · OUTBOUND</div>
     </section>
@@ -51,7 +63,7 @@ export default function ExpeditionView({ profile, onLaunch, onTransit, onPractic
           className={`pv-waypoint${selected === point.level ? ' is-selected' : ''}${isOpen(profile, point.level) ? ' is-open' : ''}`}
           aria-pressed={selected === point.level} aria-label={`${point.name}, level ${point.level}, ${isOpen(profile, point.level) ? 'open' : 'locked, preview destination'}`}>
           <span className="pv-node" style={{ '--waypoint': point.colour }}>{isOpen(profile, point.level) ? String(point.level).padStart(2, '0') : '·'}</span>
-          <strong>{point.name.replace('The ', '')}</strong><small>{isOpen(profile, point.level) ? point.level === profile.level ? 'Current base' : 'Open' : 'Uncharted'}</small>
+          <strong>{point.name.replace('The ', '')}</strong><small>{isOpen(profile, point.level) ? point.level === profile.level ? 'Current base' : 'Charted' : 'Uncharted'}</small>
         </button>)}
       </div>
     </section>
@@ -69,7 +81,7 @@ export default function ExpeditionView({ profile, onLaunch, onTransit, onPractic
       </section>
       <div className="pv-side-missions">
         <button className="pv-side-card" type="button" onClick={onTransit}><span className="pv-card-symbol" aria-hidden="true">✧</span><span><small>DAILY DISCOVERY</small><strong>Tonight’s transit</strong><span>One fresh piece. A small reason to return.</span></span><b aria-hidden="true">↗</b></button>
-        <button className="pv-side-card" type="button" onClick={onPractice}><span className="pv-card-symbol" aria-hidden="true">♫</span><span><small>FREE EXPLORATION</small><strong>Open practice</strong><span>Take your time. Try, listen, and try again.</span></span><b aria-hidden="true">↗</b></button>
+        <button className="pv-side-card" type="button" onClick={() => onPractice()}><span className="pv-card-symbol" aria-hidden="true">♫</span><span><small>FREE EXPLORATION</small><strong>Open practice</strong><span>Take your time. Try, listen, and try again.</span></span><b aria-hidden="true">↗</b></button>
         <button className="pv-side-card" type="button" onClick={onProgress}><span className="pv-card-symbol" aria-hidden="true">⌁</span><span><small>YOUR DISCOVERIES</small><strong>Flight log</strong><span>{profile.totals.takes ? `${profile.totals.takes} recorded takes · see the skills you’re building` : 'Your reading skills will light up here.'}</span></span><b aria-hidden="true">↗</b></button>
       </div>
     </div>

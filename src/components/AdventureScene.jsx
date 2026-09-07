@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { createStage, prefersReducedMotion } from '../core/stage.js';
 
 // A real navigable room. Every highlighted object has a world-space hit target.
 // No continuous physics, model downloads, post-processing, or pointer lock.
@@ -9,21 +10,20 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
   useEffect(() => { live.current = { room, onInteract, onTarget, view, paused, onUnavailable }; });
   useEffect(() => {
     const host = mount.current;
-    delete host.dataset.rendered;
-    let renderer;
-    try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'low-power' }); }
-    catch { live.current.onUnavailable(); return undefined; }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    const camera = new THREE.PerspectiveCamera(66, 1, .08, 90);
+    const stage = createStage(host, {
+      camera, alpha: false, maxPixelRatio: 1.5, powerPreference: 'low-power',
+    });
+    if (!stage) { live.current.onUnavailable(); return undefined; }
+    const { renderer } = stage;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
-    host.appendChild(renderer.domElement);
+    renderer.toneMappingExposure = 1.62;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(location.sky);
     scene.fog = new THREE.FogExp2(location.sky, .019);
-    const camera = new THREE.PerspectiveCamera(66, 1, .08, 90);
     camera.position.set(0, 1.65, 6.2);
     const geometry = [], materials = [], textures = [], targets = [], labels = [];
     const color = new THREE.Color(location.color);
@@ -51,7 +51,7 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
       const mesh = new THREE.Mesh(g, mat); mesh.position.set(x, y, z); scene.add(mesh); return mesh;
     }
     function target(mesh, id, label) { mesh.userData = { id, label }; targets.push(mesh); return mesh; }
-    scene.add(new THREE.HemisphereLight('#b5d1e4', '#182027', 2.4));
+    scene.add(new THREE.HemisphereLight('#b5d1e4', '#243039', 3.1));
     const light = new THREE.PointLight(color, 90, 18, 2); light.position.set(0, 4.2, 0); scene.add(light);
     const windowLight = new THREE.DirectionalLight('#b7d6ed', 2.1); windowLight.position.set(0, 5, -8); windowLight.castShadow = true; windowLight.shadow.mapSize.set(1024,1024); Object.assign(windowLight.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: .1, far: 35 }); windowLight.shadow.bias = -.001; scene.add(windowLight);
     // Walkable deck, structural ribs, overhead practical lighting.
@@ -111,6 +111,47 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
         box(.9, 3.4, 1.3, x, 1.7, z, dark);
         for (let i = 0; i < 8; i++) { box(1, .1, 1.32, x, .35 + i * .4, z, steel); box(1.04, .05, .4, x, .42 + i * .4, z, glow); }
       }
+    } else if (location.type === 'greenhouse') {
+      // Growing frames stacked toward a light source, and nothing on the floor,
+      // so the room reads taller than the garden it grew out of.
+      const green = material('#4f9f76');
+      for (const x of [-6.2, 6.2]) for (let z = -5; z <= 5; z += 2.5) {
+        for (let tier = 0; tier < 3; tier++) {
+          box(1.5, .07, 1.4, x, .8 + tier * 1.35, z, pale);
+          box(1.4, .1, .12, x, .95 + tier * 1.35, z + .62, glow);
+          for (let i = 0; i < 3; i++) { const leaf = box(.44, .07, .2, x + (i - 1) * .4, 1 + tier * 1.35, z, green); leaf.rotation.z = (i - 1) * .5; animated.push(leaf); }
+        }
+        cylinder(.09, 4.4, x - .78, 2.2, z, steel); cylinder(.09, 4.4, x + .78, 2.2, z, steel);
+      }
+    } else if (location.type === 'workshop') {
+      // Benches, pipework and hanging lamps: somewhere things get repaired.
+      for (const x of [-6.2, 6.2]) for (let z = -5; z <= 5; z += 2.5) {
+        box(1.6, .12, 1.5, x, 1.05, z, trim);
+        box(.14, 1, .14, x - .6, .5, z, steel); box(.14, 1, .14, x + .6, .5, z, steel);
+        box(1.4, .5, .1, x, 1.9, z, dark); box(1.2, .06, .06, x, 1.72, z, warm);
+        const lamp = cylinder(.22, .16, x, 3.6, z, warm); animated.push(lamp);
+        cylinder(.05, 1.5, x, 4.4, z, steel);
+      }
+      for (let z = -6; z <= 6; z += 4) cylinder(.13, 14.6, 0, 5.1, z, steel).rotation.z = Math.PI / 2;
+    } else if (location.type === 'shelter') {
+      // Low, close and warm: crates, bedrolls and one lantern each.
+      for (const x of [-6, 6]) for (let z = -5; z <= 5; z += 2.5) {
+        box(1.5, 1.1, 1.4, x, .55, z, dark);
+        box(1.55, .1, 1.45, x, 1.14, z, trim);
+        const lantern = box(.3, .42, .3, x, 1.55, z, warm); animated.push(lantern);
+        box(1.2, .16, 1.2, x, .06, z + 1.4, pale);
+      }
+      box(15, .35, 17, 0, 4.6, 0, dark);
+    } else if (location.type === 'relay') {
+      // Dishes turned outward, listening for something a long way off.
+      for (const x of [-6.4, 6.4]) for (let z = -4.5; z <= 4.5; z += 3) {
+        cylinder(.14, 2.4, x, 1.2, z, steel);
+        const dish = new THREE.Group(); dish.position.set(x, 2.6, z); scene.add(dish);
+        const face = cylinder(1.05, .12, 0, 0, 0, pale, dish); face.rotation.z = x < 0 ? -.6 : .6;
+        cylinder(.06, .9, 0, .5, 0, trim, dish);
+        box(.22, .22, .22, 0, .95, 0, glow, dish);
+        animated.push(dish);
+      }
     } else {
       const telescope = new THREE.Group(); telescope.position.set(0, 2.9, -6.6); scene.add(telescope);
       const tube = cylinder(.38, 2.7, 0, 0, 0, pale, telescope); tube.rotation.x = .75;
@@ -120,7 +161,7 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
     }
     const receiver = cylinder(.26, 1.25, 4.3, 2.3, -3.6, glow);
     const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
-    let yaw = 0, pitch = -.035, previous = performance.now(), frame, dragging = null, moved = false, targetId = null, lastView = null;
+    let yaw = 0, pitch = -.035, dragging = null, moved = false, targetId = null, lastView = null;
     const keys = new Set();
     const shots = { room: [0, 1.65, 6.2, 0, -.035], power: [-4.3, 1.7, -.1, 0, -.05], signal: [4.3, 1.7, -.1, 0, -.05], piano: [0, 1.65, -.8, 0, -.05], exit: [0, 1.65, 4.8, Math.PI, 0] };
     const moveTo = (id) => { const shot = shots[id] || shots.room; camera.position.set(...shot.slice(0,3)); yaw = shot[3]; pitch = shot[4]; };
@@ -134,18 +175,8 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
     const blur = () => { keys.clear(); dragging = null; };
     renderer.domElement.addEventListener('pointerdown', down); renderer.domElement.addEventListener('pointermove', move); renderer.domElement.addEventListener('pointerup', up); renderer.domElement.addEventListener('pointercancel', blur);
     window.addEventListener('keydown', keydown); window.addEventListener('keyup', keyup); window.addEventListener('blur', blur);
-    // Resizing a WebGL canvas clears it, so the still frame drawn for a
-    // paused or backgrounded page has to be drawn again at the new size.
-    // Without this the room can end up blank after a rotate or a tab switch.
-    const resize = new ResizeObserver(() => {
-      const w = host.clientWidth, h = host.clientHeight;
-      renderer.setSize(w, h); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
-      delete host.dataset.rendered;
-    }); resize.observe(host);
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const draw = (now) => {
-      frame = requestAnimationFrame(draw);
-      const dt = Math.min((now - previous) / 1000, .05); previous = now;
+    const reduced = prefersReducedMotion();
+    const draw = (dt, now) => {
       const state = live.current;
       if (state.view !== lastView) { moveTo(state.view?.id); lastView = state.view; }
       if (!state.paused) {
@@ -165,11 +196,13 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
       exitButton.material = complete ? glow : warm;
       if (state.room.power && !reduced && !state.paused) for (const object of animated) object.rotation.y = Math.sin(now * .0002) * .08;
       if (!state.paused) { raycaster.setFromCamera(new THREE.Vector2(0,0),camera); const hit = raycaster.intersectObjects(targets,false)[0]?.object; if ((hit?.userData.id || null) !== targetId) { targetId = hit?.userData.id || null; state.onTarget(hit ? { id: targetId, label: hit.userData.label } : null); } }
-      if (!document.hidden && !state.paused) renderer.render(scene,camera);
-      else if (!host.dataset.rendered) { renderer.render(scene,camera); host.dataset.rendered = 'true'; }
+      // A page the browser has stopped drawing, or a paused room, still needs
+      // one frame that matches the current size and state.
+      if (!document.hidden && !state.paused) renderer.render(scene, camera);
+      else if (stage.stale) { renderer.render(scene, camera); stage.settle(); }
     };
-    frame = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(frame); resize.disconnect(); window.removeEventListener('keydown',keydown); window.removeEventListener('keyup',keyup); window.removeEventListener('blur',blur); geometry.forEach(g=>g.dispose()); materials.forEach(m=>m.dispose()); textures.forEach(t=>t.dispose()); renderer.dispose(); renderer.domElement.remove(); labels.length = 0; };
+    stage.run(draw);
+    return () => { window.removeEventListener('keydown',keydown); window.removeEventListener('keyup',keyup); window.removeEventListener('blur',blur); stage.track(...geometry, ...materials, ...textures); stage.dispose(); labels.length = 0; };
   }, [location]);
   return <div className="pv-world-canvas" ref={mount} aria-label="Explorable space station. Drag to look. Use W A S D to walk, arrows to turn and walk, or the station controls." role="img" />;
 }

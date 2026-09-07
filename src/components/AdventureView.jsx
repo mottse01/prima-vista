@@ -89,7 +89,15 @@ export default function AdventureView({
       : !room.music ? 'Read a fresh piano piece'
         : routeOpen ? 'Route open · travel onward' : (routeReason || 'Keep reading here');
   return <div className={`pv-adventure${terminal ? ' is-terminal' : ''}`}>
-    <Suspense fallback={<div className="pv-world-loading">Entering {location.subtitle}…</div>}>
+    {/* The room's own colours while its engine arrives, rather than a line of
+        text on black. The 3D chunk is already off the critical path — this is
+        about what the incomplete state looks like. */}
+    <Suspense fallback={
+      <div className="pv-world-loading" style={{ '--sky': location.sky, '--glow': location.color }}>
+        <span className="pv-world-loading-mark" aria-hidden="true" />
+        <p>Entering {location.subtitle}…</p>
+      </div>
+    }>
       <AdventureScene location={location} room={room} onInteract={onInteract} onTarget={setTarget} view={view} paused={intro || menu || terminal || ending || rhythm} onUnavailable={onUnavailable} />
     </Suspense>
     <div className="pv-world-shade" aria-hidden="true" />
