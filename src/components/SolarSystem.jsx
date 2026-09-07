@@ -4,6 +4,7 @@ import {
   SCENE_RADIUS, bodyRadius, journeyState, orbitPosition, orbitRadius,
 } from '../core/journey.js';
 import { skyState } from '../core/constellation.js';
+import { missionState } from '../core/missions.js';
 
 // The journey, flown.
 //
@@ -296,7 +297,12 @@ export default function SolarSystem({ profile, onPick }) {
   const [zoom, setZoom] = useState(0.28);
   const [webgl] = useState(supportsWebGL);
 
-  const waypoints = useMemo(() => journeyState(profile), [profile]);
+  const waypoints = useMemo(() => journeyState(profile).map((waypoint) => {
+    const mission = missionState(profile, waypoint.level);
+    // A place is lit when its objectives are done, which is a richer and more
+    // honest signal than "the level was promoted at some point".
+    return { ...waypoint, mission, reached: mission.cleared || waypoint.reached };
+  }), [profile]);
   const sky = useMemo(() => skyState(profile), [profile]);
   const level = profile?.level || 1;
 
@@ -762,13 +768,18 @@ export default function SolarSystem({ profile, onPick }) {
         <div className="sr-orrery-readout">
           <span className="sr-eyebrow">
             {looking ? 'Looking at' : 'You are at'} · Level {shown.level}
-            {shown.reached && <em className="sr-orrery-flag">Demonstrated</em>}
+            {shown.mission.cleared && <em className="sr-orrery-flag">Cleared</em>}
           </span>
           <strong>{shown.name}</strong>
           <p>{shown.fact}</p>
           <p className="sr-orrery-distance">
             {shown.au} AU from the Sun
             {shown.period ? ` · one orbit every ${shown.period} years` : ''}
+          </p>
+          <p className="sr-orrery-objectives">
+            {shown.mission.cleared
+              ? 'Every objective here is complete.'
+              : `${shown.mission.done} of ${shown.mission.total} objectives · next: ${shown.mission.objectives.find((item) => !item.done)?.title}`}
           </p>
           {looking && (
             <button type="button" className="sr-btn sr-btn--small sr-orrery-travel" onClick={() => pick(shown.level)}>

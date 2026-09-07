@@ -145,6 +145,15 @@ export function applyResult(profile, {
     pitchAccuracy: summary.pitchAccuracy,
     rhythmAccuracy: summary.rhythmAccuracy,
     continuity: summary.continuity,
+    // Kept per take because a mission asks about one reading, not an average:
+    // "hold the beat within 45 ms" is a thing you did once, not a trend.
+    timing: summary.meanSignedTiming ?? null,
+    hands: summary.hands
+      ? {
+        rh: { pitchAccuracy: summary.hands.rh?.pitchAccuracy ?? null },
+        lh: { pitchAccuracy: summary.hands.lh?.pitchAccuracy ?? null },
+      }
+      : null,
     notes: summary.total,
     meta: meta || null,
   });

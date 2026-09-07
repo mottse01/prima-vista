@@ -5,6 +5,7 @@ import ProgressView from './components/ProgressView.jsx';
 import PathView from './components/PathView.jsx';
 import CompareView from './components/CompareView.jsx';
 import TransitCard from './components/TransitCard.jsx';
+import MissionPanel from './components/MissionPanel.jsx';
 import OnboardingModal from './components/OnboardingModal.jsx';
 import { generateExercise } from './core/generator.js';
 import { applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
@@ -242,6 +243,14 @@ export default function App() {
           pitches: summary.pitches,
           pitchLocations: summary.pitchLocations,
           recovery: summary.recovery,
+          // What was actually on the page, for the objectives that ask about
+          // the music rather than about the playing.
+          tiedOverBarline: [...score.staves.rh, ...score.staves.lh].some((note) => (
+            !note.rest
+            && Math.floor(note.onset / score.ts.ticks)
+              !== Math.floor((note.onset + note.duration - 1) / score.ts.ticks)
+          )),
+          textures: [...new Set(score.staves.lh.map((note) => note.texture).filter(Boolean))],
           recipe: {
             seed: score.seed,
             params: score.params,
@@ -493,12 +502,21 @@ export default function App() {
 
       <main className="sr-main" id="practice-main">
         {tab === 'practice' && (
-          <TransitCard
-            profile={profile}
-            active={transitActive}
-            onRead={readTransit}
-            onLeave={leaveTransit}
-          />
+          <div className="sr-practice-top">
+            {params.level && (
+              <MissionPanel
+                profile={profile}
+                level={params.level}
+                onOpenPath={() => setTab('path')}
+              />
+            )}
+            <TransitCard
+              profile={profile}
+              active={transitActive}
+              onRead={readTransit}
+              onLeave={leaveTransit}
+            />
+          </div>
         )}
         {tab === 'practice' && (
           <PracticeView
