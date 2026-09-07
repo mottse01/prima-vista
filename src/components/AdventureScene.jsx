@@ -134,7 +134,14 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
     const blur = () => { keys.clear(); dragging = null; };
     renderer.domElement.addEventListener('pointerdown', down); renderer.domElement.addEventListener('pointermove', move); renderer.domElement.addEventListener('pointerup', up); renderer.domElement.addEventListener('pointercancel', blur);
     window.addEventListener('keydown', keydown); window.addEventListener('keyup', keyup); window.addEventListener('blur', blur);
-    const resize = new ResizeObserver(() => { const w = host.clientWidth, h = host.clientHeight; renderer.setSize(w,h); camera.aspect = w / Math.max(1,h); camera.updateProjectionMatrix(); }); resize.observe(host);
+    // Resizing a WebGL canvas clears it, so the still frame drawn for a
+    // paused or backgrounded page has to be drawn again at the new size.
+    // Without this the room can end up blank after a rotate or a tab switch.
+    const resize = new ResizeObserver(() => {
+      const w = host.clientWidth, h = host.clientHeight;
+      renderer.setSize(w, h); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+      delete host.dataset.rendered;
+    }); resize.observe(host);
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const draw = (now) => {
       frame = requestAnimationFrame(draw);
