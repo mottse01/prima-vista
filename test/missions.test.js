@@ -231,3 +231,21 @@ test('two strong reads never unlock the next destination', async () => {
   assert.equal(missionState(profile, 1).routeReady, false);
   assert.equal(openThrough(raiseFrontier(profile, 1)), 1);
 });
+
+test('the route is earned, but the piano room is always open', async () => {
+  const { isOpen, openThrough } = await import('../src/core/missions.js');
+
+  // A reader who has cleared nothing still stands at the start of the route.
+  const fresh = emptyProfile();
+  assert.equal(openThrough(fresh), 1);
+  assert.equal(isOpen(fresh, 7), false, 'the map has not charted level 7');
+
+  // paramsForLevel is what the practice tab uses to change level, and it
+  // answers for any level at all — nothing in the reading engine consults the
+  // route. The gate lives in the expedition, not in the music.
+  const { paramsForLevel } = await import('../src/core/adaptive.js');
+  for (const level of [1, 5, 10]) {
+    const params = paramsForLevel(level, fresh, { seed: 4242, targeting: false });
+    assert.equal(params.level, level, `practice must be able to open level ${level}`);
+  }
+});

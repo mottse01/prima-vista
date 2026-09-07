@@ -109,6 +109,11 @@ test('practice exposes one difficulty slider, named actions and independent disp
   const html = render(Practice, props);
   assert.equal((html.match(/aria-label="Difficulty level"/g) || []).length, 1);
   assert.ok(html.indexOf('aria-label="Difficulty level"') < html.indexOf('<summary>Settings</summary>'));
+  // The expedition has a route you earn. The piano room does not: practice is
+  // reachable at any level whatever the map says, so a reader can warm up
+  // somewhere easy or stretch somewhere hard.
+  assert.match(html, /type="range" min="1" max="10"/);
+  assert.doesNotMatch(html, /course is open through level/);
   for (const label of ['Launch flight', 'New music', 'Listen', 'Preparation tips', 'Comfort view', 'Eclipse', '2-minute practice']) assert.ok(html.includes(label), label);
   assert.match(html, /30-second preparation/);
   assert.doesNotMatch(render(Practice, { ...props, settings: { ...DEFAULT_SETTINGS, preparationTips: false } }), /class="sr-btn sr-btn--ghost sr-prep-toggle"/);

@@ -426,12 +426,18 @@ export default function App() {
     setParams(paramsForLevel(profile.level, profile, { seed: randomSeed() }));
   }, [profile]);
 
-  const changeDifficulty = useCallback((levelId) => {
-    // The one place a level is chosen, and so the one place the course is
-    // enforced. A closed destination says what is standing in the way rather
-    // than silently refusing.
-    if (!isOpen(profile, levelId)) {
-      setToast({ kind: 'info', text: `${waypointFor(levelId).name} is not open yet. ${lockReason(profile, levelId)}` });
+  /**
+   * The one place a level is chosen.
+   *
+   * The expedition has a route you earn, and the map enforces it. Practice
+   * does not: the piano room is always open at any level, which is how a
+   * reader warms up somewhere easy, stretches somewhere hard, or works on the
+   * piece their teacher set this week. Only a move made *along the route* is
+   * checked against it.
+   */
+  const changeDifficulty = useCallback((levelId, { alongRoute = true } = {}) => {
+    if (alongRoute && !isOpen(profile, levelId)) {
+      setToast({ kind: 'info', text: `${waypointFor(levelId).name} is not charted yet. ${lockReason(profile, levelId)}` });
       return;
     }
     setPlacement(null);
@@ -443,7 +449,14 @@ export default function App() {
     setRepairHand(null);
     setProfile(nextProfile);
     setParams(paramsForLevel(chosen.id, nextProfile, { seed: randomSeed(), targeting: false }));
-    setToast({ kind: 'info', text: `Course set for ${waypointFor(chosen.id).name} · level ${chosen.id}, ${chosen.name}` });
+    setToast({
+      kind: 'info',
+      // Setting a course and opening the piano are different acts, and the
+      // expedition should not claim credit for the second one.
+      text: alongRoute
+        ? `Course set for ${waypointFor(chosen.id).name} · level ${chosen.id}, ${chosen.name}`
+        : `Practising at level ${chosen.id} · ${chosen.name}`,
+    });
     setSettings((current) => ({ ...current, curtain: 'off', guideKeys: false }));
     setTab((current) => current === 'adventure' ? 'adventure' : 'practice');
   }, [profile]);
@@ -486,8 +499,7 @@ export default function App() {
             onResult={handleResult}
             onUnscoredComplete={(take) => adventureResultRef.current?.({ ...take, unscored: true })}
             onRegenerate={regenerate}
-            onDifficultyChange={changeDifficulty}
-            openLevel={openThrough(profile)}
+            onDifficultyChange={(levelId) => changeDifficulty(levelId, { alongRoute: false })}
             level={level}
             midi={midi}
             onConnectMidi={handleConnectMidi}
