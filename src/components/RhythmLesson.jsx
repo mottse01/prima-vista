@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { assessRhythm, rhythmPattern } from '../core/adventure.js';
+import { assessRhythm, rhythmEvidence, rhythmNoteId, rhythmPattern, rhythmScore } from '../core/adventure.js';
+import { xmlNoteId } from '../core/musicxml.js';
+import { renderScoreSvg } from '../core/verovio.js';
 import { now, playClick, playPianoNote, unlockAudio } from '../core/audio.js';
 
-export default function RhythmLesson({ level, midi, onComplete }) {
+export default function RhythmLesson({ level, midi, onComplete, onEvidence }) {
   const [variation, setVariation] = useState(0);
   const [tempo, setTempo] = useState(60);
   const [phase, setPhase] = useState('ready');
@@ -58,6 +60,8 @@ export default function RhythmLesson({ level, midi, onComplete }) {
           const outcome = assessRhythm(events, active.taps, beat);
           setResult(outcome); setPhase('done');
           setMessage(outcome.passed ? 'A steady reading. Take that same pulse into the fresh piece.' : outcome.extras ? 'Some taps landed between the written attacks. Count through long notes and rests without adding a tap.' : 'Some note starts missed the pulse. Try a slower tempo and keep counting between attacks.');
+          // Every attempt is a measured observation of a pulse, passed or not.
+          onEvidence?.(rhythmEvidence(events, outcome));
           if (outcome.passed) onComplete();
           cancel(); return;
         }
@@ -80,15 +84,52 @@ export default function RhythmLesson({ level, midi, onComplete }) {
   </section>;
 }
 
+/**
+ * The rhythm, engraved.
+ *
+ * Rendered through the same MusicXML and the same engraver as the studies, so
+ * a reader meets one set of shapes throughout. The note being read is
+ * highlighted rather than swept by a line, which is what the score itself does
+ * and is more use than a moving cursor.
+ */
 function RhythmNotation({ events, position }) {
-  return <div className="pv-rhythm-paper"><svg viewBox="0 0 800 145" role="img" aria-label={`Two bars in four-four: ${events.map(e=>`${e.rest ? 'rest' : 'note'} ${e.duration} beats`).join(', ')}`}>
-    <line x1="70" x2="775" y1="82" y2="82" stroke="currentColor" strokeWidth="1.4"/>
-    <text x="27" y="80" fill="currentColor" fontSize="25" fontFamily="serif">4</text><text x="27" y="102" fill="currentColor" fontSize="25" fontFamily="serif">4</text>
-    {[0,4,8].map(b=><line key={b} x1={80+b*85} x2={80+b*85} y1="58" y2="99" stroke="currentColor" strokeWidth="1.5"/>)}
-    {events.map((e,i)=>{const x=98+e.beat*82;const dotted=e.duration===1.5;const flags=e.duration===.25?2:e.duration===.5?1:0;return <g key={i}>
-      {e.rest ? <text x={x-9} y="91" fill="currentColor" fontSize="40" fontFamily="serif">𝄽</text> : <><ellipse cx={x} cy="82" rx="9" ry="6" transform={`rotate(-20 ${x} 82)`} fill={e.duration===2?'white':'currentColor'} stroke="currentColor" strokeWidth="2"/><line x1={x+8} x2={x+8} y1="81" y2="34" stroke="currentColor" strokeWidth="2"/>{Array.from({length:flags},(_,f)=><path key={f} d={`M${x+8},${34+f*9} Q${x+30},${46+f*9} ${x+19},${61+f*9}`} fill="none" stroke="currentColor" strokeWidth="3"/>)}{dotted&&<circle cx={x+18} cy="76" r="3"/>}</>}
-      <text x={x} y="127" textAnchor="middle" fill="#637472" fontSize="13">{e.beat%1===0 ? (e.beat%4)+1 : ''}</text>
-    </g>;})}
-    {position!==null&&<line x1={98+Math.min(8,Math.max(0,position))*82} x2={98+Math.min(8,Math.max(0,position))*82} y1="20" y2="104" stroke="#27867c" strokeWidth="2"/>}
-  </svg></div>;
+  const host = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const node = host.current;
+    node.dataset.state = 'loading';
+    renderScoreSvg(rhythmScore(events), { layout: 'scroll', pageWidth: 1800 })
+      .then((svg) => {
+        if (cancelled || !host.current) return;
+        host.current.innerHTML = svg || '';
+        host.current.dataset.state = svg ? 'ready' : 'error';
+      })
+      .catch(() => { if (!cancelled && host.current) host.current.dataset.state = 'error'; });
+    return () => { cancelled = true; };
+  }, [events]);
+
+  useEffect(() => {
+    const node = host.current;
+    if (!node || node.dataset.state !== 'ready') return;
+    for (const element of node.querySelectorAll('.is-reading')) element.classList.remove('is-reading');
+    if (position == null) return;
+    const current = rhythmNoteId(events, position);
+    if (!current) return;
+    node.querySelector(`[id="${xmlNoteId('rh', current.onset, current.midi)}"]`)?.classList.add('is-reading');
+  }, [events, position]);
+
+  const spoken = events.map((event) => `${event.rest ? 'rest' : 'note'} ${event.duration} beats`).join(', ');
+  return (
+    <div className="pv-rhythm-paper">
+      <div
+        className="pv-rhythm-engraving" ref={host} data-state="loading"
+        role="img" aria-label={`Two bars in four-four on one pitch: ${spoken}`}
+      />
+      <p className="pv-rhythm-placeholder">Engraving the rhythm…</p>
+      <p className="pv-rhythm-fallback">
+        The rhythm could not be engraved. Two bars in four-four: {spoken}.
+      </p>
+    </div>
+  );
 }

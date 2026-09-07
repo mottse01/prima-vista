@@ -11,7 +11,7 @@ import TransitCard from './components/TransitCard.jsx';
 import MissionPanel from './components/MissionPanel.jsx';
 import OnboardingModal from './components/OnboardingModal.jsx';
 import { generateExercise } from './core/generator.js';
-import { applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
+import { applyPracticeEvidence, applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
 import { levelById } from './core/levels.js';
 import { waypointFor } from './core/constellation.js';
 import { recordTransit, transitParams, transitStreak } from './core/transit.js';
@@ -493,7 +493,7 @@ export default function App() {
           <PracticeView
             key={`${score.seed}:${score.tempo}:${repairHand || 'both'}`}
             score={practiceScore}
-            debrief={receipt?.scoreId === scoreId && receipt.level && <ExpeditionDebrief receipt={receipt} profile={profile} onExplore={() => setTab('expedition')} onLaunch={changeDifficulty} />}
+            debrief={receipt?.scoreId === scoreId && receipt.level && <ExpeditionDebrief receipt={receipt} profile={profile} onExplore={() => setTab('adventure')} onLaunch={changeDifficulty} />}
             settings={settings}
             onSettings={practiceSettings}
             onResult={handleResult}
@@ -575,25 +575,31 @@ export default function App() {
       <main className="sr-main" id="practice-main">
         {tab === 'adventure' && <AdventureView practice={practiceElement} level={profile.level} midi={midi}
           registerResult={registerAdventureResult} onTools={setTab}
+          routeOpen={isOpen(profile, profile.level + 1)}
+          routeReason={lockReason(profile, profile.level + 1)}
+          mission={missionState(profile, profile.level)}
+          onTravel={(next) => changeDifficulty(next, { alongRoute: true })}
+          onRhythmEvidence={(tallies) => setProfile((current) => applyPracticeEvidence(current, tallies))}
           onPrepareMusic={() => { nextFromLevel(profile.level); setTab('adventure'); setReceipt(null); setPlacement(null); setTransitActive(false); setSettings((s) => ({ ...s, curtain: 'off', guideKeys: false })); }} />}
 
-        {tab === 'expedition' && <ExpeditionView profile={profile}
-          onLaunch={(id) => { if (!settings.onboardingComplete && !profile.totals.takes) setShowOnboarding(true); else changeDifficulty(id); }}
-          onTransit={readTransit} onPractice={() => setTab('practice')}
-          onProgress={() => setTab('progress')} onPlacement={() => setShowOnboarding(true)} />}
-
         {tab === 'practice' && <div className="pv-practice-heading">
-          <button type="button" onClick={() => setTab('expedition')}>← Expedition</button>
+          <button type="button" onClick={() => setTab('adventure')}>← Station</button>
           <span>{transitActive ? 'DAILY DISCOVERY' : params.level ? `SECTOR ${String(params.level).padStart(2, '0')} · ${waypointFor(params.level).name.toUpperCase()}` : 'MUSIC LAB'} · PIANO FLIGHT</span>
           <details className="pv-flight-brief"><summary>Mission brief</summary><div>
-            {params.level && <MissionPanel profile={profile} level={params.level} onOpenPath={() => setTab('expedition')} />}
+            {params.level && <MissionPanel profile={profile} level={params.level} onOpenPath={() => setTab('path')} />}
             <TransitCard profile={profile} active={transitActive} onRead={readTransit} onLeave={leaveTransit} />
           </div></details>
         </div>}
         {tab === 'practice' && practiceElement}
 
         {tab === 'path' && (
-          <PathView profile={profile} onPick={changeDifficulty} />
+          <>
+            <ExpeditionView profile={profile}
+              onLaunch={(id) => { if (!settings.onboardingComplete && !profile.totals.takes) setShowOnboarding(true); else changeDifficulty(id); }}
+              onTransit={readTransit} onPractice={() => setTab('practice')}
+              onProgress={() => setTab('progress')} onPlacement={() => setShowOnboarding(true)} />
+            <PathView profile={profile} onPick={changeDifficulty} />
+          </>
         )}
 
         {tab === 'custom' && (

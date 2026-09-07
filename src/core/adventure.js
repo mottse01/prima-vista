@@ -1,5 +1,17 @@
-// Story progress is local exploration, separate from musical assessment.
-// Preparation and rhythm are scaffolds. Only a fresh reading opens the musical route.
+// The station you are standing in.
+//
+// There is one position, and it is the reading level. Location N is level N,
+// so travelling in the story *is* changing level and nothing has to keep two
+// counters agreeing. What this module owns is the ritual of a visit —
+// prepare, isolate the rhythm, read something fresh — recorded per level so a
+// returning reader picks up where they left that room.
+//
+// Preparation and rhythm are scaffolds. What opens the route is the
+// destination's own objectives, which live in missions.js and are measured
+// from real readings.
+import { TPQ, fromDia } from './theory.js';
+import { timeSig } from './rhythm.js';
+
 export const ADVENTURE_KEY = 'prima-vista.adventure.v1';
 export const LOCATIONS = [
   { name: 'The listening room', place: 'Luna', subtitle: 'Selene Observatory', color: '#70dcca', sky: '#091c2b', type: 'observatory' },
@@ -13,31 +25,42 @@ export const LOCATIONS = [
   { name: 'Messages in the ice', place: 'Kuiper Belt', subtitle: 'Drift Archive', color: '#b3c6e6', sky: '#101827', type: 'archive' },
   { name: 'Where the song goes', place: 'Heliopause', subtitle: 'Voyager Relay', color: '#a4f2da', sky: '#082b2b', type: 'observatory' },
 ];
-export function emptyAdventure() { return { version: 2, current: 0, rooms: {} }; }
-export function roomState(state, index = state.current) {
-  return { power: false, signal: false, music: false, ...(state.rooms[index] || {}) };
+export const locationFor = (level) => LOCATIONS[Math.max(0, Math.min(LOCATIONS.length - 1, (Number(level) || 1) - 1))];
+
+export function emptyAdventure() { return { version: 3, rooms: {} }; }
+
+/** The visit ritual at one level: strategy read, rhythm passed, fresh reading. */
+export function roomState(state, level) {
+  return { power: false, signal: false, music: false, ...(state?.rooms?.[level] || {}) };
 }
-export function roomComplete(state, index = state.current) {
-  const room = roomState(state, index);
+export function roomComplete(state, level) {
+  const room = roomState(state, level);
   return room.power && room.signal && room.music;
 }
-export function completePuzzle(state, puzzle) {
+export function completePuzzle(state, level, puzzle) {
   if (!['power', 'signal', 'music'].includes(puzzle)) return state;
-  const room = roomState(state);
-  if (puzzle === 'signal' && !room.power || puzzle === 'music' && !room.signal) return state;
-  return { ...state, rooms: { ...state.rooms, [state.current]: { ...room, [puzzle]: true } } };
+  const room = roomState(state, level);
+  // The steps are in order because the earlier ones are what make the later
+  // ones worth doing: you cannot isolate a rhythm you have not looked at.
+  if (puzzle === 'signal' && !room.power) return state;
+  if (puzzle === 'music' && !room.signal) return state;
+  return { ...state, rooms: { ...state.rooms, [level]: { ...room, [puzzle]: true } } };
 }
-export function travel(state) {
-  if (!roomComplete(state) || state.current >= LOCATIONS.length - 1) return state;
-  return { ...state, current: state.current + 1 };
-}
+
 export function loadAdventure() {
   try {
     const saved = JSON.parse(localStorage.getItem(ADVENTURE_KEY));
-    if ([1, 2].includes(saved?.version) && Number.isInteger(saved.current) && saved.current >= 0 && saved.current < LOCATIONS.length && saved.rooms && typeof saved.rooms === 'object') {
-      if (saved.version === 2) return saved;
-      // Keep already visited space; old circuitry never becomes reading evidence.
-      return { version: 2, current: saved.current, rooms: Object.fromEntries(Object.entries(saved.rooms).filter(([index]) => Number(index) < saved.current)) };
+    if (saved?.version === 3 && saved.rooms && typeof saved.rooms === 'object') return saved;
+    // Versions 1 and 2 kept a room index of their own. Rooms were numbered
+    // from zero and the level from one, so a saved room moves up by one and
+    // lands on the level it was always standing in.
+    if ([1, 2].includes(saved?.version) && saved.rooms && typeof saved.rooms === 'object') {
+      const rooms = {};
+      for (const [index, room] of Object.entries(saved.rooms)) {
+        const level = Number(index) + 1;
+        if (level >= 1 && level <= LOCATIONS.length) rooms[level] = room;
+      }
+      return { version: 3, rooms };
     }
   } catch { /* A blocked store starts a session without persistence. */ }
   return emptyAdventure();
@@ -73,6 +96,40 @@ export function rhythmPattern(level, variation = 0) {
   let beat = 0;
   return bank[variation % bank.length].map((value) => { const event = { beat, duration: Math.abs(value), rest: value < 0 }; beat += Math.abs(value); return event; });
 }
+/**
+ * Which reading strands a rhythm study is evidence about.
+ *
+ * Read from the pattern rather than from the level, because the pattern is
+ * what the reader actually saw. Every study is evidence about holding a pulse;
+ * the rest depends on what was written into it.
+ */
+export function rhythmSkills(events) {
+  const skills = new Set(['rhythm.quarter']);
+  for (const event of events) {
+    if (event.rest) skills.add('rhythm.rest');
+    if (event.duration <= 0.25) skills.add('rhythm.sixteenth');
+    else if (event.duration <= 0.5) skills.add('rhythm.eighth');
+    if (event.duration === 1.5 || event.duration === 0.75) skills.add('rhythm.dotted');
+  }
+  return [...skills];
+}
+
+/**
+ * A rhythm study as skill evidence.
+ *
+ * Tapping one key is practice, not sight-reading — there are no pitches in it
+ * — so it is weighed as practice evidence and can never move a level. But it
+ * is a real, measured observation of a reader's pulse, and throwing it away
+ * left the rhythm strands waiting on readings alone.
+ */
+export function rhythmEvidence(events, outcome) {
+  if (!outcome || !outcome.total) return null;
+  const correct = Math.max(0, outcome.correct - outcome.extras * 0.5);
+  return Object.fromEntries(
+    rhythmSkills(events).map((id) => [id, { correct: Math.round(correct), total: outcome.total }]),
+  );
+}
+
 export function assessRhythm(events, taps, secondsPerBeat) {
   const expected = events.filter((event) => !event.rest).map((event) => event.beat * secondsPerBeat);
   const tolerance = Math.min(.20, secondsPerBeat * .22);
@@ -85,4 +142,45 @@ export function assessRhythm(events, taps, secondsPerBeat) {
   }
   const score = Math.max(0, Math.round((correct - remaining.length * .5) / expected.length * 100));
   return { score, correct, total: expected.length, extras: remaining.length, passed: score >= 85 && remaining.length === 0 && correct >= Math.ceil(expected.length * .85) };
+}
+
+/**
+ * The rhythm study as a score, so it can be engraved.
+ *
+ * A reader learns one set of shapes. Drawing this line by hand put a second
+ * set three clicks from the first, at exactly the moment we are asking them to
+ * concentrate on rhythm — so it goes through the same MusicXML and the same
+ * engraver as everything else. One pitch on the middle line, because pitch is
+ * not what is being read here.
+ */
+export const RHYTHM_DIA = 34; // B4, the middle line of the treble staff
+
+export function rhythmScore(events) {
+  const ts = timeSig('4/4');
+  const pitch = fromDia(RHYTHM_DIA, 0);
+  const notes = events.map((event) => ({
+    onset: Math.round(event.beat * TPQ),
+    duration: Math.round(event.duration * TPQ),
+    rest: event.rest,
+    pitches: event.rest ? [] : [pitch],
+    tags: ['rhythm-study'],
+    cellId: 'rhythm',
+  }));
+  return {
+    ts,
+    key: { fifths: 0, mode: 'major' },
+    measures: 2,
+    totalTicks: 2 * ts.ticks,
+    tempo: 60,
+    staves: { rh: notes, lh: [] },
+    slurs: [],
+    notationRepeat: null,
+  };
+}
+
+/** The engraved id of the note sounding at a beat, for live highlighting. */
+export function rhythmNoteId(events, beatPosition) {
+  const event = [...events].reverse().find((item) => !item.rest && item.beat <= beatPosition + 1e-6);
+  if (!event || beatPosition > event.beat + event.duration) return null;
+  return { onset: Math.round(event.beat * TPQ), midi: fromDia(RHYTHM_DIA, 0).midi };
 }

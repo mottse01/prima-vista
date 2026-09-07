@@ -42,3 +42,24 @@ html.sr-practice-running .pv-console-purpose { display: none; }
 html.sr-practice-running .pv-console-guide { display: none; }
 @media(max-width:700px) { .pv-mentor-card { grid-template-columns: 1fr; gap: 0; padding: 18px; max-height: 52dvh; overflow-y: auto; }.pv-mentor-card > img { display: none; }.pv-mentor-card h2 { font-size: 21px; }.pv-mentor-card p { font-size: 15px; }.pv-mentor-card .pv-mentor-task { font-size: 14px; }.pv-mentor-card .pv-world-primary { width: 100%; }.pv-learning-steps { gap: 12px; font-size: 12px; }.pv-rhythm-dialog { padding: 28px 18px 18px; }.pv-rhythm-dialog h2 { font-size: 26px; }.pv-rhythm-paper { padding: 4px; margin-block: 16px; }.pv-rhythm-control { gap: 8px; }.pv-rhythm-pad { min-height: 85px; }.pv-station-nav { border-radius: 12px; }.pv-console-guide p { font-size: 14px; } }
 @media(max-height:600px) and (orientation:landscape) { .pv-mentor-card { max-height: 45dvh; overflow-y: auto; }.pv-mentor-card > img { width: 100px; max-height: 160px; }.pv-mentor-card { grid-template-columns: 100px 1fr; }.pv-learning-steps { margin-top: 6px; }.pv-world-objective { top: 72px; } }
+
+/* The rhythm study is engraved by the same toolkit as the studies, on the
+   same lit page, so a reader meets one set of shapes throughout. */
+.pv-rhythm-paper { position: relative; }
+.pv-rhythm-engraving { color: #14161c; }
+.pv-rhythm-engraving svg { width: 100%; height: auto; display: block; }
+.pv-rhythm-engraving g.note, .pv-rhythm-engraving g.rest, .pv-rhythm-engraving g.clef,
+.pv-rhythm-engraving g.keySig, .pv-rhythm-engraving g.meterSig { fill: #14161c; }
+.pv-rhythm-engraving .staff path, .pv-rhythm-engraving .barLine path,
+.pv-rhythm-engraving .ledgerLines path, .pv-rhythm-engraving .stem path,
+.pv-rhythm-engraving .beam polygon { fill: #14161c; stroke: #14161c; }
+.pv-rhythm-engraving g.note.is-reading { fill: #157a6e; }
+.pv-rhythm-engraving g.note.is-reading .stem path,
+.pv-rhythm-engraving g.note.is-reading .beam polygon { fill: #157a6e; stroke: #157a6e; }
+.pv-rhythm-placeholder, .pv-rhythm-fallback {
+  margin: 0; padding: 26px 0; text-align: center; font-size: 13px; color: #5b6a72;
+}
+.pv-rhythm-engraving[data-state="ready"] ~ .pv-rhythm-placeholder,
+.pv-rhythm-engraving[data-state="ready"] ~ .pv-rhythm-fallback,
+.pv-rhythm-engraving[data-state="loading"] ~ .pv-rhythm-fallback,
+.pv-rhythm-engraving[data-state="error"] ~ .pv-rhythm-placeholder { display: none; }

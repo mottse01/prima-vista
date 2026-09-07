@@ -33,6 +33,29 @@ export function placementRecommendation(startLevel, scores) {
 
 export { comparableReads, eligibleFirstRead };
 
+/**
+ * Fold a measured practice observation into the profile.
+ *
+ * Practice evidence lives in its own bank: it informs what to work on next and
+ * lights the skill map, but it never counts toward a level, because a drill is
+ * not a reading at sight.
+ */
+export function applyPracticeEvidence(profile, tallies) {
+  if (!tallies || !Object.keys(tallies).length) return profile;
+  const practiceSkills = { ...(profile.practiceSkills || {}) };
+  for (const [id, tally] of Object.entries(tallies)) {
+    if (!tally?.total) continue;
+    const previous = practiceSkills[id] || { rating: 0.5, attempts: 0 };
+    const observed = tally.correct / tally.total;
+    const alpha = Math.min(ALPHA_MAX, ALPHA_MIN + tally.total * 0.03);
+    practiceSkills[id] = {
+      rating: previous.rating * (1 - alpha) + observed * alpha,
+      attempts: previous.attempts + tally.total,
+    };
+  }
+  return { ...profile, practiceSkills };
+}
+
 export function emptyProfile() {
   const skills = {};
   for (const s of SKILLS) skills[s.id] = { rating: 0.5, attempts: 0 };

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assessRhythm, completePuzzle, emptyAdventure, loadAdventure, LOCATIONS, pianoRelaySolved, readingLesson, rhythmPattern, roomComplete, roomState, travel, ADVENTURE_KEY } from '../src/core/adventure.js';
+import { assessRhythm, completePuzzle, emptyAdventure, loadAdventure, locationFor, LOCATIONS, pianoRelaySolved, readingLesson, rhythmPattern, roomComplete, roomState, ADVENTURE_KEY } from '../src/core/adventure.js';
 
 test('each rhythm is two complete bars with a playable onset at each non-rest', () => {
   for (let level=1;level<=10;level++) for(let variant=0;variant<3;variant++) {
@@ -23,34 +23,43 @@ test('rhythm evidence rejects silence, button mashing, rushed playing and attack
   assert.equal(assessRhythm(events,all,1).passed,false);
 });
 
-test('fresh reading unlocks travel only after preparation and rhythm', () => {
+test('the ritual runs in order, and out of order does nothing', () => {
   let state=emptyAdventure();
-  assert.equal(travel(state),state);
-  assert.equal(completePuzzle(state,'music'),state);
-  assert.equal(completePuzzle(state,'signal'),state);
-  state=completePuzzle(state,'power');
-  assert.equal(travel(state),state);
-  state=completePuzzle(state,'signal');
-  assert.equal(travel(state),state);
-  state=completePuzzle(state,'music');
-  assert.equal(roomComplete(state),true);
-  const next=travel(state);
-  assert.equal(next.current,1);
-  assert.equal(roomComplete(next,0),true);
-  assert.deepEqual(roomState(next),{power:false,signal:false,music:false});
+  // You cannot isolate a rhythm you have not looked at, and reading a fresh
+  // piece is the last thing you do rather than the first.
+  assert.equal(completePuzzle(state,1,'music'),state);
+  assert.equal(completePuzzle(state,1,'signal'),state);
+  state=completePuzzle(state,1,'power');
+  assert.equal(roomComplete(state,1),false);
+  state=completePuzzle(state,1,'signal');
+  assert.equal(roomComplete(state,1),false);
+  state=completePuzzle(state,1,'music');
+  assert.equal(roomComplete(state,1),true);
+  assert.equal(completePuzzle(state,1,'nonsense'),state);
 });
 
-test('all destinations have an ending and every reading level has concrete guidance', () => {
+test('a room is remembered per level, so a visit picks up where it stopped', () => {
+  // There is one position and it is the reading level. Nothing is stored about
+  // "where you are" — a level names its own room.
   let state=emptyAdventure();
-  for(let i=0;i<LOCATIONS.length;i++){
-    assert.equal(state.current,i);
-    for(const step of ['power','signal','music'])state=completePuzzle(state,step);
-    assert.ok(readingLesson(i+1).advice.length>50);
-    assert.ok(readingLesson(i+1).task.length>40);
-    state=travel(state);
+  assert.equal('current' in state,false);
+  for(const step of ['power','signal','music'])state=completePuzzle(state,4,step);
+  assert.equal(roomComplete(state,4),true);
+  assert.equal(roomComplete(state,5),false);
+  assert.deepEqual(roomState(state,5),{power:false,signal:false,music:false});
+  // Coming back to level 4 finds it as it was left.
+  assert.equal(roomState(state,4).music,true);
+});
+
+test('every destination is a level, and every level has concrete guidance', () => {
+  assert.equal(LOCATIONS.length,10);
+  for(let level=1;level<=LOCATIONS.length;level++){
+    assert.equal(locationFor(level),LOCATIONS[level-1]);
+    assert.ok(readingLesson(level).advice.length>50);
+    assert.ok(readingLesson(level).task.length>40);
   }
-  assert.equal(state.current,9);
-  assert.equal(travel(state),state);
+  assert.equal(locationFor(0),LOCATIONS[0]);
+  assert.equal(locationFor(99),LOCATIONS[LOCATIONS.length-1]);
 });
 
 test('only a valid fresh independent performance can complete the reading challenge', () => {
@@ -62,9 +71,27 @@ test('only a valid fresh independent performance can complete the reading challe
   assert.equal(pianoRelaySolved({score:100}),false);
 });
 
-test('legacy circuit completion never becomes reading evidence, while visited places are retained', () => {
+test('a saved expedition moves onto the level it was always standing in', () => {
   const original=globalThis.localStorage;
-  globalThis.localStorage={getItem:key=>key===ADVENTURE_KEY?JSON.stringify({version:1,current:3,rooms:{0:{power:true,signal:true,music:true},3:{power:true,signal:true,music:false}}}):null};
-  try { const migrated=loadAdventure();assert.equal(migrated.version,2);assert.equal(migrated.current,3);assert.equal(roomComplete(migrated,0),true);assert.deepEqual(roomState(migrated),{power:false,signal:false,music:false}); }
+  // Rooms were numbered from zero and levels from one, so room 0 is level 1.
+  globalThis.localStorage={getItem:key=>key===ADVENTURE_KEY?JSON.stringify({version:2,current:3,rooms:{0:{power:true,signal:true,music:true},3:{power:true,signal:true,music:false}}}):null};
+  try {
+    const migrated=loadAdventure();
+    assert.equal(migrated.version,3);
+    assert.equal('current' in migrated,false,'the second position is gone');
+    assert.equal(roomComplete(migrated,1),true);
+    assert.equal(roomState(migrated,4).signal,true);
+    assert.equal(roomState(migrated,4).music,false);
+    assert.deepEqual(roomState(migrated,2),{power:false,signal:false,music:false});
+  }
   finally {if(original===undefined)delete globalThis.localStorage;else globalThis.localStorage=original;}
+});
+
+test('a corrupt or absent save starts a clean expedition', () => {
+  const original=globalThis.localStorage;
+  for(const stored of [null,'{',JSON.stringify({version:9,rooms:{}}),JSON.stringify({version:3})]){
+    globalThis.localStorage={getItem:()=>stored};
+    assert.deepEqual(loadAdventure(),emptyAdventure());
+  }
+  if(original===undefined)delete globalThis.localStorage;else globalThis.localStorage=original;
 });
