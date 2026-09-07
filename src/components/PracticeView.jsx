@@ -36,6 +36,7 @@ const FOCUS_PACKS = [
 export default function PracticeView({
   score, settings, onSettings, onResult, onRegenerate, level, debrief, onUnscoredComplete,
   onDifficultyChange,
+  expedition = true,
   midi, onConnectMidi, microphone, onConnectMicrophone, showKeyboard, onToggleKeyboard,
   freshRead, strongReads = 0, onPreview, onReflect, onNotify,
   session, onSessionStart, placement, onFocus, onRecheckLevel, repairHand, onRepairHand,
@@ -597,7 +598,7 @@ export default function PracticeView({
         ))}
       </nav>
       <div className={`pv-flight-track is-${journeyPhase}`} aria-label="Flight progress">
-        <div><span>{journeyPhase === 'play' ? 'FLIGHT IN PROGRESS' : journeyPhase === 'review' ? 'FLIGHT COMPLETE' : 'READY FOR DEPARTURE'}</span><span>{journeyPhase === 'play' ? `Bar ${Math.min(score.measures, Math.floor(Math.max(0, tick) / score.ts.ticks) + 1)} of ${score.measures}` : `${score.measures} bars · ${score.tempo} bpm`}</span></div>
+        <div><span>{journeyPhase === 'play' ? (expedition ? 'FLIGHT IN PROGRESS' : 'READING') : journeyPhase === 'review' ? (expedition ? 'FLIGHT COMPLETE' : 'READ') : (expedition ? 'READY FOR DEPARTURE' : 'READY TO READ')}</span><span>{journeyPhase === 'play' ? `Bar ${Math.min(score.measures, Math.floor(Math.max(0, tick) / score.ts.ticks) + 1)} of ${score.measures}` : `${score.measures} bars · ${score.tempo} bpm`}</span></div>
         <progress max="100" value={journeyPhase === 'review' ? 100 : Math.max(0, Math.min(100, tick / (score.performanceTicks || score.totalTicks) * 100))} aria-label="Music played" />
       </div>
       <div className="sr-studio-header">
@@ -804,7 +805,7 @@ export default function PracticeView({
               {audioBusy ? 'Turning on sound…'
                 : result ? 'Play again'
                     : qualifies && preparation.phase === 'active' ? `Start when ready · ${preparation.remaining}s`
-                      : 'Launch flight'}
+                      : expedition ? 'Launch flight' : 'Start practice'}
             </button>
           )}
           <button

@@ -13,7 +13,12 @@ import { isOpen, lockReason, openThrough } from '../core/missions.js';
 // download. It arrives when someone opens the path.
 const SolarSystem = lazy(() => import('./SolarSystem.jsx'));
 
-export default function PathView({ profile, onPick }) {
+/**
+ * `gated` says whether this map is the expedition's route or the practice
+ * room's level list. The route is earned and shows what is still uncharted;
+ * the practice list is simply every level, because practising is not gated.
+ */
+export default function PathView({ profile, onPick, gated = true }) {
   const current = levelById(profile.level);
   const next = LEVELS.find((item) => item.id === current.id + 1);
   const demonstrated = (profile.demonstratedLevels || []).includes(current.id);
@@ -23,14 +28,15 @@ export default function PathView({ profile, onPick }) {
       <h2 className="sr-view-title">Your star atlas</h2>
       <p className="sr-setup-lead">
         Ten levels, ten places. Drag to look around, scroll to travel outward, and choose
-        an open destination to practise there. Locked destinations show what comes next.
+        one to practise there.
       </p>
       <Suspense fallback={<div className="sr-orrery sr-orrery--loading" aria-hidden="true" />}>
         <SolarSystem profile={profile} onPick={onPick} />
       </Suspense>
       <p className="sr-journey-line">
-        The course is open through <strong>{waypointFor(openThrough(profile)).name}</strong> ·
-        <strong> {progress.reached}</strong> of {progress.total} waypoints demonstrated
+        {gated
+          ? <>The course is open through <strong>{waypointFor(openThrough(profile)).name}</strong> · <strong>{progress.reached}</strong> of {progress.total} waypoints demonstrated</>
+          : <>Every level is open here. <strong>{progress.reached}</strong> of {progress.total} demonstrated in your first reads</>}
       </p>
       <div className="sr-path-spotlight">
         <section className="sr-path-current">
@@ -47,11 +53,11 @@ export default function PathView({ profile, onPick }) {
           <p>{next ? next.blurb : 'There is always more music to read. Keep exploring new pieces, or revisit a level for a relaxed practice.'}</p>
           <button
             type="button" className="sr-btn"
-            disabled={next ? !isOpen(profile, next.id) : false}
+            disabled={next ? gated && !isOpen(profile, next.id) : false}
             onClick={() => onPick(next?.id || current.id)}
           >
             {!next ? 'Find another piece'
-              : isOpen(profile, next.id) ? 'Set course' : 'Three strong first reads to open'}
+              : !gated || isOpen(profile, next.id) ? 'Practise at this level' : 'Three strong first reads to open'}
           </button>
         </section>
       </div>
@@ -68,7 +74,7 @@ export default function PathView({ profile, onPick }) {
           <div className="sr-levels">
             {LEVELS.filter((l) => l.stage === stage).map((l) => {
               const demonstrated = (profile.demonstratedLevels || []).includes(l.id);
-              const open = isOpen(profile, l.id);
+              const open = !gated || isOpen(profile, l.id);
               const state = !open ? 'locked' : l.id === profile.level ? 'current' : demonstrated ? 'done' : 'ahead';
               const takes = comparableReads(profile, l.id);
               const best = takes.length ? Math.max(...takes.map((t) => t.score)) : null;

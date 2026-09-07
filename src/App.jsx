@@ -9,6 +9,8 @@ import PathView from './components/PathView.jsx';
 import CompareView from './components/CompareView.jsx';
 import TransitCard from './components/TransitCard.jsx';
 import MissionPanel from './components/MissionPanel.jsx';
+import ModeChoice from './components/ModeChoice.jsx';
+import { homeTabFor, modeOf, otherMode, tabsFor } from './core/modes.js';
 import OnboardingModal from './components/OnboardingModal.jsx';
 import { generateExercise } from './core/generator.js';
 import { applyPracticeEvidence, applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
@@ -25,13 +27,6 @@ import {
   loadPresets, loadProfile, loadSettings, resetProfile, savePresets, saveProfile, saveSettings,
 } from './core/storage.js';
 
-const TABS = [
-  { id: 'adventure', label: 'Explore station', short: 'Explore' },
-    { id: 'practice', label: 'Practice', short: 'Practice' },
-  { id: 'path', label: 'Star atlas', short: 'Atlas' },
-  { id: 'custom', label: 'Music lab', short: 'Lab' },
-  { id: 'progress', label: 'Flight log', short: 'Log' },
-];
 
 /** Read both the seed and its parameter recipe from an exact shared link. */
 function exerciseFromUrl() {
@@ -64,7 +59,11 @@ export default function App() {
   const [profile, setProfile] = useState(loadProfile);
   const [settings, setSettings] = useState(loadSettings);
   const [presets, setPresets] = useState(loadPresets);
-  const [tab, setTab] = useState(() => exerciseFromUrl().seed != null ? 'practice' : 'adventure');
+  // A shared link is a piece of music somebody sent you, so it opens at the
+  // piano whichever room you normally use.
+  const [tab, setTab] = useState(() => (
+    exerciseFromUrl().seed != null ? 'practice' : homeTabFor(loadSettings().mode || 'expedition')
+  ));
   const [showKeyboard, setShowKeyboard] = useState(() => (loadSettings().inputMode || 'screen') === 'screen');
   const [repairHand, setRepairHand] = useState(null);
   const [transitActive, setTransitActive] = useState(false);
@@ -487,6 +486,26 @@ export default function App() {
   }, [params.level, profile, scoreId, settings.showFingerings, tab]);
 
   const customParams = useMemo(() => customisableParams(params), [params]);
+  // Somebody who followed a link came for that piece of music, not to be asked
+  // a question about how they like to practise. The link opens at the piano
+  // and the choice waits until they go looking for it.
+  const sharedArrival = useMemo(() => exerciseFromUrl().seed != null, []);
+  const mode = modeOf(settings) || (sharedArrival ? modeOf({ mode: 'practice' }) : null);
+
+  /**
+   * Choose a room, or move to the other one.
+   *
+   * Switching is arriving somewhere else, not a preference change with the old
+   * page still underneath, so it lands on that mode's own home. Nothing about
+   * the reader is touched: levels, history and the skill map are one profile
+   * shared by both.
+   */
+  const chooseMode = useCallback((id) => {
+    setSettings((current) => ({ ...current, mode: id }));
+    setRepairHand(null);
+    setTransitActive(false);
+    setTab(homeTabFor(id));
+  }, []);
   const nightsObserved = useMemo(() => transitStreak(profile), [profile]);
 
   const practiceElement = (
@@ -500,6 +519,7 @@ export default function App() {
             onUnscoredComplete={(take) => adventureResultRef.current?.({ ...take, unscored: true })}
             onRegenerate={regenerate}
             onDifficultyChange={(levelId) => changeDifficulty(levelId, { alongRoute: false })}
+            expedition={mode.id === 'expedition'}
             level={level}
             midi={midi}
             onConnectMidi={handleConnectMidi}
@@ -526,8 +546,19 @@ export default function App() {
           />
   );
 
+  // Nobody has said which room they want yet, so the landing screen asks.
+  if (!mode) {
+    return (
+      <div className="sr-app is-choosing">
+        <div className="sr-starfield" aria-hidden="true" />
+        <ModeChoice onChoose={chooseMode} />
+        {toast && <div className={`sr-toast sr-toast--${toast.kind}`} role="status">{toast.text}</div>}
+      </div>
+    );
+  }
+
   return (
-    <div className={`sr-app${tab === 'adventure' ? ' is-adventure' : ''}`}>
+    <div className={`sr-app${tab === 'adventure' ? ' is-adventure' : ''} is-${mode.id}`}>
       <div className="sr-starfield" aria-hidden="true" />
       <a className="sr-skip" href="#practice-main">Skip to practice</a>
       <header className="sr-header">
@@ -538,11 +569,11 @@ export default function App() {
           </svg>
           <div>
             <h1>Prima <span>Vista</span></h1>
-            <p>THE SIGHT-READING EXPEDITION</p>
+            <p>{mode.id === 'expedition' ? 'THE SIGHT-READING EXPEDITION' : 'SIGHT-READING PRACTICE'}</p>
           </div>
         </div>
         <nav className="sr-tabs" aria-label="Sections">
-          {TABS.map((t) => (
+          {tabsFor(mode.id).map((t) => (
             <button
               key={t.id} type="button"
               className={`sr-tab${tab === t.id ? ' is-on' : ''}`}
@@ -554,6 +585,11 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <button
+          type="button" className="sr-modeswitch"
+          onClick={() => chooseMode(otherMode(mode.id).id)}
+          title="Everything carries over. You can come back at any time."
+        >{otherMode(mode.id).name} mode <span aria-hidden="true">→</span></button>
         <div className="sr-headerstat">
           <button
             type="button" className="sr-comfort-toggle"
@@ -582,7 +618,11 @@ export default function App() {
           onRhythmEvidence={(tallies) => setProfile((current) => applyPracticeEvidence(current, tallies))}
           onPrepareMusic={() => { nextFromLevel(profile.level); setTab('adventure'); setReceipt(null); setPlacement(null); setTransitActive(false); setSettings((s) => ({ ...s, curtain: 'off', guideKeys: false })); }} />}
 
-        {tab === 'practice' && <div className="pv-practice-heading">
+        {/* In the expedition the piano is a place you walked to, so the strip
+            says where from and what the destination wants. In the practice
+            room it is just the piano, and the daily piece is the only thing
+            worth offering beside it. */}
+        {tab === 'practice' && mode.id === 'expedition' && <div className="pv-practice-heading">
           <button type="button" onClick={() => setTab('adventure')}>← Station</button>
           <span>{transitActive ? 'DAILY DISCOVERY' : params.level ? `SECTOR ${String(params.level).padStart(2, '0')} · ${waypointFor(params.level).name.toUpperCase()}` : 'MUSIC LAB'} · PIANO FLIGHT</span>
           <details className="pv-flight-brief"><summary>Mission brief</summary><div>
@@ -590,9 +630,15 @@ export default function App() {
             <TransitCard profile={profile} active={transitActive} onRead={readTransit} onLeave={leaveTransit} />
           </div></details>
         </div>}
+        {tab === 'practice' && mode.id === 'practice' && (
+          <TransitCard profile={profile} active={transitActive} onRead={readTransit} onLeave={leaveTransit} />
+        )}
         {tab === 'practice' && practiceElement}
 
-        {tab === 'path' && (
+        {tab === 'path' && mode.id === 'practice' && (
+          <PathView profile={profile} gated={false} onPick={(id) => changeDifficulty(id, { alongRoute: false })} />
+        )}
+        {tab === 'path' && mode.id === 'expedition' && (
           <>
             <ExpeditionView profile={profile}
               onLaunch={(id) => { if (!settings.onboardingComplete && !profile.totals.takes) setShowOnboarding(true); else changeDifficulty(id); }}

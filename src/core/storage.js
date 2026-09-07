@@ -85,6 +85,8 @@ export const DEFAULT_SETTINGS = {
   sessionMinutes: 0,
   inputLatencyMs: 0,
   onboardingComplete: false,
+  // Which room the app is: 'expedition', 'practice', or null until asked.
+  mode: null,
   inputMode: 'screen',
   comfortView: false,
   preparationTips: true,

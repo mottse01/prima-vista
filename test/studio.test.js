@@ -9,7 +9,7 @@ import { levelById } from '../src/core/levels.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/core/storage.js';
 import { curtainMode } from '../src/core/curtain.js';
 
-let server, Path, Onboarding, Practice, Result, Progress, Expedition, Debrief;
+let server, Path, Onboarding, Practice, Result, Progress, Expedition, Debrief, Modes;
 const noop = () => {};
 before(async () => {
   server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' });
@@ -21,6 +21,7 @@ before(async () => {
   Practice = practice.default;
   Result = practice.ResultPanel;
   Progress = (await server.ssrLoadModule('/src/components/ProgressView.jsx')).default;
+  Modes = (await server.ssrLoadModule('/src/components/ModeChoice.jsx')).default;
 });
 after(async () => { await server?.close(); });
 const render = (component, props) => renderToStaticMarkup(createElement(component, props));
@@ -57,6 +58,38 @@ test('a scored take draws a star chart of the reading and offers the exact link'
 test('an unplayed take draws no star chart', () => {
   const html = render(Result, resultProps({ result: { ...result, timeline: [] } }));
   assert.doesNotMatch(html, /class="sr-trace"/);
+});
+
+test('the landing screen offers both rooms and promises nothing is lost', () => {
+  const html = render(Modes, { onChoose: noop });
+  assert.match(html, /How do you want to read today\?/);
+  for (const name of ['Expedition', 'Practice']) {
+    assert.match(html, new RegExp(`Start in ${name.toLowerCase()}`));
+    assert.match(html, new RegExp(`>${name}</h2>`));
+  }
+  // The choice must not read as a difficulty setting or a one-way door.
+  assert.match(html, /switch at any time/);
+  assert.match(html, /nothing resets/);
+  assert.match(html, /The music is the same either way/);
+});
+
+test('the landing screen marks the room you are already in', () => {
+  const html = render(Modes, { onChoose: noop, current: 'practice' });
+  assert.match(html, /Continue in practice/);
+  assert.match(html, /Start in expedition/);
+});
+
+test('the practice room level map gates nothing', () => {
+  const profile = { ...emptyProfile(), level: 1, unlockedLevel: 1 };
+  const route = render(Path, { profile, onPick: noop });
+  const room = render(Path, { profile, onPick: noop, gated: false });
+  // Same ten levels either way; only the route says what is still uncharted.
+  assert.equal((route.match(/class="sr-level is-/g) || []).length, 10);
+  assert.equal((room.match(/class="sr-level is-/g) || []).length, 10);
+  assert.match(route, /class="sr-level is-locked"/);
+  assert.doesNotMatch(room, /class="sr-level is-locked"/);
+  assert.doesNotMatch(room, /disabled=""/);
+  assert.match(room, /Every level is open here/);
 });
 
 test('Path shows all ten levels and opens only as far as the course has been earned', () => {

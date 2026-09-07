@@ -2217,3 +2217,72 @@ html.sr-practice-running .pv-practice-heading { display: none; }
 @media print { .pv-practice-heading, .pv-flight-track, .pv-debrief { display: none !important; } }
 @media (max-width: 700px) { .sr-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); background: #101b2bf5; gap: 0; }.sr-tab { font-size: 14px; min-height: 44px; }.pv-mission-grid > *, .pv-command-copy { min-width: 0; }.pv-waypoint { min-height: 106px; } }
 @media (forced-colors: active) { .pv-command, .pv-brief, .pv-side-card, .pv-debrief { background: Canvas; color: CanvasText; }.pv-launch { background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; }.pv-waypoint.is-selected { border-color: Highlight; }.pv-check.is-done { color: Highlight; } }
+
+/* ---------- choosing a room ---------- */
+
+.sr-app.is-choosing { display: grid; place-items: center; min-height: 100vh; padding: 0; }
+.pv-modes { position: relative; z-index: 1; width: 100%; padding: clamp(28px, 6vh, 72px) 24px; }
+.pv-modes-inner { max-width: 940px; margin: 0 auto; }
+.pv-modes-kicker {
+  margin: 0 0 18px; font-size: 11px; font-weight: 700; letter-spacing: .19em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.pv-modes h1 {
+  margin: 0 0 12px; font-family: Georgia, 'Times New Roman', serif; font-weight: 400;
+  font-size: clamp(30px, 5vw, 48px); line-height: 1.08; letter-spacing: -.02em; color: var(--ink);
+}
+.pv-modes-lead { margin: 0 0 34px; max-width: 58ch; font-size: 16.5px; color: var(--ink-soft); }
+.pv-modes-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+
+.pv-mode {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 24px 26px 26px; border: 1px solid var(--line); border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.035), transparent 58%), var(--panel);
+  transition: border-color .2s ease, transform .2s ease;
+}
+.pv-mode:hover, .pv-mode:focus-within { border-color: var(--accent); transform: translateY(-2px); }
+.pv-mode.is-current { border-color: color-mix(in srgb, var(--starlight) 45%, var(--line)); }
+.pv-mode-art {
+  display: block; margin-bottom: 14px; padding: 16px 0; border-radius: 12px;
+  background: radial-gradient(120% 120% at 50% 0%, rgba(255,255,255,.045), transparent 68%);
+}
+.pv-mode-art svg { display: block; width: 100%; max-width: 190px; height: auto; margin: 0 auto; }
+.pv-mark-orbit { fill: none; stroke: var(--line-strong); stroke-width: 1; opacity: .55; }
+.pv-mark-orbit.is-far { opacity: .3; }
+.pv-mark-sun { fill: var(--starlight); }
+.pv-mark-body { fill: var(--accent); }
+.pv-mark-body.is-dim { fill: var(--ink-faint); }
+.pv-mark-stave { stroke: var(--line-strong); stroke-width: 1; opacity: .7; }
+.pv-mark-head { fill: var(--ink); }
+.pv-mark-stem { stroke: var(--ink); stroke-width: 1.6; }
+
+.pv-mode-tagline {
+  margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--accent);
+}
+.pv-mode h2 {
+  margin: 2px 0 0; font-family: Georgia, 'Times New Roman', serif; font-weight: 500;
+  font-size: 27px; letter-spacing: -.015em; color: var(--ink);
+}
+.pv-mode-blurb { margin: 8px 0 0; font-size: 14.5px; color: var(--ink-soft); }
+.pv-mode-for { margin: 10px 0 0; font-size: 13px; color: var(--ink-faint); }
+.pv-mode-choose {
+  margin-top: auto; padding-top: 18px; align-self: flex-start;
+  border: 0; background: none; padding-inline: 0; font: inherit; font-size: 15px; font-weight: 600;
+  color: var(--accent-strong); cursor: pointer;
+}
+.pv-mode-choose:hover { color: var(--ink); }
+.pv-mode-choose:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.pv-modes-note { margin: 28px 0 0; max-width: 62ch; font-size: 13px; color: var(--ink-faint); }
+
+/* ---------- crossing between rooms ---------- */
+
+/* Crossing between rooms must always be one visible control, so it sits with
+   the navigation rather than in the header strip that narrow screens drop. */
+.sr-modeswitch {
+  order: 3; margin-left: 10px;
+  min-height: 34px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink-soft); font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.sr-modeswitch:hover { border-color: var(--accent); color: var(--accent-strong); }
+.sr-modeswitch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
