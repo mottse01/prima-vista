@@ -8,7 +8,7 @@ import { createGrader, SKILLS } from '../core/grader.js';
 import { TPQ, keyLabel } from '../core/theory.js';
 import {
   audioState, now, playPianoNote, primeAudioGesture, scheduleCountIn, setMasterVolume,
-  startPlayback, startPracticePlayback, startReferencePlayback, startSoundCheck,
+  runSoundCheck, startPlayback, startPracticePlayback, startReferencePlayback,
   subscribeAudioState, unlockAudio,
 } from '../core/audio.js';
 import { warmUp } from '../core/verovio.js';
@@ -428,17 +428,30 @@ export default function PracticeView({
     onConnectMidi();
   }, [onConnectMidi]);
 
+  const [soundReport, setSoundReport] = useState(null);
+
+  // "Playback started" is not the same as "you can hear it". The check
+  // measures what actually leaves the app, so the answer to a silent app is a
+  // fact rather than a guess.
   const testSound = useCallback(async () => {
-    const media = startSoundCheck();
-    if (media && await media.started) {
-      onNotify?.('Sound is on');
+    setSoundReport({ state: 'testing' });
+    const report = await runSoundCheck();
+    if (report.started) {
+      setSoundReport(report);
+      onNotify?.(report.measured && report.peak > 0.02
+        ? 'Sound check passed — the app is producing audio'
+        : 'Sound check played');
       return;
     }
-    if (!(await prepareSound())) return;
+    if (!(await prepareSound())) {
+      setSoundReport({ state: 'blocked' });
+      return;
+    }
     const at = now() + 0.035;
     playPianoNote(at, 60, 0.7, 0.55);
     playPianoNote(at + 0.11, 64, 0.7, 0.5);
     playPianoNote(at + 0.22, 67, 0.9, 0.52);
+    setSoundReport({ state: 'fallback' });
     onNotify?.('Sound is on');
   }, [onNotify, prepareSound]);
 
@@ -996,8 +1009,8 @@ export default function PracticeView({
             <span className="sr-sound-status">{soundLabel(soundState)}</span>
             <button
               type="button" className="sr-btn sr-btn--small" onPointerDown={primeAudioGesture}
-              onClick={testSound} disabled={busy}
-            >Test sound</button>
+              onClick={testSound} disabled={busy || soundReport?.state === 'testing'}
+            >{soundReport?.state === 'testing' ? 'Listening…' : 'Test sound'}</button>
             <label className="sr-volume">
               <span>Volume <b>{Math.round((settings.masterVolume ?? 0.82) * 100)}%</b></span>
               <input
@@ -1007,6 +1020,9 @@ export default function PracticeView({
               />
             </label>
           </div>
+          {soundReport && soundReport.state !== 'testing' && (
+            <p className="sr-soundreport" aria-live="polite">{soundCheckMessage(soundReport)}</p>
+          )}
 
           <div className="sr-inputbar">
             <div className={`sr-midi sr-midi--${midi.status}`}>
@@ -1261,6 +1277,34 @@ function formatClock(seconds) {
   const minutes = Math.floor(seconds / 60);
   const remainder = String(seconds % 60).padStart(2, '0');
   return `${minutes}:${remainder} left`;
+}
+
+/**
+ * What the sound check found, in words a person can act on.
+ *
+ * The useful case is the awkward one: the app measured its own output and
+ * there was signal in it, so anything still silent is downstream — the
+ * system's volume, its output device, or a muted browser tab.
+ */
+function soundCheckMessage(report) {
+  if (report.state === 'blocked') {
+    return 'This browser would not start audio. Tap anywhere on the page and try again.';
+  }
+  if (report.state === 'fallback') return 'A test tone played through the browser’s audio engine.';
+  if (!report.started) return 'The test could not start playback in this browser.';
+  if (!report.measured) {
+    return 'A test tone played. This browser will not let the app listen to its own output, '
+      + 'so if you heard nothing, check your system volume, your output device, and whether this tab is muted.';
+  }
+  if (report.peak > 0.02) {
+    return `The app produced sound — measured output ${Math.round(report.peak * 100)}% of full scale. `
+      + 'If you still heard nothing, it is downstream of the app: check your system volume and output device, '
+      + 'and whether this browser tab is muted.';
+  }
+  return report.volume < 0.05
+    ? 'No signal left the app, and its own volume is near zero. Raise the volume slider above.'
+    : 'No signal left the app even though playback started. This usually means the browser is routing audio '
+      + 'to a device that is not connected.';
 }
 
 function soundLabel(state) {

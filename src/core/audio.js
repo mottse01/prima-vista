@@ -464,6 +464,7 @@ export function startReferencePlayback({
 
   return {
     started,
+    element,
     leadIn,
     exerciseStart,
     currentTime: () => element.currentTime || 0,
@@ -484,6 +485,66 @@ export function startPracticePlayback({ score, metronome, countInBeats, onEnd })
     playScore: false,
     onEnd,
   });
+}
+
+/**
+ * Play the sound check and measure what actually leaves the app.
+ *
+ * "Playback started" is not the same as "you can hear it": the element can be
+ * decoding happily while the system output is muted, the tab is silenced, or
+ * the volume is at zero. Routing the check through an analyser lets the app
+ * report whether it produced a signal at all, so the answer to "why can't I
+ * hear anything" stops being a guess.
+ *
+ * Resolves to { started, measured, peak, state, volume }. `measured` is false
+ * when the browser would not let us listen to our own output, in which case
+ * the check still plays and `peak` means nothing.
+ */
+export async function runSoundCheck({ seconds = 1.4 } = {}) {
+  const report = {
+    started: false, measured: false, peak: 0, state: audioState(), volume: masterVolume,
+  };
+  const media = startSoundCheck();
+  if (!media) return report;
+  report.started = await media.started;
+  if (!report.started) {
+    report.state = audioState();
+    return report;
+  }
+
+  const ac = audioContext();
+  const element = media.element;
+  // Tapping the element means routing it through WebAudio. If the context is
+  // not running, that would silence the very thing being tested, so the check
+  // stays untapped and simply plays.
+  if (!ac || !element || ac.state !== 'running') {
+    report.state = audioState();
+    return report;
+  }
+
+  try {
+    const source = ac.createMediaElementSource(element);
+    const analyser = ac.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    analyser.connect(ac.destination);
+    const frame = new Uint8Array(analyser.fftSize);
+    const deadline = Date.now() + seconds * 1000;
+    while (Date.now() < deadline) {
+      analyser.getByteTimeDomainData(frame);
+      for (const value of frame) {
+        const level = Math.abs(value - 128) / 128;
+        if (level > report.peak) report.peak = level;
+      }
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+    }
+    report.measured = true;
+  } catch {
+    // Some browsers refuse a second tap on an element, or refuse it entirely.
+    report.measured = false;
+  }
+  report.state = audioState();
+  return report;
 }
 
 /** A short media-element cue for the user-facing sound check. */
