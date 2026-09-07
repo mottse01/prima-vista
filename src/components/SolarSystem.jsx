@@ -4,7 +4,7 @@ import {
   SCENE_RADIUS, bodyRadius, journeyState, orbitPosition, orbitRadius,
 } from '../core/journey.js';
 import { skyState } from '../core/constellation.js';
-import { missionState } from '../core/missions.js';
+import { isOpen, lockReason, missionState } from '../core/missions.js';
 
 // The journey, flown.
 //
@@ -301,7 +301,14 @@ export default function SolarSystem({ profile, onPick }) {
     const mission = missionState(profile, waypoint.level);
     // A place is lit when its objectives are done, which is a richer and more
     // honest signal than "the level was promoted at some point".
-    return { ...waypoint, mission, reached: mission.cleared || waypoint.reached };
+    return {
+      ...waypoint,
+      mission,
+      reached: mission.cleared || waypoint.reached,
+      open: isOpen(profile, waypoint.level),
+      locked: !isOpen(profile, waypoint.level),
+      reason: lockReason(profile, waypoint.level),
+    };
   }), [profile]);
   const sky = useMemo(() => skyState(profile), [profile]);
   const level = profile?.level || 1;
@@ -393,6 +400,7 @@ export default function SolarSystem({ profile, onPick }) {
         }));
         sheen.scale.setScalar(size * 2.9);
         group.add(sheen);
+        group.userData.sheen = sheen;
         disposables.push(sheen.material);
 
         if (waypoint.ring) {
@@ -529,6 +537,7 @@ export default function SolarSystem({ profile, onPick }) {
       level,
       reached: new Set(waypoints.filter((item) => item.reached).map((item) => item.level)),
       visited: new Set(waypoints.filter((item) => item.visited).map((item) => item.level)),
+      locked: new Set(waypoints.filter((item) => item.locked).map((item) => item.level)),
       hovered: null,
     };
 
@@ -560,6 +569,15 @@ export default function SolarSystem({ profile, onPick }) {
           const emphasise = state.hovered === record.waypoint.level;
           const target = emphasise ? 1.22 : 1;
           record.mesh.scale.lerp(new THREE.Vector3(target, target, target), 0.16);
+          // A destination that is not open yet is out there but unlit: no
+          // sheen of its own, and only the Sun to show it.
+          const locked = state.locked.has(record.waypoint.level);
+          record.mesh.material.emissiveIntensity = locked ? 0.15 : 1;
+          const sheen = record.group.userData.sheen;
+          if (sheen) {
+            const wanted = locked ? 0.04 : 0.28;
+            sheen.material.opacity += (wanted - sheen.material.opacity) * 0.1;
+          }
         }
       }
 
@@ -676,9 +694,10 @@ export default function SolarSystem({ profile, onPick }) {
         // Ease the view out far enough to hold both ends of the hop.
         view.targetDistance = framing(record.waypoint);
       },
-      setProgress(reached, visited) {
+      setProgress(reached, visited, locked) {
         state.reached = new Set(reached);
         state.visited = new Set(visited);
+        state.locked = new Set(locked);
       },
       setHovered(value) { state.hovered = value; },
       setZoom(value) {
@@ -709,6 +728,7 @@ export default function SolarSystem({ profile, onPick }) {
     engineRef.current?.setProgress(
       waypoints.filter((item) => item.reached).map((item) => item.level),
       waypoints.filter((item) => item.visited).map((item) => item.level),
+      waypoints.filter((item) => item.locked).map((item) => item.level),
     );
   }, [waypoints]);
   useEffect(() => { engineRef.current?.setHovered(hovered); }, [hovered]);
@@ -737,7 +757,8 @@ export default function SolarSystem({ profile, onPick }) {
               if (node) labelRefs.current.set(waypoint.level, node);
               else labelRefs.current.delete(waypoint.level);
             }}
-            className={`sr-orrery-label is-hidden${waypoint.level === level ? ' is-current' : ''}${waypoint.reached ? ' is-reached' : ''}`}
+            className={`sr-orrery-label is-hidden${waypoint.level === level ? ' is-current' : ''}${waypoint.reached ? ' is-reached' : ''}${waypoint.locked ? ' is-locked' : ''}`}
+            aria-describedby={waypoint.locked ? 'sr-orrery-lock' : undefined}
             onClick={() => pick(waypoint.level)}
             onMouseEnter={() => setHovered(waypoint.level)}
             onMouseLeave={() => setHovered(null)}
@@ -746,7 +767,7 @@ export default function SolarSystem({ profile, onPick }) {
           >
             <span className="sr-orrery-dot" aria-hidden="true" />
             <span className="sr-orrery-name">{waypoint.name}</span>
-            <span className="sr-orrery-level">Level {waypoint.level}</span>
+            <span className="sr-orrery-level">{waypoint.locked ? 'Closed' : `Level ${waypoint.level}`}</span>
           </button>
         ))}
         {sky.map((constellation) => (
@@ -768,7 +789,9 @@ export default function SolarSystem({ profile, onPick }) {
         <div className="sr-orrery-readout">
           <span className="sr-eyebrow">
             {looking ? 'Looking at' : 'You are at'} · Level {shown.level}
-            {shown.mission.cleared && <em className="sr-orrery-flag">Cleared</em>}
+            {shown.locked
+              ? <em className="sr-orrery-flag is-locked">Closed</em>
+              : shown.mission.cleared && <em className="sr-orrery-flag">Cleared</em>}
           </span>
           <strong>{shown.name}</strong>
           <p>{shown.fact}</p>
@@ -776,12 +799,14 @@ export default function SolarSystem({ profile, onPick }) {
             {shown.au} AU from the Sun
             {shown.period ? ` · one orbit every ${shown.period} years` : ''}
           </p>
-          <p className="sr-orrery-objectives">
-            {shown.mission.cleared
-              ? 'Every objective here is complete.'
-              : `${shown.mission.done} of ${shown.mission.total} objectives · next: ${shown.mission.objectives.find((item) => !item.done)?.title}`}
+          <p className="sr-orrery-objectives" id="sr-orrery-lock">
+            {shown.locked
+              ? `Not open yet — ${shown.reason}`
+              : shown.mission.cleared
+                ? 'Every objective here is complete.'
+                : `${shown.mission.done} of ${shown.mission.total} objectives · next: ${shown.mission.objectives.find((item) => !item.done)?.title}`}
           </p>
-          {looking && (
+          {looking && !shown.locked && (
             <button type="button" className="sr-btn sr-btn--small sr-orrery-travel" onClick={() => pick(shown.level)}>
               Travel to {shown.name}
             </button>

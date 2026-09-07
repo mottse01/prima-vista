@@ -847,6 +847,10 @@ test('assisted work cannot satisfy the three-first-read promotion rule', () => {
     pitchAccuracy: 0.98,
     rhythmAccuracy: 0.94,
     continuity: 1,
+    // Luna also asks for a steady pulse and one unbroken read before it opens
+    // the way to Mars; without those, three strong reads leave you where you
+    // are however clean they were.
+    meanSignedTiming: 0.02,
     total: 20,
     skills: {},
   };
@@ -868,6 +872,28 @@ test('assisted work cannot satisfy the three-first-read promotion rule', () => {
     level: 1, summary, seed: 4, exerciseId: 'd', elapsedSec: 20,
   }).profile;
   assert.equal(profile.level, 2);
+  assert.equal(profile.unlockedLevel, 2, 'clearing a destination opens the next one');
+});
+
+test('reading well is not enough to move on with a destination unfinished', () => {
+  let profile = emptyProfile();
+  for (const id of ['notes.treble', 'intervals.step', 'rhythm.quarter']) {
+    profile.skills[id] = { rating: 0.95, attempts: 100 };
+  }
+  // Strong, clean, and rushed: the reading evidence is there, the steady-pulse
+  // objective is not, so Luna stays unfinished and Mars stays closed.
+  const rushed = {
+    score: 96, pitchAccuracy: 0.98, rhythmAccuracy: 0.94, continuity: 1,
+    meanSignedTiming: 0.34, total: 20, skills: {},
+  };
+  for (const seed of [1, 2, 3, 4]) {
+    profile = applyResult(profile, {
+      level: 1, summary: rushed, seed, exerciseId: `r${seed}`, elapsedSec: 20,
+    }).profile;
+  }
+  assert.equal(profile.level, 1);
+  assert.equal(profile.unlockedLevel, 1);
+  assert.ok(profile.demonstratedLevels.includes(1), 'the reading itself is still demonstrated');
 });
 
 test('assisted practice keeps separate evidence without changing first-read ratings', () => {

@@ -12,6 +12,7 @@ import { applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, para
 import { levelById } from './core/levels.js';
 import { waypointFor } from './core/constellation.js';
 import { recordTransit, transitParams, transitStreak } from './core/transit.js';
+import { isOpen, lockReason, openTo, openThrough } from './core/missions.js';
 import { connectMidi } from './core/midi.js';
 import { connectMicrophone } from './core/microphone.js';
 import { codeToSeed, randomSeed } from './core/rng.js';
@@ -263,6 +264,9 @@ export default function App() {
       });
       if (placementComplete) {
         next.level = placementLevel;
+        // Placement is the way in. Three unseen pieces put a returning
+        // pianist where they belong, and the course opens to there.
+        Object.assign(next, openTo(next, placementLevel));
         nextPathLevelRef.current = placementLevel;
       } else if (promoted) {
         nextPathLevelRef.current = next.level;
@@ -373,7 +377,9 @@ export default function App() {
   }, []);
 
   const chooseStartingLevel = useCallback((levelId, preferences = {}) => {
-    const nextProfile = { ...profile, level: levelId };
+    // Choosing where to begin is a placement, not progress: it opens the
+    // course to that point so a returning pianist starts where they belong.
+    const nextProfile = openTo({ ...profile, level: levelId }, levelId);
     setProfile(nextProfile);
     setParams(paramsForLevel(levelId, nextProfile, { seed: randomSeed(), targeting: false }));
     setSettings((current) => ({
@@ -413,6 +419,13 @@ export default function App() {
   }, [profile]);
 
   const changeDifficulty = useCallback((levelId) => {
+    // The one place a level is chosen, and so the one place the course is
+    // enforced. A closed destination says what is standing in the way rather
+    // than silently refusing.
+    if (!isOpen(profile, levelId)) {
+      setToast({ kind: 'info', text: `${waypointFor(levelId).name} is not open yet. ${lockReason(profile, levelId)}` });
+      return;
+    }
     setPlacement(null);
     setTransitActive(false);
     const chosen = levelById(levelId);
@@ -527,6 +540,7 @@ export default function App() {
             onResult={handleResult}
             onRegenerate={regenerate}
             onDifficultyChange={changeDifficulty}
+            openLevel={openThrough(profile)}
             level={level}
             midi={midi}
             onConnectMidi={handleConnectMidi}

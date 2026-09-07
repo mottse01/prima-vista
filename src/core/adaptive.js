@@ -6,6 +6,8 @@
 import { SKILLS, SCORING_VERSION } from './grader.js';
 import { levelById, LEVELS } from './levels.js';
 import { makeRng, randomSeed } from './rng.js';
+import { comparableReads, eligibleFirstRead } from './reads.js';
+import { missionState, openThrough, raiseFrontier } from './missions.js';
 
 const ALPHA_MIN = 0.18;
 const ALPHA_MAX = 0.45;
@@ -28,16 +30,8 @@ export function placementRecommendation(startLevel, scores) {
   return Math.max(1, Math.min(LEVELS.length, Number(startLevel) + adjustment));
 }
 
-/** Shared first-read rule for placement, promotion and comparable evidence. */
-export function eligibleFirstRead({ summary, fresh = true, takeIndex = 1, assisted = false, curtain = 'off' }) {
-  return summary?.valid !== false && summary?.assessmentEligible !== false
-    && fresh && takeIndex === 1 && !assisted && (!curtain || curtain === 'off');
-}
 
-export function comparableReads(profile, level = profile.level) {
-  return profile.history.filter((take) => take.level === level
-    && take.scoringVersion === SCORING_VERSION && !take.repeat && !take.assisted && !take.curtain);
-}
+export { comparableReads, eligibleFirstRead };
 
 export function emptyProfile() {
   const skills = {};
@@ -47,6 +41,9 @@ export function emptyProfile() {
     scoringVersion: SCORING_VERSION,
     demonstratedLevels: [],
     level: 1,
+    // How far along the course is open. Only placement, or clearing the
+    // destination you are standing on, moves it — and it never moves back.
+    unlockedLevel: 1,
     skills,
     practiceSkills: {},
     history: [],       // { at, level, score, seed, repeat, curtain, ... }
@@ -176,14 +173,22 @@ export function applyResult(profile, {
     return { profile: next, promoted: false, demoted: false, repeat };
   }
 
-  const { promoted, demoted } = evaluateLevel(next, level);
-  if (promoted) {
-    next.level = Math.min(LEVELS.length, level + 1);
+  // Two different things, deliberately separated. "Demonstrated" is the old
+  // reading evidence: three strong first reads in a row with the level's focus
+  // skills behind them. Moving on additionally needs the destination cleared,
+  // because that is what opens the next one.
+  const { promoted: demonstrated, demoted } = evaluateLevel(next, level);
+  if (demonstrated) {
     next.demonstratedLevels = [...new Set([...(next.demonstratedLevels || []), level])];
+  }
+  Object.assign(next, raiseFrontier(next, level));
+  const promoted = demonstrated && missionState(next, level).cleared;
+  if (promoted) {
+    next.level = Math.min(LEVELS.length, openThrough(next), level + 1);
   }
   if (demoted) next.level = Math.max(1, level - 1);
 
-  return { profile: next, promoted, demoted, repeat };
+  return { profile: next, promoted, demonstrated, demoted, repeat };
 }
 
 /**

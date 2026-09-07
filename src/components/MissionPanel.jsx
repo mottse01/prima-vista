@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { missionState } from '../core/missions.js';
+import { isOpen, missionState } from '../core/missions.js';
 import { waypointFor } from '../core/journey.js';
 
 // Where you are, and what this place is asking for.
@@ -14,6 +14,7 @@ export default function MissionPanel({ profile, level, onOpenPath }) {
   const waypoint = waypointFor(level);
   const next = mission.objectives.find((item) => !item.done);
   const nextPlace = level < 10 ? waypointFor(level + 1) : null;
+  const nextOpen = nextPlace ? isOpen(profile, nextPlace.level) : false;
 
   return (
     <section className={`sr-mission${mission.cleared ? ' is-cleared' : ''}`}>
@@ -34,6 +35,9 @@ export default function MissionPanel({ profile, level, onOpenPath }) {
                 ? `Everything here is done. ${nextPlace.name} is open.`
                 : 'Everything here is done. This is the edge of the Sun’s reach.'
               : next?.detail || waypoint.note}
+            {!mission.cleared && nextPlace && !nextOpen && (
+              <span className="sr-mission-gate"> {nextPlace.name} opens when this is finished.</span>
+            )}
           </p>
         </div>
         <div className="sr-mission-count">

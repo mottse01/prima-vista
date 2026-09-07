@@ -40,9 +40,16 @@ export function loadProfile() {
       && take.rhythmAccuracy === 0
       && take.continuity === 0);
   if (allTakesWereSilent) return { ...blank, level: stored.level || 1 };
+  // Profiles saved before the course existed already stand somewhere. They
+  // keep that ground: the frontier opens to where they had got to, and the
+  // objectives govern everything from there outward. Nobody is sent back to
+  // Luna by an update.
+  const unlockedLevel = stored.unlockedLevel
+    || Math.max(1, stored.level || 1, ...(stored.demonstratedLevels || []).map((level) => level + 1));
   return {
     ...blank,
     ...stored,
+    unlockedLevel,
     version: 5,
     scoringVersion: SCORING_VERSION,
     // Keep every past take and previous ratings, but do not mix known-biased

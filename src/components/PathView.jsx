@@ -3,6 +3,7 @@ import { LEVELS, STAGES, levelById } from '../core/levels.js';
 import { comparableReads } from '../core/adaptive.js';
 import { waypointFor } from '../core/constellation.js';
 import { journeyProgress } from '../core/journey.js';
+import { isOpen, lockReason, openThrough } from '../core/missions.js';
 
 
 // The graded path. Levels are parameter envelopes, so each one is an endless
@@ -28,8 +29,8 @@ export default function PathView({ profile, onPick }) {
         <SolarSystem profile={profile} onPick={onPick} />
       </Suspense>
       <p className="sr-journey-line">
-        <strong>{progress.reached}</strong> of {progress.total} waypoints demonstrated ·
-        furthest reached <strong>{progress.furthest.name}</strong>
+        The course is open through <strong>{waypointFor(openThrough(profile)).name}</strong> ·
+        <strong> {progress.reached}</strong> of {progress.total} waypoints demonstrated
       </p>
       <div className="sr-path-spotlight">
         <section className="sr-path-current">
@@ -44,12 +45,20 @@ export default function PathView({ profile, onPick }) {
           <span className="sr-eyebrow">{next ? `Explore next · Level ${next.id} · ${waypointFor(next.id).name}` : 'Keep exploring'}</span>
           <h3>{next ? next.name : 'Fresh music, familiar skills'}</h3>
           <p>{next ? next.blurb : 'There is always more music to read. Keep exploring new pieces, or revisit a level for a relaxed practice.'}</p>
-          <button type="button" className="sr-btn" onClick={() => onPick(next?.id || current.id)}>{next ? 'Try this when you’re ready' : 'Find another piece'}</button>
+          <button
+            type="button" className="sr-btn"
+            disabled={next ? !isOpen(profile, next.id) : false}
+            onClick={() => onPick(next?.id || current.id)}
+          >
+            {!next ? 'Find another piece'
+              : isOpen(profile, next.id) ? 'Set course' : 'Closed until this one is cleared'}
+          </button>
         </section>
       </div>
       <details className="sr-path-explanation">
         <summary>How progress works</summary>
-        <p>Your selected level is a starting point, not a test result. A level is marked “Demonstrated” only after three strong first reads and enough evidence in its focus skills. These are Prima Vista levels, not exam grades. Assisted practice and familiar pieces remain useful practice, but don’t count toward this milestone.</p>
+        <p>Each destination has objectives, and the next one opens when they are done. Objectives are checked against first reads only — assisted practice, replays and Eclipse drills stay useful practice but do not count. A level is separately marked “Demonstrated” after three strong first reads with enough evidence in its focus skills. These are Prima Vista levels, not exam grades.</p>
+        <p>If you already read music, do not start at the beginning: take the level check from Practice → “Recheck my level”. Three unseen pieces will place you, and the course opens to there.</p>
       </details>
       <details className="sr-path-all">
         <summary>Explore all {LEVELS.length} levels <span>From first notes to advanced reading</span></summary>
@@ -59,7 +68,8 @@ export default function PathView({ profile, onPick }) {
           <div className="sr-levels">
             {LEVELS.filter((l) => l.stage === stage).map((l) => {
               const demonstrated = (profile.demonstratedLevels || []).includes(l.id);
-              const state = l.id === profile.level ? 'current' : demonstrated ? 'done' : 'ahead';
+              const open = isOpen(profile, l.id);
+              const state = !open ? 'locked' : l.id === profile.level ? 'current' : demonstrated ? 'done' : 'ahead';
               const takes = comparableReads(profile, l.id);
               const best = takes.length ? Math.max(...takes.map((t) => t.score)) : null;
               return (
@@ -67,6 +77,8 @@ export default function PathView({ profile, onPick }) {
                   key={l.id} type="button"
                   className={`sr-level is-${state}`}
                   aria-current={l.id === profile.level ? 'true' : undefined}
+                  disabled={!open}
+                  title={open ? undefined : lockReason(profile, l.id)}
                   onClick={() => onPick(l.id)}
                 >
                   <span className="sr-level-num">{l.id}</span>
@@ -76,7 +88,10 @@ export default function PathView({ profile, onPick }) {
                     <span className="sr-dim">{l.blurb}</span>
                   </span>
                   <span className="sr-level-score">
-                    {l.id === profile.level ? 'Selected' : demonstrated ? 'Demonstrated' : takes.length ? 'Practiced' : 'Try this'}
+                    {!open ? 'Closed'
+                      : l.id === profile.level ? 'Selected'
+                        : demonstrated ? 'Demonstrated'
+                          : takes.length ? 'Practiced' : 'Try this'}
                     {best != null && <small>best {best}</small>}
                   </span>
                 </button>

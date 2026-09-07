@@ -36,6 +36,7 @@ const FOCUS_PACKS = [
 export default function PracticeView({
   score, settings, onSettings, onResult, onRegenerate, level,
   onDifficultyChange,
+  openLevel = 10,
   midi, onConnectMidi, microphone, onConnectMicrophone, showKeyboard, onToggleKeyboard,
   freshRead, strongReads = 0, onPreview, onReflect, onNotify,
   session, onSessionStart, placement, onFocus, onRecheckLevel, repairHand, onRepairHand,
@@ -604,9 +605,9 @@ export default function PracticeView({
         </div>
         {level && <div className="sr-quick-level">
             <input
-              type="range" min="1" max={LEVELS.length} step="1" value={difficultyDraft}
+              type="range" min="1" max={openLevel} step="1" value={Math.min(difficultyDraft, openLevel)}
               aria-label="Difficulty level"
-              aria-valuetext={`Level ${difficultyDraft}, ${draftLevel.name}`}
+              aria-valuetext={`Level ${difficultyDraft}, ${draftLevel.name}. Levels up to ${openLevel} are open.`}
               disabled={busy}
               onChange={(event) => setDifficultyDraft(Number(event.target.value))}
               onPointerUp={(event) => commitDifficulty(event.currentTarget.value)}
@@ -616,6 +617,11 @@ export default function PracticeView({
             <div className="sr-difficulty-scale" aria-hidden="true">
               <span>Foundations</span><span>Fluency</span><span>Advanced</span>
             </div>
+            {openLevel < LEVELS.length && (
+              <p className="sr-difficulty-lock">
+                The course is open through level {openLevel}. Clear this destination to go further.
+              </p>
+            )}
         </div>}
         <details className="sr-practice-tools" ref={practiceToolsRef} onKeyDown={(event) => {
           if (event.key === 'Escape') {

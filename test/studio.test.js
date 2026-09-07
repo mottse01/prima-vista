@@ -57,15 +57,32 @@ test('an unplayed take draws no star chart', () => {
   assert.doesNotMatch(html, /class="sr-trace"/);
 });
 
-test('Path highlights current and next skills without locking any of ten levels', () => {
+test('Path shows all ten levels and opens only as far as the course has been earned', () => {
   for (const level of [1, 4, 10]) {
-    const html = render(Path, { profile: { ...emptyProfile(), level }, onPick: noop });
+    // unlockedLevel is what the course opens to; a reader is placed there or
+    // walks there by clearing destinations.
+    const profile = { ...emptyProfile(), level, unlockedLevel: level };
+    const html = render(Path, { profile, onPick: noop });
     assert.match(html, new RegExp(`Where you are · Level ${level}`));
-    assert.equal((html.match(/class="sr-level is-/g) || []).length, 10);
+    assert.equal((html.match(/class="sr-level is-/g) || []).length, 10, 'every level stays visible');
     assert.match(html, /<details class="sr-path-all"><summary>Explore all 10 levels/);
-    assert.doesNotMatch(html, /disabled=|Level 11|>Mastery</);
+    assert.doesNotMatch(html, /Level 11|>Mastery</);
     assert.match(html, level === 10 ? /Keep exploring/ : new RegExp(`Explore next · Level ${level + 1}`));
+
+    // Everything beyond the frontier is present, marked closed, and unusable.
+    const closed = (html.match(/class="sr-level is-locked"/g) || []).length;
+    assert.equal(closed, 10 - level, `level ${level} should close ${10 - level} destinations`);
+    assert.equal((html.match(/disabled=""/g) || []).length, closed + (level === 10 ? 0 : 1));
   }
+});
+
+test('Path names what is standing in the way of the next destination', () => {
+  const profile = { ...emptyProfile(), level: 1, unlockedLevel: 1 };
+  const html = render(Path, { profile, onPick: noop });
+  assert.match(html, /Closed until this one is cleared/);
+  assert.match(html, /The course is open through <strong>Luna<\/strong>/);
+  // The way in for someone who already reads music.
+  assert.match(html, /Recheck my level/);
 });
 
 test('selected Path level is not presented as demonstrated without evidence', () => {

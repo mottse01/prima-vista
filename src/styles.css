@@ -1967,6 +1967,7 @@ html.sr-stand-mode .sr-studio-header .sr-transport, html.sr-practice-running .sr
   font-size: 22px; letter-spacing: -.012em; color: var(--ink);
 }
 .sr-mission-title p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-soft); max-width: 62ch; }
+.sr-mission-gate { color: var(--ink-faint); }
 .sr-mission-count { flex: 0 0 auto; text-align: right; }
 .sr-mission-count strong {
   display: block; font-family: Georgia, 'Times New Roman', serif; font-weight: 500;
@@ -2117,6 +2118,18 @@ html.sr-stand-mode .sr-studio-header .sr-transport, html.sr-practice-running .sr
 
 .sr-orrery-objectives {
   margin-top: 6px !important; font-size: 12.5px !important; color: var(--ink-soft) !important;
+}
+
+.sr-orrery-label.is-locked { opacity: .55; }
+.sr-orrery-label.is-locked .sr-orrery-dot {
+  background: transparent; border: 1px solid var(--line-strong); box-shadow: none;
+}
+.sr-orrery-label.is-locked .sr-orrery-name { color: var(--ink-faint); }
+.sr-orrery-flag.is-locked { background: rgba(255,255,255,.06); color: var(--ink-faint); }
+.sr-level.is-locked { opacity: .5; cursor: not-allowed; }
+.sr-level.is-locked .sr-level-num { background: transparent; border: 1px dashed var(--line-strong); color: var(--ink-faint); }
+.sr-difficulty-lock {
+  grid-column: 1 / -1; margin: 6px 0 0; font-size: 11.5px; color: var(--ink-faint);
 }
 
 .sr-orrery-flag {

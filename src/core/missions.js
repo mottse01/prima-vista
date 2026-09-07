@@ -10,9 +10,8 @@
 // barline; the Kuiper Belt asks for two independent voices. That is the level
 // curriculum, made legible and given somewhere to happen.
 
-import { comparableReads } from './adaptive.js';
-import { skyProgress } from './constellation.js';
-import { LIT_RATING, OBSERVATIONS_FOR_CONFIDENCE } from './constellation.js';
+import { comparableReads } from './reads.js';
+import { LIT_RATING, OBSERVATIONS_FOR_CONFIDENCE, skyProgress } from './constellation.js';
 import { waypointFor } from './journey.js';
 
 /** A read counts toward a mission at the same score the level gate wants. */
@@ -57,7 +56,9 @@ const unbroken = () => (context) => counted(
   'One read without stopping',
   'Keep going through every attack, even past a wrong note.',
   1,
-  context.takes.some((take) => (take.continuity ?? 0) >= 0.99) ? 1 : 0,
+  // Kept going, not played perfectly: a wrong note struck on the beat still
+  // counts, and one fumble in a whole read should not disqualify it.
+  context.takes.some((take) => (take.continuity ?? 0) >= 0.95) ? 1 : 0,
 );
 
 const evenHands = (points) => (context) => counted(
@@ -206,10 +207,6 @@ export const MISSIONS = {
 
 /**
  * Where a reader stands at one destination.
- *
- * Missions describe the recommended course; they never lock a level. Anyone
- * can fly anywhere at any time, which is the app's own rule — an adult
- * returning to the piano should not have to re-earn Luna.
  */
 export function missionState(profile, level) {
   const builders = MISSIONS[level] || [];
@@ -241,4 +238,64 @@ export function missionProgress(profile) {
     .map(Number)
     .sort((a, b) => a - b)
     .map((level) => missionState(profile, level));
+}
+
+// ---------------------------------------------------------------------------
+// The lock
+// ---------------------------------------------------------------------------
+
+/**
+ * How far the course is open.
+ *
+ * A destination opens when the one before it is cleared, so the objectives are
+ * a gate rather than a suggestion. Two things stop that from being a trap:
+ *
+ * The frontier is a high-water mark kept on the profile, so it can only ever
+ * move outward. Take history is capped, and a mission that was cleared a
+ * thousand reads ago must not close behind you because the evidence scrolled
+ * off the end.
+ *
+ * And placement opens the course directly. An adult returning to the piano
+ * plays three unseen pieces, is placed where they belong, and starts there —
+ * they are not asked to re-earn Luna. Everything after that point is walked.
+ */
+export const openThrough = (profile) => Math.max(1, profile?.unlockedLevel || 1);
+
+export const isOpen = (profile, level) => level <= openThrough(profile);
+
+/** The first destination still closed, or null when the whole course is open. */
+export function nextLocked(profile) {
+  const open = openThrough(profile);
+  return open >= Object.keys(MISSIONS).length ? null : open + 1;
+}
+
+/** Why a destination is closed, in one sentence. */
+export function lockReason(profile, level) {
+  if (isOpen(profile, level)) return null;
+  const blocking = openThrough(profile);
+  const mission = missionState(profile, blocking);
+  const outstanding = mission.objectives.find((item) => !item.done);
+  return outstanding
+    ? `${mission.waypoint.name} first — ${outstanding.title.toLowerCase()}.`
+    : `Clear ${mission.waypoint.name} first.`;
+}
+
+/**
+ * Raise the frontier if the current destination is now cleared.
+ *
+ * Called after a take is folded in, so it sees the reading that finished the
+ * job. Never lowers anything.
+ */
+export function raiseFrontier(profile, level) {
+  const open = openThrough(profile);
+  const at = level || profile?.level || 1;
+  if (at > open || !missionState(profile, at).cleared) return profile;
+  const next = Math.min(Object.keys(MISSIONS).length, at + 1);
+  return next > open ? { ...profile, unlockedLevel: next } : profile;
+}
+
+/** Placement opens the course to where the reader was placed. */
+export function openTo(profile, level) {
+  const wanted = Math.max(1, Math.min(Object.keys(MISSIONS).length, level || 1));
+  return wanted > openThrough(profile) ? { ...profile, unlockedLevel: wanted } : profile;
 }

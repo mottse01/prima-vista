@@ -134,3 +134,74 @@ test('clearing every objective clears the destination', () => {
   assert.equal(mission.cleared, true);
   assert.equal(nextObjective(profile, 1), null);
 });
+
+// ---------------------------------------------------------------------------
+// The lock
+// ---------------------------------------------------------------------------
+
+test('the course opens one destination at a time', async () => {
+  const { isOpen, openThrough, nextLocked, raiseFrontier, lockReason } = await import('../src/core/missions.js');
+
+  const fresh = emptyProfile();
+  assert.equal(openThrough(fresh), 1);
+  assert.equal(isOpen(fresh, 1), true);
+  assert.equal(isOpen(fresh, 2), false);
+  assert.equal(nextLocked(fresh), 2);
+  assert.match(lockReason(fresh, 5), /^Luna first/);
+  assert.equal(lockReason(fresh, 1), null, 'an open destination has no reason to give');
+
+  // Clearing Luna opens Mars, and nothing further.
+  const cleared = raiseFrontier(withHistory(1, [
+    read(1, { timing: 0.01, continuity: 1 }), read(1), read(1),
+  ]), 1);
+  assert.equal(openThrough(cleared), 2);
+  assert.equal(isOpen(cleared, 2), true);
+  assert.equal(isOpen(cleared, 3), false);
+});
+
+test('the frontier never moves backwards', async () => {
+  const { openThrough, raiseFrontier, openTo } = await import('../src/core/missions.js');
+
+  // Take history is capped, so evidence that cleared a destination can scroll
+  // off the end. Somewhere you have already been must not close behind you.
+  const travelled = { ...emptyProfile(), level: 6, unlockedLevel: 6, history: [] };
+  assert.equal(openThrough(raiseFrontier(travelled, 6)), 6);
+  assert.equal(openThrough(openTo(travelled, 2)), 6, 'placing lower does not close anything');
+  assert.equal(openThrough(openTo(travelled, 9)), 9, 'placing higher opens the way');
+});
+
+test('placement is the way in for someone who already reads music', async () => {
+  const { openThrough, isOpen, openTo } = await import('../src/core/missions.js');
+
+  const placed = openTo(emptyProfile(), 7);
+  assert.equal(openThrough(placed), 7);
+  assert.equal(isOpen(placed, 7), true);
+  assert.equal(isOpen(placed, 8), false, 'placement opens the way in, not the whole course');
+  assert.equal(openThrough(openTo(emptyProfile(), 99)), 10, 'and never past the end of it');
+});
+
+test('a profile saved before the course existed keeps the ground it stood on', async () => {
+  const { loadProfile } = await import('../src/core/storage.js');
+  const { openThrough } = await import('../src/core/missions.js');
+
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => store.get(key) ?? null,
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: (key) => store.delete(key),
+  };
+  store.set('sightread.profile.v1', JSON.stringify({
+    version: 5,
+    scoringVersion: SCORING_VERSION,
+    level: 6,
+    demonstratedLevels: [1, 2, 3, 4, 5],
+    skills: {},
+    history: [],
+    streak: { count: 0, lastDay: null },
+    totals: { takes: 40, notes: 900, minutes: 60 },
+  }));
+
+  const migrated = loadProfile();
+  assert.equal(openThrough(migrated), 6, 'a level-6 reader is not sent back to Luna by an update');
+  delete globalThis.localStorage;
+});
