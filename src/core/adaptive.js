@@ -175,14 +175,14 @@ export function applyResult(profile, {
 
   // Two different things, deliberately separated. "Demonstrated" is the old
   // reading evidence: three strong first reads in a row with the level's focus
-  // skills behind them. Moving on additionally needs the destination cleared,
+  // skills behind them. Moving on additionally needs the first-read flight goal complete,
   // because that is what opens the next one.
   const { promoted: demonstrated, demoted } = evaluateLevel(next, level);
   if (demonstrated) {
     next.demonstratedLevels = [...new Set([...(next.demonstratedLevels || []), level])];
   }
   Object.assign(next, raiseFrontier(next, level));
-  const promoted = demonstrated && missionState(next, level).cleared;
+  const promoted = demonstrated && missionState(next, level).routeReady;
   if (promoted) {
     next.level = Math.min(LEVELS.length, openThrough(next), level + 1);
   }

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ExpeditionDebrief from './components/ExpeditionDebrief.jsx';
+import ExpeditionView from './components/ExpeditionView.jsx';
 import PracticeView from './components/PracticeView.jsx';
 import SetupPanel from './components/SetupPanel.jsx';
 import ProgressView from './components/ProgressView.jsx';
@@ -12,7 +14,7 @@ import { applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, para
 import { levelById } from './core/levels.js';
 import { waypointFor } from './core/constellation.js';
 import { recordTransit, transitParams, transitStreak } from './core/transit.js';
-import { isOpen, lockReason, openTo, openThrough } from './core/missions.js';
+import { isOpen, lockReason, missionState, openTo, openThrough } from './core/missions.js';
 import { connectMidi } from './core/midi.js';
 import { connectMicrophone } from './core/microphone.js';
 import { codeToSeed, randomSeed } from './core/rng.js';
@@ -23,10 +25,11 @@ import {
 } from './core/storage.js';
 
 const TABS = [
+  { id: 'expedition', label: 'Expedition', short: 'Explore' },
   { id: 'practice', label: 'Practice', short: 'Practice' },
-  { id: 'path', label: 'The path', short: 'Path' },
-  { id: 'custom', label: 'Build an exercise', short: 'Build' },
-  { id: 'progress', label: 'Progress', short: 'Progress' },
+  { id: 'path', label: 'Star atlas', short: 'Atlas' },
+  { id: 'custom', label: 'Music lab', short: 'Lab' },
+  { id: 'progress', label: 'Flight log', short: 'Log' },
 ];
 
 /** Read both the seed and its parameter recipe from an exact shared link. */
@@ -60,18 +63,14 @@ export default function App() {
   const [profile, setProfile] = useState(loadProfile);
   const [settings, setSettings] = useState(loadSettings);
   const [presets, setPresets] = useState(loadPresets);
-  const [tab, setTab] = useState('practice');
-  const [showKeyboard, setShowKeyboard] = useState(false);
+  const [tab, setTab] = useState(() => exerciseFromUrl().seed != null ? 'practice' : 'expedition');
+  const [showKeyboard, setShowKeyboard] = useState(() => (loadSettings().inputMode || 'screen') === 'screen');
   const [repairHand, setRepairHand] = useState(null);
   const [transitActive, setTransitActive] = useState(false);
   const [placement, setPlacement] = useState(null);
   const [toast, setToast] = useState(null);
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    const shared = exerciseFromUrl();
-    const existingProfile = loadProfile();
-    const isNewReader = existingProfile.totals.takes === 0 && existingProfile.history.length === 0;
-    return isNewReader && !loadSettings().onboardingComplete && !(shared.seed != null && shared.params);
-  });
+  const [receipt, setReceipt] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const nextPathLevelRef = useRef(null);
   const preparedExerciseRef = useRef(null);
   const learnerTargetRef = useRef(null);
@@ -135,8 +134,10 @@ export default function App() {
   // Keep the address bar in step. Unlike a seed alone, this link includes the
   // exact generator recipe and therefore opens identical music for everyone.
   useEffect(() => {
-    window.history.replaceState(null, '', exactExerciseUrl(score, window.location.href));
-  }, [score]);
+    const url = new URL(window.location.href);
+    if (tab === 'practice') window.history.replaceState(null, '', exactExerciseUrl(score, url.href));
+    else { url.searchParams.delete('x'); url.searchParams.delete('p'); window.history.replaceState(null, '', url.href); }
+  }, [score, tab]);
 
   // --- MIDI ---------------------------------------------------------------
   const subsRef = useRef(new Set());
@@ -222,6 +223,9 @@ export default function App() {
 
   const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain, assisted, fresh }) => {
     const eligible = eligibleFirstRead({ summary, takeIndex, curtain, assisted, fresh });
+    setReceipt({ scoreId, level: params.level, eligible: eligible && !placement?.active,
+      before: params.level ? missionState(profile, params.level) : null,
+      frontier: openThrough(profile), score: summary.score });
     const placementScores = placement?.active && eligible ? [...placement.scores, summary.score] : null;
     const placementComplete = Boolean(placementScores && placementScores.length >= placement.total);
     const placementLevel = placementComplete
@@ -278,7 +282,7 @@ export default function App() {
         nextPathLevelRef.current = next.level;
         setToast({
           kind: 'down',
-          text: `Falling back to ${waypointFor(next.level).name} to rebuild — level ${next.level}.`,
+          text: `A gentler next flight at ${waypointFor(next.level).name}. All your open destinations stay open.`,
         });
       }
       // A transit is recorded only for a genuine first read, which is the
@@ -298,7 +302,7 @@ export default function App() {
     } else if (placement?.active) {
       setToast({ kind: 'info', text: 'Practice saved. Choose New music for the next independent level-check read.' });
     }
-  }, [params.level, placement, score, scoreId, transitActive]);
+  }, [params.level, placement, profile, score, scoreId, transitActive]);
 
   const handleReflection = useCallback(({ label, skillId }) => {
     learnerTargetRef.current = skillId || null;
@@ -436,6 +440,7 @@ export default function App() {
     setProfile(nextProfile);
     setParams(paramsForLevel(chosen.id, nextProfile, { seed: randomSeed(), targeting: false }));
     setToast({ kind: 'info', text: `Course set for ${waypointFor(chosen.id).name} · level ${chosen.id}, ${chosen.name}` });
+    setSettings((current) => ({ ...current, curtain: 'off', guideKeys: false }));
     setTab('practice');
   }, [profile]);
 
@@ -479,7 +484,7 @@ export default function App() {
           </svg>
           <div>
             <h1>Prima <span>Vista</span></h1>
-            <p>A little music. A little more confidence.</p>
+            <p>THE SIGHT-READING EXPEDITION</p>
           </div>
         </div>
         <nav className="sr-tabs" aria-label="Sections">
@@ -514,27 +519,24 @@ export default function App() {
       </header>
 
       <main className="sr-main" id="practice-main">
-        {tab === 'practice' && (
-          <div className="sr-practice-top">
-            {params.level && (
-              <MissionPanel
-                profile={profile}
-                level={params.level}
-                onOpenPath={() => setTab('path')}
-              />
-            )}
-            <TransitCard
-              profile={profile}
-              active={transitActive}
-              onRead={readTransit}
-              onLeave={leaveTransit}
-            />
-          </div>
-        )}
+        {tab === 'expedition' && <ExpeditionView profile={profile}
+          onLaunch={(id) => { if (!settings.onboardingComplete && !profile.totals.takes) setShowOnboarding(true); else changeDifficulty(id); }}
+          onTransit={readTransit} onPractice={() => setTab('practice')}
+          onProgress={() => setTab('progress')} onPlacement={() => setShowOnboarding(true)} />}
+
+        {tab === 'practice' && <div className="pv-practice-heading">
+          <button type="button" onClick={() => setTab('expedition')}>← Expedition</button>
+          <span>{transitActive ? 'DAILY DISCOVERY' : params.level ? `SECTOR ${String(params.level).padStart(2, '0')} · ${waypointFor(params.level).name.toUpperCase()}` : 'MUSIC LAB'} · PIANO FLIGHT</span>
+          <details className="pv-flight-brief"><summary>Mission brief</summary><div>
+            {params.level && <MissionPanel profile={profile} level={params.level} onOpenPath={() => setTab('expedition')} />}
+            <TransitCard profile={profile} active={transitActive} onRead={readTransit} onLeave={leaveTransit} />
+          </div></details>
+        </div>}
         {tab === 'practice' && (
           <PracticeView
             key={`${score.seed}:${score.tempo}:${repairHand || 'both'}`}
             score={practiceScore}
+            debrief={receipt?.scoreId === scoreId && receipt.level && <ExpeditionDebrief receipt={receipt} profile={profile} onExplore={() => setTab('expedition')} onLaunch={changeDifficulty} />}
             settings={settings}
             onSettings={practiceSettings}
             onResult={handleResult}

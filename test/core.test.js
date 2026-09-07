@@ -875,13 +875,13 @@ test('assisted work cannot satisfy the three-first-read promotion rule', () => {
   assert.equal(profile.unlockedLevel, 2, 'clearing a destination opens the next one');
 });
 
-test('reading well is not enough to move on with a destination unfinished', () => {
+test('strong reading opens travel while unfinished discoveries remain optional', () => {
   let profile = emptyProfile();
   for (const id of ['notes.treble', 'intervals.step', 'rhythm.quarter']) {
     profile.skills[id] = { rating: 0.95, attempts: 100 };
   }
   // Strong, clean, and rushed: the reading evidence is there, the steady-pulse
-  // objective is not, so Luna stays unfinished and Mars stays closed.
+  // discovery is not. Mars opens while that discovery remains unfinished.
   const rushed = {
     score: 96, pitchAccuracy: 0.98, rhythmAccuracy: 0.94, continuity: 1,
     meanSignedTiming: 0.34, total: 20, skills: {},
@@ -891,8 +891,8 @@ test('reading well is not enough to move on with a destination unfinished', () =
       level: 1, summary: rushed, seed, exerciseId: `r${seed}`, elapsedSec: 20,
     }).profile;
   }
-  assert.equal(profile.level, 1);
-  assert.equal(profile.unlockedLevel, 1);
+  assert.equal(profile.level, 2);
+  assert.equal(profile.unlockedLevel, 2);
   assert.ok(profile.demonstratedLevels.includes(1), 'the reading itself is still demonstrated');
 });
 

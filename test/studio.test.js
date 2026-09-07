@@ -9,10 +9,12 @@ import { levelById } from '../src/core/levels.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../src/core/storage.js';
 import { curtainMode } from '../src/core/curtain.js';
 
-let server, Path, Onboarding, Practice, Result, Progress;
+let server, Path, Onboarding, Practice, Result, Progress, Expedition, Debrief;
 const noop = () => {};
 before(async () => {
   server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' });
+  Expedition = (await server.ssrLoadModule('/src/components/ExpeditionView.jsx')).default;
+  Debrief = (await server.ssrLoadModule('/src/components/ExpeditionDebrief.jsx')).default;
   Path = (await server.ssrLoadModule('/src/components/PathView.jsx')).default;
   Onboarding = (await server.ssrLoadModule('/src/components/OnboardingModal.jsx')).default;
   const practice = await server.ssrLoadModule('/src/components/PracticeView.jsx');
@@ -79,7 +81,7 @@ test('Path shows all ten levels and opens only as far as the course has been ear
 test('Path names what is standing in the way of the next destination', () => {
   const profile = { ...emptyProfile(), level: 1, unlockedLevel: 1 };
   const html = render(Path, { profile, onPick: noop });
-  assert.match(html, /Closed until this one is cleared/);
+  assert.match(html, /Three strong first reads to open/);
   assert.match(html, /The course is open through <strong>Luna<\/strong>/);
   // The way in for someone who already reads music.
   assert.match(html, /Recheck my level/);
@@ -107,7 +109,7 @@ test('practice exposes one difficulty slider, named actions and independent disp
   const html = render(Practice, props);
   assert.equal((html.match(/aria-label="Difficulty level"/g) || []).length, 1);
   assert.ok(html.indexOf('aria-label="Difficulty level"') < html.indexOf('<summary>Settings</summary>'));
-  for (const label of ['Start practice', 'New music', 'Listen', 'Preparation tips', 'Comfort view', 'Eclipse', '2-minute practice']) assert.ok(html.includes(label), label);
+  for (const label of ['Launch flight', 'New music', 'Listen', 'Preparation tips', 'Comfort view', 'Eclipse', '2-minute practice']) assert.ok(html.includes(label), label);
   assert.match(html, /30-second preparation/);
   assert.doesNotMatch(render(Practice, { ...props, settings: { ...DEFAULT_SETTINGS, preparationTips: false } }), /class="sr-btn sr-btn--ghost sr-prep-toggle"/);
   assert.match(render(Practice, { ...props, level: null }), /Custom exercise/);
@@ -174,4 +176,27 @@ test('preparation preferences persist independently of comfort and answer assist
     if (original === undefined) delete globalThis.localStorage;
     else globalThis.localStorage = original;
   }
+});
+
+
+test('expedition opens on a real launch with ten accessible destination previews', () => {
+  const html = render(Expedition, { profile: emptyProfile() });
+  assert.match(html, /Launch mission/);
+  assert.equal((html.match(/aria-pressed=/g) || []).length, 10);
+  assert.match(html, /0 \/ 3 first reads/);
+  assert.match(html, /three strong first reads open the route/);
+  assert.match(html, /MIDI|Flight log|flight log/);
+  assert.doesNotMatch(html, /disabled=""/);
+});
+
+test('debrief celebrates a real unlock and does not invent one for rehearsal', async () => {
+  const { missionState } = await import('../src/core/missions.js');
+  const base = emptyProfile();
+  const receipt = { level: 1, frontier: 1, eligible: false, before: missionState(base, 1) };
+  const practice = render(Debrief, { profile: base, receipt });
+  assert.doesNotMatch(practice, /NEW DESTINATION OPEN|Travel onward/);
+  assert.match(practice, /fresh, unassisted reading/);
+  const unlocked = render(Debrief, { profile: { ...base, unlockedLevel: 2 }, receipt: { ...receipt, eligible: true } });
+  assert.match(unlocked, /Next stop: Mars/);
+  assert.match(unlocked, /Travel onward/);
 });

@@ -205,3 +205,29 @@ test('a profile saved before the course existed keeps the ground it stood on', a
   assert.equal(openThrough(migrated), 6, 'a level-6 reader is not sent back to Luna by an update');
   delete globalThis.localStorage;
 });
+
+test('three strong new reads open travel without optional discovery gates', async () => {
+  const { raiseFrontier, openThrough } = await import('../src/core/missions.js');
+  for (const level of LEVELS) {
+    const profile = withHistory(level.id, [read(level.id), read(level.id), read(level.id)], { unlockedLevel: level.id });
+    assert.equal(missionState(profile, level.id).routeReady, true);
+    assert.equal(openThrough(raiseFrontier(profile, level.id)), Math.min(10, level.id + 1));
+  }
+});
+
+test('rehearsals cannot earn reading discoveries or unlock travel', async () => {
+  const { raiseFrontier, openThrough } = await import('../src/core/missions.js');
+  for (const contamination of [{ repeat: true }, { assisted: true }, { curtain: 'beat' }, { scoringVersion: 'old' }]) {
+    const takes = Array.from({ length: 3 }, () => read(1, { timing: 0, continuity: 1, ...contamination }));
+    const profile = withHistory(1, takes);
+    assert.equal(missionState(profile, 1).done, 0);
+    assert.equal(openThrough(raiseFrontier(profile, 1)), 1);
+  }
+});
+
+test('two strong reads never unlock the next destination', async () => {
+  const { raiseFrontier, openThrough } = await import('../src/core/missions.js');
+  const profile = withHistory(1, [read(1), read(1)]);
+  assert.equal(missionState(profile, 1).routeReady, false);
+  assert.equal(openThrough(raiseFrontier(profile, 1)), 1);
+});

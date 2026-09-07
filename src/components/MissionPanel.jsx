@@ -26,17 +26,17 @@ export default function MissionPanel({ profile, level, onOpenPath }) {
         />
         <div className="sr-mission-title">
           <span className="sr-eyebrow">
-            {mission.cleared ? 'Cleared' : 'Destination'} · Level {level}
+            {mission.routeReady ? 'Route charted' : 'Destination'} · Level {level}
           </span>
           <h3>{waypoint.name}</h3>
           <p>
             {mission.cleared
               ? nextPlace
-                ? `Everything here is done. ${nextPlace.name} is open.`
+                ? `All discoveries complete. ${nextPlace.name} is open.`
                 : 'Everything here is done. This is the edge of the Sun’s reach.'
               : next?.detail || waypoint.note}
             {!mission.cleared && nextPlace && !nextOpen && (
-              <span className="sr-mission-gate"> {nextPlace.name} opens when this is finished.</span>
+              <span className="sr-mission-gate"> {nextPlace.name} opens after three strong first reads.</span>
             )}
           </p>
         </div>

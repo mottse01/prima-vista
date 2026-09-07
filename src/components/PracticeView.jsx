@@ -34,7 +34,7 @@ const FOCUS_PACKS = [
  * which is what resets the transport, the colouring and the last result.
  */
 export default function PracticeView({
-  score, settings, onSettings, onResult, onRegenerate, level,
+  score, settings, onSettings, onResult, onRegenerate, level, debrief,
   onDifficultyChange,
   openLevel = 10,
   midi, onConnectMidi, microphone, onConnectMicrophone, showKeyboard, onToggleKeyboard,
@@ -588,14 +588,18 @@ export default function PracticeView({
       <nav className="sr-flowsteps" aria-label="Practice stages">
         {[
           ['prepare', placement?.active ? `Level check ${placement.total - placement.remaining + 1}/${placement.total}` : 'Prepare'],
-          ['play', 'Play'],
-          ['review', 'Review'],
+          ['play', 'Fly'],
+          ['review', 'Debrief'],
         ].map(([id, label], index) => (
           <span key={id} className={journeyPhase === id ? 'is-current' : ''} aria-current={journeyPhase === id ? 'step' : undefined}>
             <b>{index + 1}</b>{label}
           </span>
         ))}
       </nav>
+      <div className={`pv-flight-track is-${journeyPhase}`} aria-label="Flight progress">
+        <div><span>{journeyPhase === 'play' ? 'FLIGHT IN PROGRESS' : journeyPhase === 'review' ? 'FLIGHT COMPLETE' : 'READY FOR DEPARTURE'}</span><span>{journeyPhase === 'play' ? `Bar ${Math.min(score.measures, Math.floor(Math.max(0, tick) / score.ts.ticks) + 1)} of ${score.measures}` : `${score.measures} bars · ${score.tempo} bpm`}</span></div>
+        <progress max="100" value={journeyPhase === 'review' ? 100 : Math.max(0, Math.min(100, tick / (score.performanceTicks || score.totalTicks) * 100))} aria-label="Music played" />
+      </div>
       <div className="sr-studio-header">
       <section className={`sr-practice-dock is-compact${level ? '' : ' is-custom'}`} aria-label="Practice controls">
         <div className="sr-practice-dock-current">
@@ -805,7 +809,7 @@ export default function PracticeView({
               {audioBusy ? 'Turning on sound…'
                 : result ? 'Play again'
                     : qualifies && preparation.phase === 'active' ? `Start when ready · ${preparation.remaining}s`
-                      : 'Start practice'}
+                      : 'Launch flight'}
             </button>
           )}
           <button
@@ -1085,6 +1089,7 @@ export default function PracticeView({
         />
       )}
 
+      {result && !result.unscored && !result.invalid && debrief}
       {result && (
           <ResultPanel
             result={result}

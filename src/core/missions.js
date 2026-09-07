@@ -17,7 +17,6 @@ import { waypointFor } from './journey.js';
 /** A read counts toward a mission at the same score the level gate wants. */
 export const STRONG_READ = 88;
 
-const takesAt = (profile, level) => (profile?.history || []).filter((take) => take.level === level);
 const recipeOf = (take) => take?.meta?.recipe?.params || null;
 
 // ---------------------------------------------------------------------------
@@ -214,7 +213,7 @@ export function missionState(profile, level) {
     profile,
     level,
     reads: comparableReads(profile, level),
-    takes: takesAt(profile, level),
+    takes: comparableReads(profile, level),
   };
   const objectives = builders.map((build) => build(context));
   return {
@@ -223,6 +222,7 @@ export function missionState(profile, level) {
     objectives,
     done: objectives.filter((item) => item.done).length,
     total: objectives.length,
+    routeReady: Boolean(objectives.find((item) => item.id === 'first-reads')?.done),
     cleared: objectives.length > 0 && objectives.every((item) => item.done),
   };
 }
@@ -247,8 +247,8 @@ export function missionProgress(profile) {
 /**
  * How far the course is open.
  *
- * A destination opens when the one before it is cleared, so the objectives are
- * a gate rather than a suggestion. Two things stop that from being a trap:
+ * Three strong independent first reads open the next destination. Other
+ * objectives are optional discoveries, so a drill never blocks travel. Two things stop that from being a trap:
  *
  * The frontier is a high-water mark kept on the profile, so it can only ever
  * move outward. Take history is capped, and a mission that was cleared a
@@ -274,14 +274,14 @@ export function lockReason(profile, level) {
   if (isOpen(profile, level)) return null;
   const blocking = openThrough(profile);
   const mission = missionState(profile, blocking);
-  const outstanding = mission.objectives.find((item) => !item.done);
+  const outstanding = mission.objectives.find((item) => item.id === 'first-reads' && !item.done);
   return outstanding
     ? `${mission.waypoint.name} first — ${outstanding.title.toLowerCase()}.`
     : `Clear ${mission.waypoint.name} first.`;
 }
 
 /**
- * Raise the frontier if the current destination is now cleared.
+ * Raise the frontier when its required first-read flight goal is complete.
  *
  * Called after a take is folded in, so it sees the reading that finished the
  * job. Never lowers anything.
@@ -289,7 +289,7 @@ export function lockReason(profile, level) {
 export function raiseFrontier(profile, level) {
   const open = openThrough(profile);
   const at = level || profile?.level || 1;
-  if (at > open || !missionState(profile, at).cleared) return profile;
+  if (at > open || !missionState(profile, at).routeReady) return profile;
   const next = Math.min(Object.keys(MISSIONS).length, at + 1);
   return next > open ? { ...profile, unlockedLevel: next } : profile;
 }

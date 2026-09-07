@@ -20,10 +20,10 @@ export default function PathView({ profile, onPick }) {
   const progress = journeyProgress(profile);
   return (
     <div className="sr-path">
-      <h2 className="sr-view-title">Your next musical step</h2>
+      <h2 className="sr-view-title">Your star atlas</h2>
       <p className="sr-setup-lead">
         Ten levels, ten places. Drag to look around, scroll to travel outward, and choose
-        a body to practise there — any of them, any time.
+        an open destination to practise there. Locked destinations show what comes next.
       </p>
       <Suspense fallback={<div className="sr-orrery sr-orrery--loading" aria-hidden="true" />}>
         <SolarSystem profile={profile} onPick={onPick} />
@@ -51,13 +51,13 @@ export default function PathView({ profile, onPick }) {
             onClick={() => onPick(next?.id || current.id)}
           >
             {!next ? 'Find another piece'
-              : isOpen(profile, next.id) ? 'Set course' : 'Closed until this one is cleared'}
+              : isOpen(profile, next.id) ? 'Set course' : 'Three strong first reads to open'}
           </button>
         </section>
       </div>
       <details className="sr-path-explanation">
         <summary>How progress works</summary>
-        <p>Each destination has objectives, and the next one opens when they are done. Objectives are checked against first reads only — assisted practice, replays and Eclipse drills stay useful practice but do not count. A level is separately marked “Demonstrated” after three strong first reads with enough evidence in its focus skills. These are Prima Vista levels, not exam grades.</p>
+        <p>Three first reads scoring 88 or better open the next destination. Optional discoveries explore its musical skills without blocking travel. Reading objectives use independent first reads; Eclipse discoveries use their separate fluency record. A level is separately marked “Demonstrated” after three strong first reads with enough evidence in its focus skills. These are Prima Vista levels, not exam grades.</p>
         <p>If you already read music, do not start at the beginning: take the level check from Practice → “Recheck my level”. Three unseen pieces will place you, and the course opens to there.</p>
       </details>
       <details className="sr-path-all">
