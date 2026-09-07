@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { completePuzzle, loadAdventure, LOCATIONS, NOTE_NAMES, roomComplete, roomState, saveAdventure, travel, toggleCircuit, receiveTone, pianoRelaySolved } from '../core/adventure.js';
-import { now, playPianoNote, unlockAudio } from '../core/audio.js';
+import { completePuzzle, loadAdventure, LOCATIONS, roomComplete, roomState, saveAdventure, travel, pianoRelaySolved, readingLesson } from '../core/adventure.js';
+import RhythmLesson from './RhythmLesson.jsx';
 const AdventureScene = lazy(() => import('./AdventureScene.jsx'));
 
 function RoomDialog({ children, onClose, title, className = '' }) {
@@ -11,119 +11,84 @@ function RoomDialog({ children, onClose, title, className = '' }) {
   </dialog>;
 }
 
-export default function AdventureView({ practice, onPrepareMusic, registerResult, onTools, level }) {
+export default function AdventureView({ practice, onPrepareMusic, registerResult, onTools, level, midi }) {
   const [adventure, setAdventure] = useState(loadAdventure);
   const room = roomState(adventure);
   const location = LOCATIONS[adventure.current];
+  const lesson = readingLesson(level);
   const [view, setView] = useState({ id: 'room' });
-  const [switches, setSwitches] = useState([false, false, false]);
-  const [signal, setSignal] = useState([]);
   const [target, setTarget] = useState(null);
   const [menu, setMenu] = useState(false);
   const [intro, setIntro] = useState(true);
   const [terminal, setTerminal] = useState(false);
+  const [rhythm, setRhythm] = useState(false);
   const [fallback, setFallback] = useState(false);
   const [hint, setHint] = useState(false);
   const [notice, setNotice] = useState('');
   const [storageOk, setStorageOk] = useState(true);
   const [ending, setEnding] = useState(false);
-  const interactRef = useRef(null);
   const [acousticComplete, setAcousticComplete] = useState(false);
+  const interactRef = useRef(null);
   const move = (id) => { setView({ id }); setHint(false); setNotice(''); };
   const solve = useCallback((id) => setAdventure((current) => completePuzzle(current, id)), []);
   useEffect(() => { if (!saveAdventure(adventure)) window.setTimeout(() => setStorageOk(false), 0); }, [adventure]);
   useEffect(() => {
     registerResult((summary) => {
-      if (terminal && summary.unscored) { setAcousticComplete(true); return; }
+      if (terminal && summary.unscored) { setAcousticComplete(summary.fresh && !summary.assisted && summary.takeIndex === 1 && summary.curtain === 'off'); setNotice('Acoustic practice is unscored. Only an independent fresh reading can be self-confirmed; choose New music after a rehearsal.'); return; }
       if (!terminal || summary.valid === false || summary.assessmentEligible === false) return;
-      if (pianoRelaySolved(summary)) { solve('music'); setNotice('Transmission restored. The airlock is ready.'); }
-      else setNotice('The relay heard you. Reach 70 to restore the transmission; you can rehearse or slow down.');
+      if (pianoRelaySolved(summary)) { solve('music'); setNotice('Fresh reading complete. A new destination is ready.'); }
+      else setNotice(summary.fresh && !summary.assisted ? 'Keep the pulse and keep going. Practice the tricky part, then choose New music for your next first read.' : 'That was useful practice. Choose New music and read without a preview or guide keys to complete this location.');
     });
     return () => registerResult(null);
   }, [registerResult, solve, terminal]);
   useEffect(() => {
-    const onKey = (event) => { if (event.key === 'Escape' && !terminal && !intro && !ending) setMenu((open) => !open); };
+    const onKey = (event) => { if (event.key === 'Escape' && !terminal && !intro && !ending && !rhythm && !menu) setMenu(true); };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
-  }, [terminal, intro, ending]);
+  }, [terminal, intro, ending, rhythm, menu]);
   const openConsole = () => {
-    if (!room.signal) { setNotice('The piano has no signal. Restore power, then decode the receiver.'); return; }
+    if (!room.signal) { setNotice('First prepare with Lyra and read the one-note rhythm. Then bring those skills to the piano.'); return; }
     onPrepareMusic(); setAcousticComplete(false); setTerminal(true); setNotice('');
   };
   const interact = (id) => {
-    if (id.startsWith('power-')) {
-      if (room.power) { setNotice('Power is already stable. Check the receiver on the other side of the room.'); return; }
-      const index = Number(id.split('-')[1]);
-      const next = toggleCircuit(switches, index);
-      setSwitches(next); setView({ id: 'power' });
-      if (next.every((value, i) => value === location.power[i])) { solve('power'); setNotice('Power restored. The receiver is awake.'); }
-      else setNotice('The switches share circuits. Match the three upper indicators.');
-    } else if (id.startsWith('note-')) {
-      if (!room.power) { setNotice('The receiver needs power. Inspect the routing board first.'); return; }
-      if (room.signal) { setNotice('Signal decoded. The piano console is ready.'); return; }
-      const note = Number(id.split('-')[1]);
-      void unlockAudio().then(() => playPianoNote(now(), note, .55, .5)).catch(() => {});
-      const response = receiveTone(location.clue, signal, note);
-      const next = response.notes; setView({ id: 'signal' });
-      if (!next.length) { setSignal([]); setNotice('The receiver reset. Read the signature from left to right and try again.'); }
-      else if (response.matched) { setSignal(next); solve('signal'); setNotice('Signature recognized. The piano console is receiving.'); }
-      else { setSignal(next); setNotice(`Tone ${next.length} received.`); }
-    } else if (id === 'piano') { move('piano'); openConsole(); }
+    if (id === 'mentor') move('power');
+    else if (id === 'rhythm') { move('signal'); if (room.power) setRhythm(true); else setNotice('Meet Lyra at the guidance station before the rhythm study.'); }
+    else if (id === 'piano') { move('piano'); openConsole(); }
     else if (id === 'exit') {
       move('exit');
-      if (!roomComplete(adventure)) setNotice('The airlock is sealed. Restore power, decode the signal, and play the piano relay first.');
+      if (!roomComplete(adventure)) setNotice('Prepare a reading strategy, complete the rhythm study, then read a fresh piece to open the route.');
       else if (adventure.current === LOCATIONS.length - 1) setEnding(true);
-      else {
-        setAdventure(travel); setSwitches([false, false, false]); setSignal([]); setView({ id: 'room' }); setTarget(null); setIntro(true);
-      }
+      else { setAdventure(travel); setView({ id: 'room' }); setTarget(null); setIntro(true); }
     }
   };
   useEffect(() => { interactRef.current = interact; });
   const onInteract = useCallback((id) => interactRef.current?.(id), []);
   const onUnavailable = useCallback(() => setFallback(true), []);
   const active = view.id;
-  const status = !room.power ? 'Restore the room’s power' : !room.signal ? 'Decode the receiver signature' : !room.music ? 'Restore the piano transmission' : 'The airlock is open';
+  const status = !room.power ? 'Prepare with Lyra' : !room.signal ? 'Read the one-note rhythm' : !room.music ? 'Read a fresh piano piece' : 'Reading complete · next destination open';
   return <div className={`pv-adventure${terminal ? ' is-terminal' : ''}`}>
     <Suspense fallback={<div className="pv-world-loading">Entering {location.subtitle}…</div>}>
-      <AdventureScene location={location} room={room} switches={room.power ? location.power : switches}
-        onInteract={onInteract} onTarget={setTarget} view={view} paused={intro || menu || terminal || ending} onUnavailable={onUnavailable} />
+      <AdventureScene location={location} room={room} onInteract={onInteract} onTarget={setTarget} view={view} paused={intro || menu || terminal || ending || rhythm} onUnavailable={onUnavailable} />
     </Suspense>
     <div className="pv-world-shade" aria-hidden="true" />
-    <header className="pv-world-hud">
-      <div><span>PRIMA VISTA / {String(adventure.current + 1).padStart(2, '0')}</span><h1>{location.subtitle}</h1><p>{location.place} · {location.name}</p></div>
-      <button type="button" className="pv-hud-button" onClick={() => setMenu(true)} aria-label="Pause and open menu">Ⅱ <span>Menu</span></button>
-    </header>
+    <header className="pv-world-hud"><div><span>PRIMA VISTA / SIGHT-READING EXPEDITION</span><h1>{location.subtitle}</h1><p>{location.place} · Reading level {level}</p></div><button type="button" className="pv-hud-button" onClick={() => setMenu(true)} aria-label="Pause and open menu">Ⅱ <span>Menu</span></button></header>
     {!terminal && <>
-      <div className="pv-world-objective"><span className="pv-objective-line" />{status}<small>{Object.values(room).filter(Boolean).length}/3 systems restored</small></div>
+      <div className="pv-world-objective"><span className="pv-objective-line" />{status}<small>Location {adventure.current+1}/10 · {lesson.skill}</small><div className="pv-learning-steps">{[['power','Prepare'],['signal','Rhythm'],['music','First read']].map(([id,label])=><span key={id} className={room[id]?'is-complete':''}>{room[id]?'✓':'○'} {label}</span>)}</div></div>
       {!fallback && <div className={`pv-crosshair${target ? ' is-target' : ''}`} aria-hidden="true">{target ? '◉' : '+'}</div>}
-      {target && !intro && !menu && <button type="button" className="pv-interact" onClick={() => interact(target.id)}><kbd>E</kbd>{target.label}</button>}
-      {fallback && <div className="pv-world-fallback"><p>The station is in navigation mode on this device.</p><p>Use the station controls below to inspect and solve every system.</p></div>}
-      <div className="pv-world-bottom">
-        <div className="pv-world-notice" role="status">{notice || (active === 'room' ? 'Drag to look around. Walk with W A S D, or choose a station below.' : '')}</div>
-        {active === 'power' && <section className="pv-instrument" aria-label="Power routing controls"><div><small>POWER ROUTING</small><h2>{room.power ? 'Power stabilized' : 'Restore the circuit'}</h2><p>Match this pattern: {location.power.map((on, i) => <span className={`pv-lamp${on ? ' is-on' : ''}`} key={i} aria-label={`light ${i+1} ${on ? 'on' : 'off'}`}>{on ? '●' : '○'}</span>)}</p></div>
-          <div className="pv-instrument-controls">{switches.map((on, i) => <button type="button" key={i} disabled={room.power} aria-pressed={room.power ? location.power[i] : on} onClick={() => interact(`power-${i}`)}>{i + 1}<span>{(room.power ? location.power[i] : on) ? 'ON' : 'OFF'}</span></button>)}</div></section>}
-        {active === 'signal' && <section className="pv-instrument" aria-label="Signal receiver"><div><small>RECEIVER SIGNATURE</small><h2>{room.signal ? 'Signal recognized' : 'Play the inscription'}</h2><Signature notes={location.clue} hint={hint} /></div><div className="pv-instrument-controls pv-note-controls">{Object.entries(NOTE_NAMES).map(([note, name]) => <button type="button" key={note} disabled={!room.power || room.signal} onClick={() => interact(`note-${note}`)}>{name}</button>)}<p>{room.signal ? '3 / 3 tones received' : `${signal.length} / 3 tones received`}</p></div></section>}
-        {active === 'piano' && <section className="pv-instrument"><div><small>HARMONIC RELAY</small><h2>{room.music ? 'Transmission restored' : 'The room is waiting for a song'}</h2><p>{room.signal ? `Read the score at your level (${level}). Reach 70 to restore the relay. Rehearsal is welcome.` : 'The receiver must be online first.'}</p></div><button type="button" className="pv-world-primary" disabled={!room.signal} onClick={openConsole}>Use piano console →</button></section>}
-        {active === 'exit' && <section className="pv-instrument"><div><small>AIRLOCK CONTROL</small><h2>{roomComplete(adventure) ? 'You can leave now.' : 'Three systems. One way forward.'}</h2><p>{roomComplete(adventure) ? adventure.current === 9 ? 'Send the final signal home.' : `Next: ${LOCATIONS[adventure.current+1].subtitle}` : status}</p></div><button type="button" className="pv-world-primary" disabled={!roomComplete(adventure)} onClick={() => interact('exit')}>{adventure.current === 9 ? 'Send signal' : 'Leave this location'} →</button></section>}
-        {hint && active === 'power' && <p className="pv-world-hint">Switch 1 flips lights 1 and 2. Switch 2 flips lights 2 and 3. Switch 3 flips only light 3. Work from left to right.</p>}
-        {hint && active !== 'power' && active !== 'signal' && <p className="pv-world-hint">Restore the power board on the left, play the receiver’s three-note signature on the right, then use the piano in the centre.</p>}
-        <nav className="pv-station-nav" aria-label="Move to a station">
-          {[['room','Look around'],['power', room.power ? '✓ Power' : 'Power board'],['signal',room.signal ? '✓ Receiver' : 'Receiver'],['piano',room.music ? '✓ Piano' : 'Piano console'],['exit','Airlock']].map(([id,label]) => <button type="button" key={id} aria-current={active === id ? 'location' : undefined} onClick={() => move(id)}>{label}</button>)}
-          <button type="button" aria-pressed={hint} onClick={() => setHint(!hint)}>Hint</button>
-        </nav>
+      {target && !intro && !menu && !rhythm && <button type="button" className="pv-interact" onClick={() => interact(target.id)}><kbd>E</kbd>{target.label}</button>}
+      {fallback && <div className="pv-world-fallback"><p>Use the stations below to continue your reading expedition.</p></div>}
+      <div className="pv-world-bottom"><div className="pv-world-notice" role="status">{notice || (active==='room' ? 'Your next discovery begins with a little music.' : '')}</div>
+        {active === 'power' && <section className="pv-mentor-card" aria-label="Lyra’s reading guidance"><img src="/lyra.webp" alt="Lyra, your expedition guide"/><div><span className="pv-lesson-kicker">LYRA · YOUR READING GUIDE</span><h2>{lesson.title}</h2><p>{lesson.advice}</p><p className="pv-mentor-task">{lesson.task}</p><button type="button" className="pv-world-primary" onClick={()=>{solve('power');move('signal');}}>{room.power ? 'Continue to rhythm →' : lesson.ready}</button></div></section>}
+        {active === 'signal' && <section className="pv-instrument"><div><small>02 / RHYTHM READING</small><h2>{room.signal ? 'Your pulse is finding its way.' : 'Read the rhythm on one note'}</h2><p>{room.power ? 'Two bars. One pitch. Count through the longer notes and rests before adding the demands of a full score.' : 'Lyra has a short reading strategy for you first.'}</p></div><button type="button" className="pv-world-primary" disabled={!room.power} onClick={()=>setRhythm(true)}>{room.signal ? 'Practice rhythm again' : 'Begin rhythm study'} →</button></section>}
+        {active === 'piano' && <section className="pv-instrument"><div><small>03 / FRESH SIGHT-READING</small><h2>{room.music ? 'A new part of the sky is open.' : 'Bring the phrase to life'}</h2><p>{room.signal ? `Fresh music at reading level ${level}. Scan, find the pulse, and keep going. A fresh unassisted score of 70 opens the route.` : 'Prepare with Lyra and complete the one-note rhythm first.'}</p></div><button type="button" className="pv-world-primary" disabled={!room.signal} onClick={openConsole}>Read a fresh piece →</button></section>}
+        {active === 'exit' && <section className="pv-instrument"><div><small>YOUR NEXT DISCOVERY</small><h2>{roomComplete(adventure) ? 'Take your new confidence with you.' : 'The music opens the way.'}</h2><p>{roomComplete(adventure) ? adventure.current===9 ? 'Your expedition is complete. There is always more music to discover.' : `Next: ${LOCATIONS[adventure.current+1].subtitle}` : status}</p></div><button type="button" className="pv-world-primary" disabled={!roomComplete(adventure)} onClick={()=>interact('exit')}>{adventure.current===9 ? 'Complete expedition' : 'Travel onward'} →</button></section>}
+        {hint && <p className="pv-world-hint">{lesson.advice} Rehearsing is useful; a different, unseen piece is your next sight-reading check.</p>}
+        <nav className="pv-station-nav" aria-label="Move to a learning station">{[['room','Explore'],['power',room.power?'✓ Lyra':'Meet Lyra'],['signal',room.signal?'✓ Rhythm':'Rhythm'],['piano',room.music?'✓ First read':'Piano'],['exit','Next destination']].map(([id,label])=><button type="button" key={id} aria-current={active===id?'location':undefined} onClick={()=>move(id)}>{label}</button>)}<button type="button" aria-pressed={hint} onClick={()=>setHint(!hint)}>Reading tip</button></nav>
       </div>
     </>}
-    {intro && <RoomDialog title="Arrival" onClose={() => setIntro(false)} className="pv-arrival"><span>INCOMING TRANSMISSION · {location.place.toUpperCase()}</span><h2>{location.name}</h2><p>{location.story}</p><p className="pv-arrival-instruction">Inspect the room. Restore its three systems. The airlock opens when your work here is done.</p><button type="button" className="pv-world-primary" onClick={() => setIntro(false)}>Enter the room →</button></RoomDialog>}
-    {menu && <RoomDialog title="Expedition menu" onClose={() => setMenu(false)}><span>EXPEDITION PAUSED</span><h2>{location.subtitle}</h2><p>Your location progress is saved in this browser.</p>{!storageOk && <p>Saving is unavailable. Keep this tab open to retain this session.</p>}<div className="pv-pause-actions"><button type="button" onClick={() => setMenu(false)}>Resume exploring</button><button type="button" onClick={() => { setMenu(false); onTools('practice'); }}>Practice & piano settings</button><button type="button" onClick={() => { setMenu(false); onTools('progress'); }}>Reading progress</button><button type="button" onClick={() => { setMenu(false); onTools('custom'); }}>Build an exercise</button><button type="button" onClick={() => { setMenu(false); onTools('expedition'); }}>Musical expedition map</button></div><p className="pv-menu-help">Drag to look · W A S D to walk · arrows to turn and walk · E to interact. Station buttons work with touch and keyboard.</p></RoomDialog>}
-    {terminal && <div className="pv-console-overlay"><div className="pv-console-top"><span>HARMONIC RELAY / {location.place.toUpperCase()}</span><button type="button" onClick={() => setTerminal(false)}>Return to room ↗</button></div><p className="pv-console-purpose" role="status">{room.music ? 'Transmission restored. Return to the room and leave through the airlock.' : 'Play this score to restore the transmission. Reach 70; repeats and practice aids are welcome. First-read assessment stays separate.'}</p>{practice}{acousticComplete && !room.music && <section className="pv-acoustic-confirm"><p>Acoustic playing is not scored. You can confirm that you played the inscription to continue the story; this awards no reading score or level progress.</p><button type="button" className="pv-world-primary" onClick={() => solve('music')}>I played the score — restore the relay</button></section>}</div>}
-    {ending && <RoomDialog title="Expedition complete" onClose={() => setEnding(false)}><span>TRANSMISSION RECEIVED</span><h2>Someone is listening.</h2><p>Your music has crossed the entire system. Every room is awake again.</p><button type="button" className="pv-world-primary" onClick={() => { setEnding(false); onTools('progress'); }}>Open your reading journal →</button></RoomDialog>}
+    {intro && <RoomDialog title="Arrival" onClose={()=>setIntro(false)} className="pv-arrival pv-lyra-arrival"><img src="/lyra.webp" alt="Lyra"/><span>LYRA · {location.place.toUpperCase()}</span><h2>A new place.<br/>A clearer reading.</h2><p>“I’ll help you prepare, then we’ll find the pulse on one note. When you’re ready, your fresh piano reading will open the next part of our journey.”</p><p className="pv-arrival-instruction">Your focus: {lesson.skill.toLowerCase()}. Your music stays at a difficulty that fits you.</p><button type="button" className="pv-world-primary" onClick={()=>{setIntro(false);move('power');}}>Meet Lyra →</button></RoomDialog>}
+    {rhythm && <RoomDialog title="Rhythm reading" className="pv-rhythm-dialog" onClose={()=>setRhythm(false)}><RhythmLesson level={level} midi={midi} onComplete={()=>solve('signal')}/>{room.signal && <button type="button" className="pv-world-primary" onClick={()=>{setRhythm(false);move('piano');}}>Take that pulse to the piano →</button>}</RoomDialog>}
+    {menu && <RoomDialog title="Expedition menu" onClose={()=>setMenu(false)}><span>YOUR SIGHT-READING JOURNEY</span><h2>{location.subtitle}</h2><p>Reading level {level} · {lesson.skill}</p><p>Progress is saved in this browser.</p>{!storageOk&&<p>Saving is unavailable. Keep this tab open to retain this session.</p>}<div className="pv-pause-actions"><button type="button" onClick={()=>setMenu(false)}>Resume</button><button type="button" onClick={()=>{setMenu(false);onTools('practice');}}>Piano settings & open practice</button><button type="button" onClick={()=>{setMenu(false);onTools('progress');}}>My reading skills</button><button type="button" onClick={()=>{setMenu(false);onTools('custom');}}>Create a focused study</button><button type="button" onClick={()=>{setMenu(false);onTools('expedition');}}>Musical level map</button></div><p className="pv-menu-help">Drag to look · W A S D to walk · E to interact. Station buttons work with touch and keyboard.</p></RoomDialog>}
+    {terminal && <div className="pv-console-overlay"><div className="pv-console-top"><span>SIGHT-READING / {lesson.skill.toUpperCase()}</span><button type="button" onClick={()=>setTerminal(false)}>Return to room ↗</button></div><div className="pv-console-guide"><img src="/lyra.webp" alt=""/><p role="status">{room.music ? '“A new destination is open. Take a moment to notice what went well.”' : notice || '“Scan the music. Feel the pulse. Keep going. Rehearse if you need to, then choose New music for a fresh reading.”'}</p></div>{practice}{acousticComplete&&!room.music&&<section className="pv-acoustic-confirm"><p>Acoustic playing is not scored. Confirm an independent reading of this fresh piece to continue exploring. This records no measured score or level advancement.</p><button type="button" className="pv-world-primary" onClick={()=>solve('music')}>I read this fresh piece independently</button></section>}</div>}
+    {ending&&<RoomDialog title="Expedition complete" onClose={()=>setEnding(false)}><span>EXPEDITION COMPLETE</span><h2>The next discovery is in the music.</h2><p>You’ve practiced preparing, finding the pulse, and reading new music across ten locations. Keep developing your reading skills with fresh pieces.</p><button type="button" className="pv-world-primary" onClick={()=>{setEnding(false);onTools('progress');}}>See my reading skills →</button></RoomDialog>}
   </div>;
-}
-
-function Signature({ notes, hint }) {
-  const ys = {60: 65, 62: 61.5, 64: 58, 65: 54.5, 67: 51};
-  return <div className="pv-signature"><svg viewBox="0 0 230 105" role="img" aria-label={hint ? `Treble clef: ${notes.map(n=>NOTE_NAMES[n]).join(', ')}` : 'Treble-clef signature. Read the three notes from left to right, or use Hint for note names.'}>
-    {[30,37,44,51,58].map(y=><line key={y} x1="8" y1={y} x2="222" y2={y} stroke="currentColor" strokeWidth="1"/>)}
-    <text x="14" y="60" fontSize="48" fill="currentColor">𝄞</text>
-    {notes.map((note,i)=><g key={i}>{note===60 && <line x1={65+i*55} y1="65" x2={85+i*55} y2="65" stroke="currentColor"/>}<ellipse cx={75+i*55} cy={ys[note]} rx="7" ry="5" fill="currentColor" transform={`rotate(-15 ${75+i*55} ${ys[note]})`}/><line x1={81+i*55} y1={ys[note]} x2={81+i*55} y2={ys[note]-26} stroke="currentColor" strokeWidth="1.4"/>{hint && <text x={75+i*55} y="99" textAnchor="middle" fill="currentColor" fontSize="15">{NOTE_NAMES[note]}</text>}</g>)}
-  </svg></div>;
 }

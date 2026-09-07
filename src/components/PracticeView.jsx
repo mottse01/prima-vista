@@ -94,7 +94,7 @@ export default function PracticeView({
     if (unscoredRef.current) {
       setNoteStates({});
       setResult({ unscored: true, takeIndex: takeCountRef.current });
-      onUnscoredComplete?.();
+      onUnscoredComplete?.({ fresh: freshAtStartRef.current, assisted: assistedRef.current, takeIndex: takeCountRef.current, curtain: settings.curtain });
       setPhaseBoth('done');
       onPreview?.();
       return;

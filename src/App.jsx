@@ -225,7 +225,7 @@ export default function App() {
   }, [nextFromLevel, params]);
 
   const handleResult = useCallback(({ summary, elapsedSec, takeIndex, curtain, assisted, fresh }) => {
-    adventureResultRef.current?.(summary);
+    adventureResultRef.current?.({ ...summary, fresh, assisted, takeIndex, curtain });
     const eligible = eligibleFirstRead({ summary, takeIndex, curtain, assisted, fresh });
     setReceipt({ scoreId, level: params.level, eligible: eligible && !placement?.active,
       before: params.level ? missionState(profile, params.level) : null,
@@ -484,7 +484,7 @@ export default function App() {
             settings={settings}
             onSettings={practiceSettings}
             onResult={handleResult}
-            onUnscoredComplete={() => adventureResultRef.current?.({ unscored: true })}
+            onUnscoredComplete={(take) => adventureResultRef.current?.({ ...take, unscored: true })}
             onRegenerate={regenerate}
             onDifficultyChange={changeDifficulty}
             openLevel={openThrough(profile)}
@@ -561,9 +561,9 @@ export default function App() {
       </header>
 
       <main className="sr-main" id="practice-main">
-        {tab === 'adventure' && <AdventureView practice={practiceElement} level={profile.level}
+        {tab === 'adventure' && <AdventureView practice={practiceElement} level={profile.level} midi={midi}
           registerResult={registerAdventureResult} onTools={setTab}
-          onPrepareMusic={() => { nextFromLevel(profile.level); setTab('adventure'); setReceipt(null); setPlacement(null); setTransitActive(false); setSettings((s) => ({ ...s, curtain: 'off' })); }} />}
+          onPrepareMusic={() => { nextFromLevel(profile.level); setTab('adventure'); setReceipt(null); setPlacement(null); setTransitActive(false); setSettings((s) => ({ ...s, curtain: 'off', guideKeys: false })); }} />}
 
         {tab === 'expedition' && <ExpeditionView profile={profile}
           onLaunch={(id) => { if (!settings.onboardingComplete && !profile.totals.takes) setShowOnboarding(true); else changeDifficulty(id); }}

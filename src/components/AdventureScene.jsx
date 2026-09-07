@@ -1,13 +1,12 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { NOTE_NAMES } from '../core/adventure.js';
 
 // A real navigable room. Every highlighted object has a world-space hit target.
 // No continuous physics, model downloads, post-processing, or pointer lock.
-export default function AdventureScene({ location, room, switches, onInteract, onTarget, view, paused, onUnavailable }) {
+export default function AdventureScene({ location, room, onInteract, onTarget, view, paused, onUnavailable }) {
   const mount = useRef(null);
-  const live = useRef({ room, switches, onInteract, onTarget, view, paused, onUnavailable });
-  useEffect(() => { live.current = { room, switches, onInteract, onTarget, view, paused, onUnavailable }; });
+  const live = useRef({ room, onInteract, onTarget, view, paused, onUnavailable });
+  useEffect(() => { live.current = { room, onInteract, onTarget, view, paused, onUnavailable }; });
   useEffect(() => {
     const host = mount.current;
     delete host.dataset.rendered;
@@ -29,7 +28,7 @@ export default function AdventureScene({ location, room, switches, onInteract, o
     const geometry = [], materials = [], textures = [], targets = [], labels = [];
     const color = new THREE.Color(location.color);
     const material = (c, opts = {}) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: .66, metalness: .25, ...opts }); materials.push(m); return m; };
-    const steel = material('#33404b'), dark = material('#141e28'), trim = material('#77848a'), pale = material('#b2b7ad');
+    const steel = material('#465259'), dark = material('#101c24'), trim = material('#a1aba7'), pale = material('#dfdfcf');
     const warm = material('#ccaa6b', { emissive: '#ccaa6b', emissiveIntensity: .75 });
     const glow = material(location.color, { emissive: color, emissiveIntensity: 1.1 });
     function box(w, h, d, x, y, z, mat, parent = scene) {
@@ -46,13 +45,6 @@ export default function AdventureScene({ location, room, switches, onInteract, o
       ctx.strokeStyle = location.color; ctx.lineWidth = 5; ctx.strokeRect(20, 20, 984, 472);
       ctx.textAlign = 'center';
       lines.forEach((line, i) => { ctx.fillStyle = i === 0 ? location.color : '#eef4eb'; ctx.font = `${i === 0 ? 500 : 600} ${i === 0 ? 34 : 60}px sans-serif`; ctx.fillText(line, 512, 108 + i * 96); });
-      if (options.staff) {
-        ctx.strokeStyle = '#ecf2e9'; ctx.lineWidth = 3;
-        for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(190, 230 + i * 26); ctx.lineTo(850, 230 + i * 26); ctx.stroke(); }
-        ctx.font = '80px serif'; ctx.fillText('𝄞', 225, 329);
-        const positions = { 60: 360, 62: 347, 64: 334, 65: 321, 67: 308 };
-        location.clue.forEach((note, i) => { const nx = 370 + i * 175, ny = positions[note]; ctx.fillStyle = '#f0f5eb'; ctx.beginPath(); ctx.ellipse(nx, ny, 19, 13, -.2, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(nx + 16, ny - 80, 3, 80); if (note === 60) { ctx.fillRect(nx - 28, ny - 1, 56, 3); } });
-      }
       const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; textures.push(texture);
       const mat = new THREE.MeshBasicMaterial({ map: texture }); materials.push(mat);
       const g = new THREE.PlaneGeometry(width, height); geometry.push(g);
@@ -72,7 +64,7 @@ export default function AdventureScene({ location, room, switches, onInteract, o
       box(13.8, .1, .15, 0, 5.5, z, dark);
       box(2.6, .04, .13, -3.7, 5.38, z, glow); box(2.6, .04, .13, 3.7, 5.38, z, glow);
     }
-    for (let x = -6; x <= 6; x += 2) box(.024, .025, 17, x, .012, 0, trim);
+    for (let x = -6; x <= 6; x += 3) box(.024, .025, 17, x, .012, 0, trim);
     // Observation window and a softly lit world beyond it.
     box(15, 1.1, .35, 0, .5, -8, steel); box(15, .5, .4, 0, 5.55, -8, steel);
     for (let x = -7; x <= 7; x += 3.5) box(.16, 4.8, .4, x, 3, -8, trim);
@@ -80,32 +72,23 @@ export default function AdventureScene({ location, room, switches, onInteract, o
     const extMat = new THREE.MeshBasicMaterial({ map: exteriorTexture, color: location.type === 'garden' ? '#e7b79d' : '#cbd9ed' }); materials.push(extMat);
     const eg = new THREE.PlaneGeometry(48, 26); geometry.push(eg);
     const outside = new THREE.Mesh(eg, extMat); outside.position.set(0, 6, -26); scene.add(outside);
-    // Power routing board: three physical switches, three target indicators.
-    box(2.8, 1.5, .6, -4.3, 1.3, -2.7, dark);
-    textPanel(['POWER ROUTING', 'MATCH THE UPPER LIGHTS'], 2.8, 1.4, -4.3, 3.25, -2.71);
-    const switchMeshes = [], switchMats = [];
-    for (let i = 0; i < 3; i++) {
-      const x = -5.15 + i * .85;
-      const goalMat = material(location.power[i] ? location.color : '#22262b', { emissive: location.power[i] ? color : '#000000', emissiveIntensity: 1 });
-      box(.32, .18, .06, x, 2.08, -2.3, goalMat);
-      const sm = material('#614c32', { emissive: '#b16e2c', emissiveIntensity: .4 }); switchMats.push(sm);
-      target(box(.52, .36, .22, x, 1.55, -2.25, sm), `power-${i}`, `Power switch ${i + 1}`);
-      const lever = box(.08, .45, .09, x, 1.58, -2.04, pale); switchMeshes.push(lever); target(lever, `power-${i}`, `Power switch ${i + 1}`);
-    }
-    // Receiver clue is conventional notation printed on a physical screen.
-    box(2.8, 1.5, .65, 4.3, 1.25, -2.7, dark);
-    textPanel(['RECEIVER SIGNATURE'], 2.8, 1.4, 4.3, 3.25, -2.7, { staff: true });
-    const noteMeshes = [];
-    [60, 62, 64, 65, 67].forEach((note, i) => {
-      const x = 3.26 + i * .52;
-      const key = target(box(.42, .32, .28, x, 1.57, -2.18, pale), `note-${note}`, `Play ${NOTE_NAMES[note]}`); noteMeshes.push(key);
-      textPanel([NOTE_NAMES[note]], .4, .2, x, 1.22, -2.32);
-    });
+    // A guidance portrait and one-key rhythm desk frame the central piano.
+    box(2.6, .16, .85, -4.3, 1.05, -2.7, steel);
+    box(.35, 1, .55, -4.3, .5, -2.7, dark);
+    const portraitTexture = new THREE.TextureLoader().load('/lyra.webp'); portraitTexture.colorSpace = THREE.SRGBColorSpace; textures.push(portraitTexture);
+    const portraitMaterial = new THREE.MeshBasicMaterial({ map: portraitTexture }); materials.push(portraitMaterial);
+    const portraitGeometry = new THREE.PlaneGeometry(2.25, 2.25); geometry.push(portraitGeometry);
+    const portrait = new THREE.Mesh(portraitGeometry, portraitMaterial); portrait.position.set(-4.3,2.55,-2.65); scene.add(portrait); target(portrait,'mentor','Meet Lyra · reading guidance');
+    box(2.42,2.42,.12,-4.3,2.55,-2.74,trim);
+    target(textPanel(['LYRA', 'READING GUIDE'],2.25,.55,-4.3,1.08,-2.45),'mentor','Meet Lyra · reading guidance');
+    box(2.8,1.15,.65,4.3,.58,-2.7, dark);
+    target(textPanel(['RHYTHM READING','ONE NOTE. STEADY PULSE.'],2.8,1.4,4.3,2.8,-2.65),'rhythm','Read a one-note rhythm');
+    target(box(1.8,.1,.65,4.3,1.21,-2.3,pale),'rhythm','Begin rhythm study');
     // The piano console is an instrument in the room, with a real score on use.
     box(3.2, .24, 1.15, 0, 1.12, -3.8, steel);
     box(.24, 1.12, .8, -1.2, .56, -3.8, dark); box(.24, 1.12, .8, 1.2, .56, -3.8, dark);
     const console = target(box(2.7, .75, .15, 0, 1.85, -4.13, dark), 'piano', 'Use the piano console');
-    const screen = textPanel(['HARMONIC RELAY', 'PIANO CONSOLE'], 2.55, .7, 0, 1.85, -4.04); target(screen, 'piano', 'Use the piano console');
+    const screen = textPanel(['FRESH SIGHT-READING', 'PIANO STUDIO'], 2.55, .7, 0, 1.85, -4.04); target(screen, 'piano', 'Use the piano console');
     for (let i = 0; i < 21; i++) { target(box(.12, .07, .7, -1.3 + i * .13, 1.29, -3.55, pale), 'piano', 'Use the piano console'); if (![2,6].includes(i % 7)) box(.065, .11, .4, -1.24 + i * .13, 1.37, -3.75, dark); }
     // Rear airlock: actual sliding panels respond to all three repaired systems.
     box(15, 6, .3, 0, 2.8, 8.5, steel);
@@ -166,7 +149,6 @@ export default function AdventureScene({ location, room, switches, onInteract, o
         camera.position.z = THREE.MathUtils.clamp(camera.position.z + (-Math.cos(yaw)*forward - Math.sin(yaw)*side)*dt*3, -.5, 6.5);
       } else keys.clear();
       updateCamera();
-      for (let i = 0; i < 3; i++) { switchMats[i].color.set(state.switches[i] ? location.color : '#51422c'); switchMats[i].emissive.set(state.switches[i] ? location.color : '#22180c'); switchMeshes[i].rotation.x = state.switches[i] ? -.5 : .5; }
       light.intensity = state.room.power ? 160 : 65;
       receiver.rotation.z = state.room.signal ? .35 : 0;
       console.material.emissive.set(state.room.music ? location.color : '#000000');
@@ -180,7 +162,7 @@ export default function AdventureScene({ location, room, switches, onInteract, o
       else if (!host.dataset.rendered) { renderer.render(scene,camera); host.dataset.rendered = 'true'; }
     };
     frame = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(frame); resize.disconnect(); window.removeEventListener('keydown',keydown); window.removeEventListener('keyup',keyup); window.removeEventListener('blur',blur); geometry.forEach(g=>g.dispose()); materials.forEach(m=>m.dispose()); textures.forEach(t=>t.dispose()); renderer.dispose(); renderer.domElement.remove(); labels.length = 0; noteMeshes.length = 0; };
+    return () => { cancelAnimationFrame(frame); resize.disconnect(); window.removeEventListener('keydown',keydown); window.removeEventListener('keyup',keyup); window.removeEventListener('blur',blur); geometry.forEach(g=>g.dispose()); materials.forEach(m=>m.dispose()); textures.forEach(t=>t.dispose()); renderer.dispose(); renderer.domElement.remove(); labels.length = 0; };
   }, [location]);
   return <div className="pv-world-canvas" ref={mount} aria-label="Explorable space station. Drag to look. Use W A S D to walk, arrows to turn and walk, or the station controls." role="img" />;
 }
