@@ -566,6 +566,13 @@ export default function PracticeView({
     .filter(Boolean)
     .slice(0, 1);
   const prepItems = preparationItems(score);
+  // Looking at the page before playing is standard reading practice and was an
+  // opt-in button almost nobody would find. In the expedition it is simply how
+  // a passage is met: open, and untimed — a countdown is the opposite of the
+  // unhurried attention this is asking for. Practice mode keeps the timer for
+  // anyone who wants to drill against one.
+  const scanOpen = settings.preparationTips !== false && freshRead && !result
+    && (preparation.phase !== 'idle' || expedition);
   const sessionLabel = session?.remaining == null
     ? 'Open practice'
     : session.complete
@@ -842,7 +849,7 @@ export default function PracticeView({
           </span>
           <span>Focus: <strong>{focusLabels.length ? focusLabels.join(' · ') : 'keep a steady beat'}</strong></span>
         </div>
-        {settings.preparationTips !== false && freshRead && !result && preparation.phase === 'idle' && <button type="button" className="sr-btn sr-btn--ghost sr-prep-toggle" onClick={beginPreparation} disabled={busy}>30-second preparation</button>}
+        {settings.preparationTips !== false && freshRead && !result && preparation.phase === 'idle' && !expedition && <button type="button" className="sr-btn sr-btn--ghost sr-prep-toggle" onClick={beginPreparation} disabled={busy}>30-second preparation</button>}
       </section>
 
       </div>
@@ -857,24 +864,29 @@ export default function PracticeView({
         </ol>
       )}
 
-      {settings.preparationTips !== false && freshRead && !result && preparation.phase !== 'idle' && (
+      {scanOpen && (
         <section className={`sr-preparation is-${preparation.phase}`} aria-label="Silent preparation">
           <div className="sr-preparation-head">
             <div>
-              <strong>{preparation.phase === 'idle'
-                ? 'Notice the key, pulse and a repeating shape.'
-                : preparation.phase === 'ready'
-                  ? 'Your scan is complete.'
-                  : preparation.phase === 'active'
-                    ? `${preparation.remaining} seconds to notice the structure.`
-                    : 'Prepared for this first read.'}</strong>
+              <strong>{preparation.phase === 'ready'
+                ? 'Your scan is complete.'
+                : preparation.phase === 'active'
+                  ? `${preparation.remaining} seconds to notice the structure.`
+                  : preparation.phase === 'done'
+                    ? 'Prepared for this first read.'
+                    : expedition
+                      ? 'Nobody has heard this one. Look at it before you start.'
+                      : 'Notice the key, pulse and a repeating shape.'}</strong>
             </div>
             {preparation.phase === 'idle' && (
-              <button type="button" className="sr-btn sr-btn--small" onClick={beginPreparation}>Optional 30-second scan</button>
+              <button type="button" className="sr-btn sr-btn--small" onClick={beginPreparation}>Time me · 30 seconds</button>
             )}
           </div>
-          {preparation.phase !== 'idle' && (
-            <div className="sr-preparation-body">
+          {/* The section itself decides whether there is a scan; what is in it
+              does not need to ask again. This used to double-check the timed
+              phase, which left the untimed scan as a heading and nothing under
+              it. */}
+          <div className="sr-preparation-body">
               <div className="sr-preparation-grid">
                 {prepItems.map((item) => {
                   const checked = preparation.checks.includes(item.id);
@@ -898,8 +910,7 @@ export default function PracticeView({
                 </button>
                 <p>{pulseTap.message}</p>
               </div>
-            </div>
-          )}
+          </div>
         </section>
       )}
 

@@ -137,8 +137,36 @@ test('onboarding keeps age-neutral choices, dismiss control and optional real mu
   assert.doesNotMatch(html, /Provisional|Confident|date of birth|children.s mode/i);
 });
 
-test('practice exposes one difficulty slider, named actions and independent display preferences', () => {
+test('a passage is met by looking at it, and the expedition does not put a clock on that', () => {
+  // Looking at the page before playing is standard reading practice, and it
+  // was an opt-in button most readers would never find. In the expedition it
+  // is simply how a passage is met — open, and untimed, because a countdown is
+  // the opposite of the unhurried attention it asks for.
   const props = { score, settings: DEFAULT_SETTINGS, level: levelById(3), midi: {}, freshRead: true };
+  const html = render(Practice, { ...props, expedition: true });
+  assert.match(html, /aria-label="Silent preparation"/);
+  assert.match(html, /Nobody has heard this one/);
+  assert.doesNotMatch(html, /30-second preparation/, 'the offer is redundant once the scan is open');
+  // The timed version stays available for anyone who wants to drill against one.
+  assert.match(html, /Time me · 30 seconds/);
+
+  // Turning preparation tips off turns it off in both rooms.
+  const quiet = render(Practice, {
+    ...props, expedition: true, settings: { ...DEFAULT_SETTINGS, preparationTips: false },
+  });
+  assert.doesNotMatch(quiet, /aria-label="Silent preparation"/);
+
+  // And the piano room keeps it as an offer rather than an opening ritual.
+  const practice = render(Practice, { ...props, expedition: false });
+  assert.doesNotMatch(practice, /aria-label="Silent preparation"/);
+  assert.match(practice, /30-second preparation/);
+});
+
+test('practice exposes one difficulty slider, named actions and independent display preferences', () => {
+  const props = {
+    score, settings: DEFAULT_SETTINGS, level: levelById(3), midi: {}, freshRead: true,
+    expedition: false,
+  };
   const html = render(Practice, props);
   assert.equal((html.match(/aria-label="Difficulty level"/g) || []).length, 1);
   assert.ok(html.indexOf('aria-label="Difficulty level"') < html.indexOf('<summary>Settings</summary>'));
@@ -147,7 +175,11 @@ test('practice exposes one difficulty slider, named actions and independent disp
   // somewhere easy or stretch somewhere hard.
   assert.match(html, /type="range" min="1" max="10"/);
   assert.doesNotMatch(html, /course is open through level/);
-  for (const label of ['Launch flight', 'New music', 'Listen', 'Preparation tips', 'Comfort view', 'Eclipse', '2-minute practice']) assert.ok(html.includes(label), label);
+  // The piano room speaks plainly: no flights, no departures, no expedition.
+  for (const label of ['Start practice', 'New music', 'Listen', 'Preparation tips', 'Comfort view', 'Eclipse', '2-minute practice']) assert.ok(html.includes(label), label);
+  assert.doesNotMatch(html, /Launch flight|READY FOR DEPARTURE/);
+  // In the piano room the scan is an offer, timed for anyone who wants to
+  // drill against a clock.
   assert.match(html, /30-second preparation/);
   assert.doesNotMatch(render(Practice, { ...props, settings: { ...DEFAULT_SETTINGS, preparationTips: false } }), /class="sr-btn sr-btn--ghost sr-prep-toggle"/);
   assert.match(render(Practice, { ...props, level: null }), /Custom exercise/);

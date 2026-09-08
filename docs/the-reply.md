@@ -2,12 +2,10 @@
 
 The story the expedition tells, and why it is shaped the way it is.
 
-> **Status: design, not yet built.** The code today has a thinner framing — a
-> "sight-reading expedition" with a guide called Lyra and ten stations. Every
-> mechanic this document leans on already exists; none of the *naming* or the
-> narration does. The table under [Fiction to mechanics](#fiction-to-mechanics)
-> says exactly which is which, so nothing here should be read as a description
-> of current behaviour. Where this contradicts
+> **Status: partly built.** The premise, the ten beats, Lyra's voice and the
+> arrival are implemented — see [What is built](#what-is-built) for exactly
+> what, and what is still design. Every mechanic this document leans on already
+> existed before it was written. Where this contradicts
 > [`environmental-adventure.md`](./environmental-adventure.md) or
 > [`expedition-design.md`](./expedition-design.md), those describe what is
 > built and this describes where it is going.
@@ -196,6 +194,22 @@ making it a thing you can lose is what turns it into a chore.
 The line to hold: **a number may describe what happened, and may never pay you
 for it.** A score out of 100 after a reading is measurement, not a prize, and
 should stay.
+
+## What is built
+
+| | State |
+| --- | --- |
+| The ten beats — what is waiting at a place, and what it turns out they worked out | Built: `BEATS` in [`adventure.js`](../src/core/adventure.js) |
+| Arrival says what is here, and nothing about what to do about it | Built: [`AdventureView.jsx`](../src/components/AdventureView.jsx) |
+| Lyra says one sentence, selected by what the grader measured | Built: [`lyra.js`](../src/core/lyra.js) |
+| Whether a misreading fell inside the key | Built: `misreadInKey` in [`grader.js`](../src/core/grader.js) |
+| Meeting a passage by looking at it, untimed, before playing | Built: the scan opens by default in the expedition, [`PracticeView.jsx`](../src/components/PracticeView.jsx) |
+| The ending refuses to end, and hands over the practice room | Built: [`AdventureView.jsx`](../src/components/AdventureView.jsx) |
+| The station as a diorama rather than a first-person room | Design |
+| One idea per room, expressed as the thing you interact with | Design |
+| The traverse between destinations as the reward | Design |
+| A shelf of the ten passages you actually read | Design |
+| *Passage* and *The Reply* used throughout the interface | Design — the words appear in new copy only |
 
 ## Names
 

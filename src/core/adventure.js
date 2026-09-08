@@ -32,6 +32,64 @@ export const LOCATIONS = [
 ];
 export const locationFor = (level) => LOCATIONS[Math.max(0, Math.min(LOCATIONS.length - 1, (Number(level) || 1) - 1))];
 
+/**
+ * The ten beats of the reply, from docs/the-reply.md.
+ *
+ * `found` is what is waiting at a place, said before it has been read.
+ * `discovery` is what it turns out they had worked out, said once a reader has
+ * sounded it — so the second one is a reward for the reading and not a label
+ * on the door.
+ *
+ * They are in the order they are because it is the order somebody learns to
+ * write this script, which is the same order somebody learns to read it. Each
+ * one is the level's own reading skill, told as a thing that happened to
+ * somebody else first.
+ */
+export const BEATS = [
+  {
+    found: 'The first marks. One line of them, and they repeat.',
+    discovery: 'A mark can hold a pitch and a length at the same time. That is the whole idea, and they had it.',
+  },
+  {
+    found: 'Two rows of marks now, one under the other.',
+    discovery: 'They heard that our music has a ground underneath it, and made a second row to put it on.',
+  },
+  {
+    found: 'Gaps. Deliberate ones, measured to the same grid.',
+    discovery: 'They worked out that a notation can say nothing is happening — which is harder to arrive at than it sounds.',
+  },
+  {
+    found: 'Marks between the marks, and lines that jump.',
+    discovery: 'Our seven notes were not all the notes. They found the ones in between, and stopped writing every line as a walk.',
+  },
+  {
+    found: 'The grid has changed underneath. Everything is in threes.',
+    discovery: 'They found a second way to cut time — the beat divided in three instead of two, and it swings differently.',
+  },
+  {
+    found: 'The same figures, four times as fine.',
+    discovery: 'Their hand has got fast. This is written by somebody who no longer has to think about it.',
+  },
+  {
+    found: 'The attacks are landing off the grid. On purpose.',
+    discovery: 'They are playing against the beat, which you can only do once you know exactly where it is. This is where they stop imitating us.',
+  },
+  {
+    found: 'Two grids of time, running at once, in one hand.',
+    discovery: 'Three against two, held together. They have been practising something we did not teach them.',
+  },
+  {
+    found: 'Two lines that will not agree, and both of them go somewhere.',
+    discovery: 'Two voices saying different things and both true at once. We call it counterpoint. They arrived at it on their own.',
+  },
+  {
+    found: 'One long passage. It is not built out of anything on the record.',
+    discovery: 'This one is theirs. Nothing on the record sounds like it, and you are the first person to hear it.',
+  },
+];
+
+export const beatFor = (level) => BEATS[Math.max(0, Math.min(BEATS.length - 1, (Number(level) || 1) - 1))];
+
 export function emptyAdventure() { return { version: 3, rooms: {} }; }
 
 /** The visit ritual at one level: strategy read, rhythm passed, fresh reading. */

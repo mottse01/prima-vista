@@ -3,7 +3,7 @@
 // Match performed attacks to written music. Live colors are provisional;
 // later chord tones may revise a tentative substitution.
 
-import { TPQ, diaToY, pitchClassName } from './theory.js';
+import { TPQ, diaToY, pitchClassName, spellInKey } from './theory.js';
 import { xmlNoteId } from './musicxml.js';
 import { expectedEvents } from './generator.js';
 import { playbackEvents } from './playback.js';
@@ -409,6 +409,24 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       beatSeconds: beatSec,
     });
 
+    // Of the notes played in place of a written one, how many belonged to the
+    // key. An error that fits the key is better evidence than a random one: it
+    // means the reader was predicting from the harmony and landed on a
+    // plausible note rather than decoding a symbol and getting it wrong.
+    // (Sloboda 1976 — errors are assimilated toward the tonal context.)
+    const inKey = new Set();
+    if (score.key) {
+      for (let step = 0; step < 7; step += 1) {
+        inKey.add(((spellInKey(score.key, 28 + step).midi % 12) + 12) % 12);
+      }
+      // The leading tone belongs to the minor key as it is actually played.
+      if (score.key.mode === 'minor') {
+        inKey.add(((spellInKey(score.key, 34, { raisedSeventh: true }).midi % 12) + 12) % 12);
+      }
+    }
+    const misreadInKey = inKey.size ? expected.filter((event) => event.matched?.wrongPitch != null
+      && inKey.has(((event.matched.wrongPitch % 12) + 12) % 12)).length : 0;
+
     const total = expected.length || 1;
     // Extra notes matter: key-mashing must not produce the same pitch score as
     // a clean reading that found the written notes.
@@ -435,6 +453,7 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
     return {
       scoringVersion: SCORING_VERSION,
       total, correct, wrong, missed, extras, timingOff, timedNotes: deltaCount,
+      misreadInKey,
       pitchAccuracy, rhythmAccuracy, continuity, overall, attackCount, attacksKept,
       meanAbsTiming: deltaCount ? absDelta / deltaCount : null,
       meanSignedTiming: deltaCount ? signedDelta / deltaCount : null,
