@@ -519,7 +519,7 @@ export default function App() {
             onUnscoredComplete={(take) => adventureResultRef.current?.({ ...take, unscored: true })}
             onRegenerate={regenerate}
             onDifficultyChange={(levelId) => changeDifficulty(levelId, { alongRoute: false })}
-            expedition={mode.id === 'expedition'}
+            expedition={mode?.id !== 'practice'}
             level={level}
             midi={midi}
             onConnectMidi={handleConnectMidi}
