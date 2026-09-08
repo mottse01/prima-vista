@@ -2,11 +2,11 @@
 // beats, and the three rules that bind changes here — is docs/the-reply.md.
 // The rule most easily broken from this file is the first of them: the story
 // never gates the instrument. Practice mode must stay reachable and plain.
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { beatFor, completePuzzle, loadAdventure, LOCATIONS, locationFor, roomState, saveAdventure, pianoRelaySolved, readingLesson } from '../core/adventure.js';
 import { lyraOnHolding, lyraSpeaks } from '../core/lyra.js';
 import RhythmLesson from './RhythmLesson.jsx';
-const AdventureScene = lazy(() => import('./AdventureScene.jsx'));
+import StationScene from './StationScene.jsx';
 
 function RoomDialog({ children, onClose, title, className = '' }) {
   const ref = useRef(null);
@@ -34,12 +34,10 @@ export default function AdventureView({
   // where the reader has already chosen to be on the journey.
   const guided = level > 1;
   const [view, setView] = useState({ id: 'room' });
-  const [target, setTarget] = useState(null);
   const [menu, setMenu] = useState(false);
   const [intro, setIntro] = useState(true);
   const [terminal, setTerminal] = useState(false);
   const [rhythm, setRhythm] = useState(false);
-  const [fallback, setFallback] = useState(false);
   const [hint, setHint] = useState(false);
   const [notice, setNotice] = useState('');
   const [storageOk, setStorageOk] = useState(true);
@@ -72,7 +70,7 @@ export default function AdventureView({
   useEffect(() => {
     if (arrivedAt.current === level) return;
     arrivedAt.current = level;
-    setView({ id: 'room' }); setTarget(null); setNotice(''); setIntro(true);
+    setView({ id: 'room' }); setNotice(''); setIntro(true);
   }, [level]);
   const openConsole = () => {
     if (guided && !room.signal) { setNotice('First prepare with Lyra and read the one-note rhythm. Then bring those skills to the piano.'); return; }
@@ -94,7 +92,6 @@ export default function AdventureView({
   };
   useEffect(() => { interactRef.current = interact; });
   const onInteract = useCallback((id) => interactRef.current?.(id), []);
-  const onUnavailable = useCallback(() => setFallback(true), []);
   const active = view.id;
   // Three steps, three verbs, and the status line is always one instruction
   // about the next one. A reader arriving here is either ten years old or has
@@ -108,30 +105,27 @@ export default function AdventureView({
     : !room.signal ? 'Find the beat: tap the rhythm out on one note.'
       : !room.music ? 'Play it. Read the music once through, and keep going.'
         : routeOpen ? 'Done here. The next place is open.' : (routeReason || 'Read one more here.');
+  // Three bands, in this order, because the picture is a sixteen-by-nine panel
+  // now rather than a full-bleed scene: what this place is, the place itself,
+  // and what to do in it. Words over a drawn room are unreadable in a way that
+  // words over a nearly black 3D scene were not.
   return <div className={`pv-adventure${terminal ? ' is-terminal' : ''}`}>
-    {/* The room's own colours while its engine arrives, rather than a line of
-        text on black. The 3D chunk is already off the critical path — this is
-        about what the incomplete state looks like. */}
-    <Suspense fallback={
-      <div className="pv-world-loading" style={{ '--sky': location.sky, '--glow': location.color }}>
-        <span className="pv-world-loading-mark" aria-hidden="true" />
-        <p>Entering {location.subtitle}…</p>
-      </div>
-    }>
-      <AdventureScene location={location} room={room} onInteract={onInteract} onTarget={setTarget} view={view} paused={intro || menu || terminal || ending || rhythm} onUnavailable={onUnavailable} />
-    </Suspense>
-    <div className="pv-world-shade" aria-hidden="true" />
-    <header className="pv-world-hud"><div><span>PRIMA VISTA / SIGHT-READING EXPEDITION</span><h1>{location.subtitle}</h1><p>{location.place} · Reading level {level}</p></div><button type="button" className="pv-hud-button" onClick={() => setMenu(true)} aria-label="Pause and open menu">Ⅱ <span>Menu</span></button></header>
+    <header className="pv-world-hud">
+      <div><span>PRIMA VISTA / SIGHT-READING EXPEDITION</span><h1>{location.subtitle}</h1><p>{location.place} · Reading level {level}</p></div>
+      {!terminal && (
+        // At Luna only the reading is asked for, so only the reading is
+        // listed: three empty circles beside "play it whenever you are ready"
+        // reads as three things standing in the way of the piano.
+        <div className="pv-world-objective"><span className="pv-objective-line" />{status}<small>Place {level} of {LOCATIONS.length} · {lesson.skill}</small><ol className="pv-learning-steps" aria-label={guided ? 'The three steps here' : 'What this place asks for'}>{(guided ? STEPS : STEPS.slice(2)).map(([id,label])=><li key={id} className={room[id]?'is-complete':''}>{room[id]?'✓':'○'} {label}</li>)}</ol></div>
+      )}
+      <button type="button" className="pv-hud-button" onClick={() => setMenu(true)} aria-label="Pause and open menu">Ⅱ <span>Menu</span></button>
+    </header>
+    <StationScene
+      location={location} level={level} room={room}
+      onInteract={onInteract}
+      active={active}
+    />
     {!terminal && <>
-      {/* At Luna only the reading is asked for, so only the reading is listed:
-          three empty circles beside "play it whenever you are ready" reads as
-          three things standing in the way of the piano. */}
-      <div className="pv-world-objective"><span className="pv-objective-line" />{status}<small>Place {level} of {LOCATIONS.length} · {lesson.skill}</small><ol className="pv-learning-steps" aria-label={guided ? 'The three steps here' : 'What this place asks for'}>{(guided ? STEPS : STEPS.slice(2)).map(([id,label])=><li key={id} className={room[id]?'is-complete':''}>{room[id]?'✓':'○'} {label}</li>)}</ol></div>
-      {/* No crosshair and no key prompt: you tap the thing you want. What is
-          left is a caption, so that on a desktop the pointer says what it is
-          hovering before it is clicked. */}
-      {target && !intro && !menu && !rhythm && <p className="pv-interact" aria-hidden="true">{target.label}</p>}
-      {fallback && <div className="pv-world-fallback"><p>Use the stations below to continue your reading expedition.</p></div>}
       <div className="pv-world-bottom"><div className="pv-world-notice" role="status">{notice || (active==='room' ? 'Tap anything in the room to use it, or use the buttons below.' : '')}</div>
         {active === 'power' && <section className="pv-mentor-card" aria-label="Lyra’s reading guidance"><img src="/lyra.webp" alt="Lyra, your expedition guide"/><div><span className="pv-lesson-kicker">LYRA · YOUR READING GUIDE</span><h2>{lesson.title}</h2><p>{lesson.advice}</p><p className="pv-mentor-task">{lesson.task}</p><button type="button" className="pv-world-primary" onClick={()=>{solve('power');move('signal');}}>{room.power ? 'Continue to rhythm →' : lesson.ready}</button></div></section>}
         {active === 'signal' && <section className="pv-instrument"><div><small>STEP 2 · FIND THE BEAT</small><h2>{room.signal ? 'You have the beat.' : 'Tap the rhythm on one note'}</h2><p>{room.power || !guided ? 'Two bars, one note. Getting the beat on its own first means there is one less thing to work out when the notes arrive.' : 'Lyra has something to show you first.'}</p></div><button type="button" className="pv-world-primary" disabled={guided && !room.power} onClick={()=>setRhythm(true)}>{room.signal ? 'Practice rhythm again' : 'Begin rhythm study'} →</button></section>}

@@ -66,6 +66,8 @@ src/
     pacing.js      reading tempo calibrated inside each level's own band
     adaptive.js    skill ratings, promotion, weakness-targeted parameters
     curtain.js     look-ahead curtain modes and their tick offsets
+    pixelart.js    the 320x180 palette, brush and layout the world is drawn with
+    frames.js      an eight-frames-a-second clock, paused when nothing is watching
     levels.js      the 10-level graded path and exam-board crosswalk
     audio.js       live WebAudio plus locally rendered media reference playback
     midi.js        Web MIDI input

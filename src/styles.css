@@ -2019,125 +2019,22 @@ html.sr-stand-mode .sr-studio-header .sr-transport, html.sr-practice-running .sr
 
 /* ---------- the orrery ---------- */
 
-.sr-orrery {
-  position: relative; margin: 18px 0 14px;
-  border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
-  background:
-    radial-gradient(120% 90% at 50% -20%, rgba(95,201,184,.10), transparent 62%),
-    linear-gradient(180deg, #060a15, #04070f 70%);
-}
-.sr-orrery--loading { height: clamp(380px, 52vh, 620px); }
-.sr-orrery-stage {
-  position: relative;
-  height: clamp(380px, 52vh, 620px);
-  touch-action: none;
-  cursor: grab;
-}
-.sr-orrery-stage:active { cursor: grabbing; }
-.sr-orrery-canvas { display: block; width: 100%; height: 100%; }
 
-.sr-orrery-label {
-  position: absolute; top: 0; left: 0; z-index: 2;
-  display: flex; align-items: baseline; gap: 7px;
-  margin: 0; padding: 4px 9px 4px 7px;
-  border: 1px solid transparent; border-radius: 999px;
-  background: rgba(8, 14, 26, .58);
-  color: var(--ink-soft); font: inherit; font-size: 12px; line-height: 1.2;
-  white-space: nowrap; cursor: pointer;
-  backdrop-filter: blur(3px);
-  transition: opacity .25s ease, color .2s ease, border-color .2s ease, background .2s ease;
-  /* The projected point is the body; the pill hangs just below and right of it. */
-  translate: 14px 10px;
-}
-.sr-orrery-label.is-hidden { opacity: 0; pointer-events: none; }
-.sr-orrery-label:hover, .sr-orrery-label:focus-visible {
-  color: var(--ink); border-color: var(--accent); background: rgba(10, 26, 30, .82);
-}
-.sr-orrery-label:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.sr-orrery-name { font-weight: 600; letter-spacing: .01em; }
-.sr-orrery-level {
-  font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--ink-faint);
-}
-.sr-orrery-dot {
-  width: 6px; height: 6px; border-radius: 50%; align-self: center;
-  background: var(--ink-faint); box-shadow: 0 0 0 3px rgba(125, 141, 166, .14);
-}
-.sr-orrery-label.is-reached .sr-orrery-dot {
-  background: var(--starlight); box-shadow: 0 0 0 3px rgba(255, 215, 154, .18);
-}
-.sr-orrery-label.is-current {
-  color: var(--ink); border-color: var(--accent); background: rgba(10, 32, 34, .86);
-}
-.sr-orrery-label.is-current .sr-orrery-dot {
-  background: var(--accent); box-shadow: 0 0 0 3px rgba(95, 201, 184, .24);
-}
-.sr-orrery-label.is-current .sr-orrery-level { color: var(--accent); }
 
-.sr-orrery-constellation {
-  position: absolute; top: 0; left: 0; z-index: 2;
-  display: flex; flex-direction: column; gap: 1px;
-  padding: 5px 10px; border-radius: 10px;
-  background: rgba(8, 14, 26, .5); backdrop-filter: blur(3px);
-  translate: -50% -50%;
-  pointer-events: none;
-  transition: opacity .35s ease;
-}
-.sr-orrery-constellation.is-hidden { opacity: 0; }
-.sr-orrery-constellation b {
-  font-family: Georgia, 'Times New Roman', serif; font-weight: 500;
-  font-size: 15px; color: var(--ink); letter-spacing: .01em;
-}
-.sr-orrery-constellation em {
-  font-style: normal; font-size: 10px; font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase; color: var(--starlight);
-}
 
-.sr-orrery-hud {
-  display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: flex-end;
-  justify-content: space-between;
-  padding: 16px 20px 18px; border-top: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(10,16,30,.4), rgba(10,16,30,.72));
-}
-.sr-orrery-readout { min-width: 0; flex: 1 1 320px; }
-.sr-orrery-readout strong {
-  display: block; margin-top: 3px;
-  font-family: Georgia, 'Times New Roman', serif; font-weight: 500; font-size: 24px;
-  letter-spacing: -.012em; color: var(--ink);
-}
-.sr-orrery-readout p { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-soft); max-width: 56ch; }
-.sr-orrery-distance {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px !important; color: var(--ink-faint) !important; letter-spacing: .01em;
-}
 .sr-soundreport {
   margin: 10px 0 0; padding: 10px 13px;
   border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0;
   background: var(--accent-soft); font-size: 13px; color: var(--ink-soft); max-width: 70ch;
 }
 
-.sr-orrery-objectives {
-  margin-top: 6px !important; font-size: 12.5px !important; color: var(--ink-soft) !important;
-}
 
-.sr-orrery-label.is-locked { opacity: .55; }
-.sr-orrery-label.is-locked .sr-orrery-dot {
-  background: transparent; border: 1px solid var(--line-strong); box-shadow: none;
-}
-.sr-orrery-label.is-locked .sr-orrery-name { color: var(--ink-faint); }
-.sr-orrery-flag.is-locked { background: rgba(255,255,255,.06); color: var(--ink-faint); }
 .sr-level.is-locked { opacity: .5; cursor: not-allowed; }
 .sr-level.is-locked .sr-level-num { background: transparent; border: 1px dashed var(--line-strong); color: var(--ink-faint); }
 .sr-difficulty-lock {
   grid-column: 1 / -1; margin: 6px 0 0; font-size: 11.5px; color: var(--ink-faint);
 }
 
-.sr-orrery-flag {
-  margin-left: 8px; padding: 1px 6px; border-radius: 999px;
-  background: rgba(255, 215, 154, .14); color: var(--starlight);
-  font-style: normal; font-size: 9.5px; letter-spacing: .1em;
-}
-.sr-orrery-travel { margin-top: 10px; }
 .pv-launch-secondary {
   display: inline-block; margin-top: 10px; padding: 0; border: 0; background: none;
   font: inherit; font-size: 13px; color: var(--accent); cursor: pointer;
@@ -2148,22 +2045,11 @@ html.sr-stand-mode .sr-studio-header .sr-transport, html.sr-practice-running .sr
 .pv-route-objectives li.is-done { color: var(--ink-soft); }
 .pv-route-objectives em { font-style: normal; opacity: .72; }
 
-.sr-orrery-zoom { display: flex; align-items: center; gap: 10px; }
-.sr-orrery-zoom span {
-  font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase;
-  color: var(--ink-faint); white-space: nowrap;
-}
-.sr-orrery-zoom input { width: clamp(120px, 22vw, 200px); accent-color: var(--accent); }
-.sr-orrery-fallback { margin: 16px 0; }
 
 .sr-journey-line { margin: 0 0 20px; font-size: 13.5px; color: var(--ink-faint); }
 .sr-journey-line strong { color: var(--ink); font-weight: 600; }
 
-@media (prefers-reduced-motion: reduce) {
-  .sr-orrery-label { transition: none; }
-}
-
-/* Expedition shell: geometric navigation, quiet instruments, cinematic space. */
+/* Expedition shell: a drawn room between a title band and a row of verbs. */
 :root { --bg: #070b13; --panel: #111b2b; --panel-raised: #172438; --accent: #86e1cf; --accent-strong: #b0f8e5; --line: #29384c; }
 .sr-app { max-width: 1480px; padding-inline: clamp(16px, 3.2vw, 52px); }
 .sr-header { padding-block: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }

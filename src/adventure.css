@@ -2,9 +2,16 @@
 .sr-app.is-adventure { max-width: none; padding: 0; min-height: 100dvh; }
 .is-adventure > .sr-header, .is-adventure > .sr-footer, .is-adventure > .sr-starfield { display: none !important; }
 .is-adventure .sr-main { margin: 0; padding: 0; max-width: none; }
-.pv-adventure { position: fixed; inset: 0; overflow: hidden; background: #0a1420; color: #edf4ee; font-family: 'Avenir Next', Avenir, system-ui, sans-serif; }
-.pv-world-canvas, .pv-world-shade, .pv-world-loading { position: absolute; inset: 0; }
-.pv-world-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+/* Three bands: what this place is, the place itself, and what to do in it.
+   The picture used to be a full-bleed 3D scene with text floating over it,
+   which was legible only because the scene was nearly black. A drawn room is
+   not, so the words moved off it. */
+.pv-adventure {
+  position: fixed; inset: 0; overflow: hidden;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #060a12; color: #edf4ee; font-family: 'Avenir Next', Avenir, system-ui, sans-serif;
+}
+.pv-world-shade { display: none; }
 /* Enough shade for the type to read, and no more: the station furniture sits
    in the middle band and the room loses its shape if that is dimmed too. */
 .pv-world-shade { pointer-events: none; background: linear-gradient(#07101a66, transparent 22%, transparent 62%, #07101ad9); }
@@ -23,16 +30,14 @@
 }
 @keyframes pv-arrive { 0%, 100% { opacity: .45; transform: scale(.94); } 50% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .pv-world-loading-mark { animation: none; } }
-.pv-world-hud { position: absolute; top: max(24px, env(safe-area-inset-top)); left: clamp(18px, 3vw, 48px); right: clamp(18px, 3vw, 48px); display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; pointer-events: none; }
+.pv-world-hud { position: relative; z-index: 2; flex-wrap: wrap; padding: max(16px, env(safe-area-inset-top)) clamp(18px, 3vw, 48px) 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; background: #08111c; border-bottom: 1px solid #1b2b3a; }
 .pv-world-hud span, .pv-world-objective small { font-size: 12px; letter-spacing: .16em; font-weight: 500; }
 .pv-world-hud h1 { margin: 8px 0 4px; font-size: clamp(20px, 2.5vw, 32px); font-weight: 450; letter-spacing: -.025em; text-shadow: 0 2px 10px #0009; }
 .pv-world-hud p { font-size: 14px; margin: 0; color: #bbccc9; }
 .pv-hud-button { pointer-events: auto; background: #101c2666; color: #e7f2e9; border: 1px solid #b3d4cb44; border-radius: 50px; padding: 12px 20px; min-height: 44px; font: inherit; cursor: pointer; display: flex; gap: 12px; align-items: center; }
-.pv-world-objective { position: absolute; right: clamp(18px, 3vw, 48px); top: 117px; font-size: 14px; text-align: right; text-shadow: 0 1px 8px black; }.pv-world-objective small { display: block; color: #c0d4cc; font-size: 12px; letter-spacing: .04em; margin-top: 8px; }.pv-objective-line { width: 22px; height: 2px; display: inline-block; vertical-align: middle; background: #b2e0ce; margin-right: 10px; }
-/* A caption for whatever the pointer is over. It is not a control — the thing
-   itself is the control — so it never takes the pointer. */
-.pv-interact { position: absolute; top: calc(50% + 96px); left: 50%; transform: translateX(-50%); margin: 0; border-radius: 999px; background: #10262cdd; padding: 7px 15px; color: #e2f4e9; font: inherit; font-size: 14px; white-space: nowrap; pointer-events: none; }
-.pv-world-bottom { position: absolute; bottom: max(20px, env(safe-area-inset-bottom)); left: clamp(16px, 3vw, 48px); right: clamp(16px, 3vw, 48px); display: flex; align-items: center; flex-direction: column; gap: 14px; pointer-events: none; }
+/* Sits inside the header band with the title, so it never covers the room. */
+.pv-world-objective { margin-left: auto; max-width: min(46ch, 50%); font-size: 14px; text-align: right; }.pv-world-objective small { display: block; color: #c0d4cc; font-size: 12px; letter-spacing: .04em; margin-top: 8px; }.pv-objective-line { width: 22px; height: 2px; display: inline-block; vertical-align: middle; background: #b2e0ce; margin-right: 10px; }
+.pv-world-bottom { position: relative; z-index: 2; padding: 12px clamp(16px, 3vw, 48px) max(16px, env(safe-area-inset-bottom)); display: flex; align-items: center; flex-direction: column; gap: 12px; background: #08111c; border-top: 1px solid #1b2b3a; }
 .pv-world-bottom button, .pv-instrument { pointer-events: auto; }.pv-world-notice { max-width: 750px; color: #e5f0e8; text-shadow: 0 2px 8px black; font-size: 15px; line-height: 1.5; text-align: center; min-height: 24px; }
 .pv-station-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 7px; background: #101d26bd; border: 1px solid #adc6c12e; border-radius: 12px; backdrop-filter: blur(12px); }.pv-station-nav button { font: inherit; font-size: 14px; min-height: 44px; padding: 10px 18px; color: #c6d7d2; border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; }.pv-station-nav button[aria-current], .pv-station-nav button:hover { color: #edfff6; border-color: #c0e6d04d; background: #c0e6d015; }
 .pv-instrument { display: flex; align-items: center; justify-content: space-between; gap: 30px; width: min(760px, 100%); padding: 18px 24px; border: 1px solid #86b9ab70; border-radius: 10px; background: #102229f2; box-shadow: 0 16px 60px #0005; }.pv-instrument small { font-size: 12px; letter-spacing: .18em; color: #9bbfb1; }.pv-instrument h2 { font-size: 20px; font-weight: 450; margin: 5px 0; }.pv-instrument p { font-size: 14px; line-height: 1.5; color: #c1d7ca; margin: 4px 0; max-width: 420px; }
@@ -42,14 +47,14 @@
 .pv-room-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow-y: auto; box-sizing: border-box; color: #edf4e9; background: #0e2029f5; border: 1px solid #a4c8bb70; border-radius: 12px; padding: 36px; box-shadow: 0 30px 90px #000a; }.pv-room-dialog::backdrop { background: #07101c66; backdrop-filter: blur(3px); }.pv-room-dialog > span { display: block; font-size: 12px; letter-spacing: .15em; color: #acd0bb; padding-right: 28px; }.pv-room-dialog h2 { font-size: 36px; line-height: 1.15; font-weight: 450; letter-spacing: -.035em; margin: 20px 0; }.pv-room-dialog p { font-size: 16px; line-height: 1.8; color: #c8d8ce; }.pv-room-dialog .pv-arrival-instruction { font-size: 14px; color: #a7c0b8; }.pv-room-dialog .pv-world-primary { width: 100%; margin-top: 14px; }.pv-room-close { position: absolute; top: 12px; right: 12px; border: 0; background: none; font-size: 24px; min-width: 44px; min-height: 44px; color: #d8eadc; cursor: pointer; }.pv-pause-actions { display: grid; gap: 8px; }.pv-pause-actions button { padding: 14px; color: #e1efe1; background: #bbd8c410; border: 1px solid #bbd8c440; border-radius: 6px; font: inherit; text-align: left; cursor: pointer; }.pv-menu-help { font-size: 14px !important; }
 .pv-console-overlay { position: absolute; inset: 0; z-index: 10; background: #0d1821f5; overflow: auto; padding: 24px max(16px, calc((100vw - 1200px)/2)) 40px; }.pv-console-top { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 16px; }.pv-console-top span { font: 12px ui-monospace, monospace; letter-spacing: .12em; color: #b3c9c2; }.pv-console-top button { min-height: 44px; padding: 10px 15px; border: 1px solid #86b8a7; background: #142c2b; border-radius: 5px; color: #d8eee0; font: inherit; cursor: pointer; }.pv-console-purpose { font-size: 15px; line-height: 1.6; color: #c0d8ca; margin: 0 0 20px; }.pv-console-overlay .pv-debrief, .pv-console-overlay .sr-flowsteps, .pv-console-overlay .pv-flight-track, .pv-console-overlay .sr-quick-level, .pv-console-overlay .sr-daily-plan { display: none; }.pv-console-overlay .sr-practice { max-width: none; }.pv-console-overlay .sr-practice-dock { justify-content: space-between; }.pv-world-fallback { position: absolute; top: 35%; left: 10%; right: 10%; color: #d1e2d7; text-align: center; }
 .pv-adventure button:focus-visible { outline: 3px solid #d0f8d3; outline-offset: 3px; }
-@media(max-width:700px) { .pv-world-hud { top: 16px; }.pv-world-hud h1 { font-size: 21px; }.pv-world-hud > div { max-width: 75%; }.pv-hud-button { padding: 10px 14px; }.pv-hud-button span { display: none; }.pv-world-objective { top: 114px; left: 18px; right: auto; text-align: left; font-size: 13px; }.pv-world-bottom { bottom: max(12px, env(safe-area-inset-bottom)); gap: 8px; }.pv-station-nav { padding: 4px; gap: 0; width: 100%; }.pv-station-nav button { padding: 8px 10px; font-size: 13px; flex: 1 1 30%; }.pv-instrument { padding: 14px; gap: 10px; flex-wrap: wrap; }.pv-instrument h2 { font-size: 18px; }.pv-instrument p { font-size: 14px; }.pv-instrument-controls { margin-left: auto; }.pv-signature { width: 170px; height: 80px; }.pv-instrument-controls button { width: 44px; height: 48px; }.pv-note-controls button { width: 38px; }.pv-world-notice { font-size: 13px; }.pv-room-dialog { padding: 28px 24px; }.pv-room-dialog h2 { font-size: 30px; }.pv-console-top { flex-wrap: wrap; gap: 8px; }.pv-console-overlay { padding-top: 14px; }.pv-console-overlay .sr-practice-dock { flex-wrap: wrap; }.pv-interact { top: auto; bottom: 46%; font-size: 13px; } }
-@media(max-height:560px) and (orientation:landscape) { .pv-world-hud h1 { font-size: 20px; }.pv-world-hud p, .pv-world-objective small { display: none; }.pv-world-objective { top: 88px; }.pv-world-bottom { gap: 5px; bottom: 8px; }.pv-instrument { padding: 9px 16px; }.pv-instrument h2 { font-size: 17px; }.pv-signature { height: 62px; }.pv-station-nav button { padding-block: 7px; min-height: 44px; }.pv-interact { top: 38%; }.pv-world-notice { font-size: 13px; } }
+@media(max-width:700px) { .pv-world-hud { top: 16px; }.pv-world-hud h1 { font-size: 21px; }.pv-world-hud > div { max-width: 75%; }.pv-hud-button { padding: 10px 14px; }.pv-hud-button span { display: none; }.pv-world-objective { max-width: 100%; text-align: left; font-size: 13px; }.pv-learning-steps { justify-content: flex-start; }.pv-world-bottom { bottom: max(12px, env(safe-area-inset-bottom)); gap: 8px; }.pv-station-nav { padding: 4px; gap: 0; width: 100%; }.pv-station-nav button { padding: 8px 10px; font-size: 13px; flex: 1 1 30%; }.pv-instrument { padding: 14px; gap: 10px; flex-wrap: wrap; }.pv-instrument h2 { font-size: 18px; }.pv-instrument p { font-size: 14px; }.pv-instrument-controls { margin-left: auto; }.pv-signature { width: 170px; height: 80px; }.pv-instrument-controls button { width: 44px; height: 48px; }.pv-note-controls button { width: 38px; }.pv-world-notice { font-size: 13px; }.pv-room-dialog { padding: 28px 24px; }.pv-room-dialog h2 { font-size: 30px; }.pv-console-top { flex-wrap: wrap; gap: 8px; }.pv-console-overlay { padding-top: 14px; }.pv-console-overlay .sr-practice-dock { flex-wrap: wrap; }}
+@media(max-height:560px) and (orientation:landscape) { .pv-world-hud h1 { font-size: 20px; }.pv-world-hud p, .pv-world-objective small { display: none; }.pv-world-bottom { gap: 5px; }.pv-instrument { padding: 9px 16px; }.pv-instrument h2 { font-size: 17px; }.pv-signature { height: 62px; }.pv-station-nav button { padding-block: 7px; min-height: 44px; }.pv-world-notice { font-size: 13px; } }
 .pv-acoustic-confirm { padding: 20px; margin-top: 20px; border: 1px solid #8eb5a5; border-radius: 8px; background: #142c2b; }.pv-acoustic-confirm p { font-size: 15px; line-height: 1.6; color: #c4d7cd; }
 html.sr-practice-running .pv-console-purpose { display: none; }
 @media (prefers-reduced-motion: reduce) { .pv-adventure *, .pv-adventure *::before, .pv-adventure *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
 /* Learning is the focal point; the room offers space around it. */
 .pv-lesson-kicker { font-size: 12px; letter-spacing: .16em; color: #a7cfc1; }
-.pv-learning-steps { display: flex; gap: 16px; margin: 14px 0 0; padding: 0; list-style: none; font-size: 13px; color: #a0bcb5; }.pv-learning-steps .is-complete { color: #d0f6dd; }
+.pv-learning-steps { display: flex; justify-content: flex-end; gap: 16px; margin: 14px 0 0; padding: 0; list-style: none; font-size: 13px; color: #a0bcb5; }.pv-learning-steps .is-complete { color: #d0f6dd; }
 .pv-mentor-card { pointer-events: auto; display: grid; grid-template-columns: 185px 1fr; gap: 26px; max-width: 840px; background: #10232beb; border: 1px solid #b5d8c645; border-radius: 16px; padding: 22px; box-shadow: 0 24px 80px #0006; backdrop-filter: blur(16px); }
 .pv-mentor-card > img { width: 185px; height: 100%; max-height: 300px; object-fit: cover; border-radius: 10px; object-position: center; }.pv-mentor-card h2 { font-size: 25px; line-height: 1.25; font-weight: 450; letter-spacing: -.025em; margin: 10px 0; }.pv-mentor-card p { font-size: 16px; line-height: 1.65; color: #d8e3db; margin: 8px 0 12px; }.pv-mentor-card .pv-mentor-task { font-size: 14px; color: #aec9bd; }.pv-mentor-card .pv-world-primary { margin-top: 4px; font-size: 14px; text-align: left; }
 .pv-lyra-arrival > img { width: 96px; height: 96px; border-radius: 50%; float: right; margin: 8px 0 18px 18px; border: 1px solid #a5ceba66; }.pv-lyra-arrival h2 { clear: both; font-size: 38px; }
@@ -80,3 +85,51 @@ html.sr-practice-running .pv-console-guide { display: none; }
 .pv-rhythm-engraving[data-state="ready"] ~ .pv-rhythm-fallback,
 .pv-rhythm-engraving[data-state="loading"] ~ .pv-rhythm-fallback,
 .pv-rhythm-engraving[data-state="error"] ~ .pv-rhythm-placeholder { display: none; }
+
+/* ---------- the drawn world ---------- */
+
+/* The canvas is always 320 x 180 and CSS magnifies it by a whole number, so
+   every pixel stays a pixel. Smoothing here is what makes pixel art look like
+   a photograph of pixel art. */
+.pv-pixels { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; overflow: hidden; }
+/* The frame keeps the sixteen-by-nine shape whatever the page does, so the
+   hotspots laid over it in percentages always land on what they name. */
+.pv-pixels-frame { position: relative; width: 100%; max-height: 100%; aspect-ratio: 16 / 9; line-height: 0; }
+.pv-pixels canvas {
+  display: block; width: 100%; height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Hotspots are real buttons over the picture. They are invisible until wanted
+   — hovered, focused, or the station you are standing at — because a room
+   covered in outlines is a diagram, not a place. */
+.pv-hotspot {
+  position: absolute; margin: 0; padding: 0;
+  border: 2px solid transparent; border-radius: 3px;
+  background: none; color: inherit; font: inherit; cursor: pointer;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.pv-hotspot:hover:not(:disabled), .pv-hotspot.is-current { border-color: #ffffff6b; background: #ffffff12; }
+.pv-hotspot:focus-visible { outline: none; border-color: #eaf7ef; background: #ffffff1f; }
+.pv-hotspot:disabled { cursor: default; }
+.pv-hotspot-name {
+  position: absolute; bottom: -4px; transform: translateY(100%);
+  padding: 3px 8px; border-radius: 4px; background: #0b1620ee; color: #e6f2ea;
+  font-size: 11px; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap;
+  opacity: 0; transition: opacity .12s;
+}
+.pv-hotspot-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.pv-hotspot:hover:not(:disabled) .pv-hotspot-name,
+.pv-hotspot:focus-visible .pv-hotspot-name,
+.pv-hotspot.is-current .pv-hotspot-name { opacity: 1; }
+
+.pv-station { min-height: 0; background: #05080e; }
+
+.pv-route { min-height: 210px; margin: 18px 0 10px; border: 1px solid var(--line); border-radius: 14px; background: #05080e; padding: 10px 0; }
+.pv-route-readout {
+  position: absolute; left: 0; right: 0; bottom: -26px; margin: 0;
+  text-align: center; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #9fb4c6;
+}
+
+@media (prefers-reduced-motion: reduce) { .pv-hotspot-name { transition: none; } }

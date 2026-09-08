@@ -107,7 +107,13 @@ test('Path shows all ten levels and opens only as far as the course has been ear
     // Everything beyond the frontier is present, marked closed, and unusable.
     const closed = (html.match(/class="sr-level is-locked"/g) || []).length;
     assert.equal(closed, 10 - level, `level ${level} should close ${10 - level} destinations`);
-    assert.equal((html.match(/disabled=""/g) || []).length, closed + (level === 10 ? 0 : 1));
+    // The route map and the level list are two drawings of one fact, so they
+    // have to close the same destinations: `closed` unreachable waypoints on
+    // the map, the same number in the list, and the "next" button while there
+    // is a next one to be shut out of.
+    const unreachable = (html.match(/class="pv-hotspot"[^>]*disabled=""/g) || []).length;
+    assert.equal(unreachable, closed, 'the map and the list must close the same places');
+    assert.equal((html.match(/disabled=""/g) || []).length, closed * 2 + (level === 10 ? 0 : 1));
   }
 });
 

@@ -205,11 +205,28 @@ should stay.
 | Whether a misreading fell inside the key | Built: `misreadInKey` in [`grader.js`](../src/core/grader.js) |
 | Meeting a passage by looking at it, untimed, before playing | Built: the scan opens by default in the expedition, [`PracticeView.jsx`](../src/components/PracticeView.jsx) |
 | The ending refuses to end, and hands over the practice room | Built: [`AdventureView.jsx`](../src/components/AdventureView.jsx) |
-| The station as a diorama rather than a first-person room | Design |
-| One idea per room, expressed as the thing you interact with | Design |
+| The station as one drawn screen rather than a navigable 3D room | Built: [`StationScene.jsx`](../src/components/StationScene.jsx) on [`pixelart.js`](../src/core/pixelart.js) |
+| The route as a map you can read at a glance | Built: [`RouteMap.jsx`](../src/components/RouteMap.jsx) |
+| One idea per room, expressed as the thing you interact with | Design — the rooms differ by palette and dressing, not yet by what they ask |
 | The traverse between destinations as the reward | Design |
 | A shelf of the ten passages you actually read | Design |
 | *Passage* and *The Reply* used throughout the interface | Design — the words appear in new copy only |
+
+## How it is drawn
+
+Everything the expedition shows is a 320 × 180 canvas scaled up, with a short
+palette derived from each destination's own two colours, and every hotspot a
+real button laid over the picture. The resolution is close to what a SNES put
+on a television and the constraint does real work: a small grid and a short
+ramp make ten rooms cohere with each other in a way that ten separately made
+pictures never would — which is the same reason a tile set exists.
+
+Two three-dimensional scenes came before it: a first-person room you walked
+around, then the same room turned like a diorama. Both were a menu in a
+costume, both cost half a megabyte of engine, and neither taught anybody to
+read. The manners this design takes from *Moss* and *Monument Valley* — a small
+world you look into, one idea per space, a companion, a reward that is a view —
+never needed a camera to hold them.
 
 ## Names
 

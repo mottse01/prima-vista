@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import RouteMap from './RouteMap.jsx';
 import { LEVELS, STAGES, levelById } from '../core/levels.js';
 import { comparableReads } from '../core/adaptive.js';
 import { waypointFor } from '../core/constellation.js';
@@ -8,10 +8,8 @@ import { isOpen, lockReason, openThrough } from '../core/missions.js';
 
 // The graded path. Levels are parameter envelopes, so each one is an endless
 // supply of new material rather than a finite set of pieces to memorise.
-
-// The solar system pulls in a 3D engine, which nobody reading music needs to
-// download. It arrives when someone opens the path.
-const SolarSystem = lazy(() => import('./SolarSystem.jsx'));
+// The route used to be an orbiting three-dimensional solar system, which cost
+// half a megabyte of engine to show ten dots in a row. It is drawn now.
 
 /**
  * `gated` says whether this map is the expedition's route or the practice
@@ -27,12 +25,10 @@ export default function PathView({ profile, onPick, gated = true }) {
     <div className="sr-path">
       <h2 className="sr-view-title">Your star atlas</h2>
       <p className="sr-setup-lead">
-        Ten levels, ten places. Drag to look around, scroll to travel outward, and choose
-        one to practise there.
+        Ten levels, ten places, in the order a spacecraft would pass them. Choose one to
+        read there.
       </p>
-      <Suspense fallback={<div className="sr-orrery sr-orrery--loading" aria-hidden="true" />}>
-        <SolarSystem profile={profile} onPick={onPick} />
-      </Suspense>
+      <RouteMap profile={profile} onPick={onPick} gated={gated} />
       <p className="sr-journey-line">
         {gated
           ? <>The course is open through <strong>{waypointFor(openThrough(profile)).name}</strong> · <strong>{progress.reached}</strong> of {progress.total} waypoints demonstrated</>
