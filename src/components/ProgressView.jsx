@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import { SKILLS, SCORING_VERSION } from '../core/grader.js';
 import { comparableReads, recentAverage, weakestSkills } from '../core/adaptive.js';
 import { levelById } from '../core/levels.js';
+import { pacingStanding } from '../core/pacing.js';
 import { CURTAIN_MODES } from '../core/curtain.js';
 import { exportAll, importAll } from '../core/storage.js';
 import ConstellationView from './ConstellationView.jsx';
@@ -22,6 +23,7 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
   const avg = recentAverage(profile, 10);
   const weak = weakestSkills(profile, 3);
   const level = levelById(profile.level);
+  const pacing = pacingStanding(profile, profile.level);
 
   const pitchTally = useMemo(() => aggregatePitches(profile), [profile]);
   const pitchLocations = useMemo(() => aggregatePitchLocations(profile), [profile]);
@@ -30,9 +32,11 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
   // charting them together would flatter or distort the sight-reading trend.
   const clean = comparableReads(profile);
   const latest = clean.at(-1)?.meta?.recipe?.params;
+  // Tempo is left out on purpose: it now moves with the reader to keep the
+  // challenge level, so two readings a few beats apart are the same study.
   const history = clean.filter((h) => {
     const recipe = h.meta?.recipe?.params;
-    return recipe?.tempo === latest?.tempo && recipe?.timeSignature === latest?.timeSignature
+    return recipe?.timeSignature === latest?.timeSignature
       && recipe?.hands === latest?.hands && recipe?.measures === latest?.measures;
   }).slice(-40);
   const savedExercises = [...profile.history]
@@ -50,7 +54,16 @@ export default function ProgressView({ profile, onDrill, onResume, onReset, onRe
       <p className="sr-setup-lead">A few minutes or a longer session—make room for music in your own way.</p>
       <section className="sr-stats">
         <Stat label="Selected level" value={profile.level} detail={level.name} />
-        <Stat label="Comparable fresh reads" value={avg == null ? '—' : avg} detail={avg == null ? 'building new evidence' : `Level ${profile.level} · same tempo, length, hands & meter`} />
+        <Stat label="Comparable fresh reads" value={avg == null ? '—' : avg} detail={avg == null ? 'building new evidence' : `Level ${profile.level} · same length, hands & meter`} />
+        <Stat
+          label="Reading tempo"
+          value={`${pacing.bpm} bpm`}
+          detail={pacing.atCeiling
+            ? `Top of level ${profile.level}’s range — the next level is where this goes faster`
+            : pacing.fromDefault === 0
+              ? `Level ${profile.level} starts here · ${pacing.low}–${pacing.high} available`
+              : `${pacing.fromDefault > 0 ? 'Up' : 'Down'} ${Math.abs(pacing.fromDefault)} from the starting tempo · ${pacing.low}–${pacing.high} available`}
+        />
         <Stat
           label="Completed practice reads"
           value={profile.totals.takes}

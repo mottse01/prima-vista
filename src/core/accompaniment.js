@@ -423,9 +423,16 @@ export function planTextures(rng, {
  * Dropping the last attack of a phrase leaves the melody exposed at the
  * cadence, which is both an ordinary piece of keyboard writing and a reading
  * skill: the left hand has to count a rest rather than ride the pulse.
+ *
+ * Where the melody is already resting, dropping the bass too produces a
+ * general rest — a moment with nothing sounding at all, which the reader has
+ * to count through with no help from the instrument. That is a harder and more
+ * useful thing to read than either hand resting alone, it is the one strand on
+ * the reading map that no generated study was reaching, and it costs nothing:
+ * the breath was going to happen somewhere, so it happens here.
  */
 export function addAccompanimentBreath(rng, notes, {
-  ts, form, measures, chance = 0.5,
+  ts, form, measures, chance = 0.5, upperStaff = [],
 }) {
   if (!chance || !rng.chance(chance)) return notes;
   const perBar = new Map();
@@ -434,6 +441,9 @@ export function addAccompanimentBreath(rng, notes, {
     const bar = Math.floor(note.onset / ts.ticks);
     perBar.set(bar, [...(perBar.get(bar) || []), note]);
   }
+  const silentAbove = (note) => !upperStaff.some((event) => !event.rest
+    && event.onset < note.onset + note.duration
+    && event.onset + event.duration > note.onset);
   const candidates = [];
   for (const unit of form?.units || []) {
     const bar = unit.bars[1];
@@ -443,13 +453,80 @@ export function addAccompanimentBreath(rng, notes, {
     candidates.push(inBar[inBar.length - 1]);
   }
   if (!candidates.length) return notes;
-  const chosen = rng.pick(candidates);
+  const general = candidates.filter(silentAbove);
+  const chosen = rng.pick(general.length ? general : candidates);
   return notes.map((note) => (note === chosen ? {
     ...note,
     rest: true,
     pitches: [],
     tags: [...new Set([...(note.tags || []), 'rest', 'accompaniment-breath'])],
   } : note));
+}
+
+/**
+ * Let the whole texture fall silent.
+ *
+ * A rest in one hand is read against the other hand still playing: the pulse
+ * is audible the whole time, and coming back in is a matter of joining
+ * something already moving. A general rest gives the reader nothing — no
+ * sound, no help — and asks them to keep counting anyway and arrive together
+ * with the other hand. It is the hardest silence to read and the one the
+ * reading map has always claimed to measure and never could, because the
+ * accompaniment carried on underneath every rest the melody took.
+ *
+ * The silence is taken where the music has already stopped, at the start of a
+ * beat, so it lands as a written general rest rather than as a hole.
+ */
+export function addGeneralRest(rng, notes, {
+  ts, measures, upperStaff = [], chance = 0, minDuration = 1,
+}) {
+  if (!chance) return notes;
+  const sounding = (upperStaff || []).filter((event) => !event.rest);
+  if (!sounding.length) return notes;
+  // Where the melody has already stopped, and for how long.
+  const edges = [...new Set(sounding.flatMap((event) => [event.onset, event.onset + event.duration]))]
+    .sort((a, b) => a - b);
+  const windows = [];
+  for (let i = 0; i + 1 < edges.length; i += 1) {
+    const [from, to] = [edges[i], edges[i + 1]];
+    if (sounding.some((event) => event.onset < to && event.onset + event.duration > from)) continue;
+    const bar = Math.floor(from / ts.ticks);
+    // Never the opening or the final bar: a study should start and finish with
+    // something to hold on to. Long enough to be heard as a silence rather
+    // than as an articulation.
+    if (bar === 0 || bar >= measures - 1) continue;
+    if (to - from < ts.beat / 2) continue;
+    windows.push([from, to]);
+  }
+  // Splitting a bass note at the edges of the silence keeps the bar tiled and
+  // leaves the accompaniment's own figure either side of the gap. Only ever on
+  // a beat, though: a walking bass that walks in quarters must not come back
+  // from the silence holding a dotted eighth. Where the edges fall inside a
+  // beat, only a note the silence completely covers can be given up.
+  const cut = (note, from, to) => {
+    const end = note.onset + note.duration;
+    if (note.rest || end <= from || note.onset >= to) return [note];
+    const onBeat = from % ts.beat === 0 && to % ts.beat === 0;
+    if (!onBeat && (note.onset < from || end > to)) return [note];
+    const pieces = [];
+    if (note.onset < from) pieces.push({ ...note, duration: from - note.onset });
+    pieces.push({
+      ...note,
+      onset: Math.max(note.onset, from),
+      duration: Math.min(end, to) - Math.max(note.onset, from),
+      rest: true,
+      pitches: [],
+      tags: [...new Set([...(note.tags || []), 'rest', 'general-rest'])],
+    });
+    if (end > to) pieces.push({ ...note, onset: to, duration: end - to });
+    return pieces.every((piece) => piece.duration >= minDuration) ? pieces : [note];
+  };
+  const usable = windows.filter(([from, to]) => notes.some((note) => (
+    cut(note, from, to).some((piece) => piece.tags?.includes('general-rest'))
+  )));
+  if (!usable.length || !rng.chance(chance)) return notes;
+  const [from, to] = rng.pick(usable);
+  return notes.flatMap((note) => cut(note, from, to));
 }
 
 /**
@@ -517,7 +594,7 @@ export function buildAccompaniment(rng, opts) {
     key, ts, chords, chordsPerMeasure, measures, texture, lowDia, highDia, form,
     compositionStyle, maxSimultaneous = 5, upperStaff = [], chromaticBudget = null,
     minDuration = 1, handSpan = 8, allowedTextures = null, allowChromatic = false,
-    allowInversions = true, breathChance = 0, anticipationChance = 0,
+    allowInversions = true, breathChance = 0, anticipationChance = 0, generalRestChance = 0,
   } = opts;
 
   const slotTicks = ts.ticks / chordsPerMeasure;
@@ -579,9 +656,12 @@ export function buildAccompaniment(rng, opts) {
   }
 
   const breathed = addAccompanimentBreath(rng, notes.sort((a, b) => a.onset - b.onset), {
-    ts, form, measures, chance: breathChance,
+    ts, form, measures, chance: breathChance, upperStaff,
   });
-  return anticipateDownbeat(rng, breathed, {
+  const rested = addGeneralRest(rng, breathed, {
+    ts, measures, upperStaff, chance: generalRestChance, minDuration,
+  });
+  return anticipateDownbeat(rng, rested, {
     ts, form, measures, minDuration, chance: anticipationChance,
   });
 

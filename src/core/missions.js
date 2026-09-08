@@ -11,6 +11,7 @@
 // curriculum, made legible and given somewhere to happen.
 
 import { comparableReads } from './reads.js';
+import { STEADY_SPREAD, UNBROKEN_HESITATION } from './fluency.js';
 import { LIT_RATING, OBSERVATIONS_FOR_CONFIDENCE, skyProgress } from './constellation.js';
 import { waypointFor } from './journey.js';
 
@@ -42,12 +43,26 @@ const strand = (id, title, detail) => (context) => {
   return counted(`strand:${id}`, title, detail, 1, proven ? 1 : 0);
 };
 
-const steadyBeat = (milliseconds) => (context) => counted(
+/**
+ * Hold one pulse for a whole reading.
+ *
+ * This used to ask for an average timing error inside 45 ms, which is a bias
+ * and not a steadiness: alternate 60 ms early and 60 ms late and the average
+ * is zero. What it asks for now is that the attacks stayed close to *each
+ * other* — a reader consistently a shade behind the click has held the beat,
+ * and one who is sometimes on it and sometimes half a beat late has not.
+ *
+ * Readings recorded before this was measured still count on the old terms, so
+ * nobody loses a destination they already cleared.
+ */
+const steadyBeat = () => (context) => counted(
   'steady',
-  `Hold the beat within ${milliseconds} ms`,
-  'One read whose average timing sits close to the pulse, early or late.',
+  'Hold one steady pulse',
+  'One read whose notes stay evenly spaced against the beat, wherever they sit on it.',
   1,
-  context.takes.some((take) => take.timing != null && Math.abs(take.timing) * 1000 <= milliseconds) ? 1 : 0,
+  context.takes.some((take) => (take.spread != null
+    ? take.spread <= STEADY_SPREAD
+    : take.timing != null && Math.abs(take.timing) * 1000 <= 45)) ? 1 : 0,
 );
 
 const unbroken = () => (context) => counted(
@@ -56,8 +71,11 @@ const unbroken = () => (context) => counted(
   'Keep going through every attack, even past a wrong note.',
   1,
   // Kept going, not played perfectly: a wrong note struck on the beat still
-  // counts, and one fumble in a whole read should not disqualify it.
-  context.takes.some((take) => (take.continuity ?? 0) >= 0.95) ? 1 : 0,
+  // counts, and one fumble in a whole read should not disqualify it. Landing
+  // every attack is not the same as never pausing between them, so a measured
+  // hesitation disqualifies a read that otherwise looks unbroken.
+  context.takes.some((take) => (take.continuity ?? 0) >= 0.95
+    && (take.hesitation == null || take.hesitation <= UNBROKEN_HESITATION)) ? 1 : 0,
 );
 
 const evenHands = (points) => (context) => counted(
@@ -126,7 +144,7 @@ const chartTheSky = () => (context) => {
 export const MISSIONS = {
   1: [
     firstReads(3),
-    steadyBeat(45),
+    steadyBeat(),
     unbroken(),
   ],
   2: [

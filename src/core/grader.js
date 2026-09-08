@@ -7,6 +7,7 @@ import { TPQ, diaToY, pitchClassName } from './theory.js';
 import { xmlNoteId } from './musicxml.js';
 import { expectedEvents } from './generator.js';
 import { playbackEvents } from './playback.js';
+import { readingFluency } from './fluency.js';
 
 export const SKILLS = [
   { id: 'notes.treble', label: 'Treble staff notes' },
@@ -390,6 +391,24 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       };
     });
 
+    // Hesitation is about moments, not notes. A blocked triad in both hands is
+    // one place the music moves, so every onset collapses to the first sound
+    // that arrived there — otherwise a chordal texture would read as a stream
+    // of impossibly even attacks and hide the stop between the chords.
+    const struck = new Map();
+    for (const event of expected) {
+      const at = event.matched && !event.matched.wrongPitch ? event.matched.time : null;
+      if (at == null) continue;
+      const held = struck.get(event.onset);
+      if (!held || at < held.at) struck.set(event.onset, { onset: event.onset, at });
+    }
+    const fluency = readingFluency({
+      deltas: expected.filter((event) => event.matched && !event.matched.wrongPitch)
+        .map((event) => event.matched.delta),
+      attacks: [...struck.values()],
+      beatSeconds: beatSec,
+    });
+
     const total = expected.length || 1;
     // Extra notes matter: key-mashing must not produce the same pitch score as
     // a clean reading that found the written notes.
@@ -419,6 +438,9 @@ export function createGrader(score, { startTime, toleranceScale = 1 } = {}) {
       pitchAccuracy, rhythmAccuracy, continuity, overall, attackCount, attacksKept,
       meanAbsTiming: deltaCount ? absDelta / deltaCount : null,
       meanSignedTiming: deltaCount ? signedDelta / deltaCount : null,
+      // Steadiness and hesitation, measured on the attacks that actually
+      // landed. Both are unit-free, so they compare across tempi and metres.
+      fluency,
       skills: skillTally,
       hands: Object.fromEntries(Object.entries(hands).map(([hand, data]) => [hand, {
         notes: data.total,

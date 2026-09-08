@@ -15,6 +15,8 @@ import OnboardingModal from './components/OnboardingModal.jsx';
 import { DEFAULT_PARAMS, generateExercise } from './core/generator.js';
 import { applyPracticeEvidence, applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
 import { levelById } from './core/levels.js';
+import { levelForSkill } from './core/syllabus.js';
+import { SKILLS } from './core/grader.js';
 import { waypointFor } from './core/constellation.js';
 import { recordTransit, transitParams, transitStreak } from './core/transit.js';
 import { isOpen, lockReason, missionState, openTo, openThrough } from './core/missions.js';
@@ -389,7 +391,16 @@ export default function App() {
 
   const drillSkill = useCallback((skillId) => {
     setRepairHand(null);
-    setParams(paramsForLevel(profile.level, profile, { seed: randomSeed(), targetSkill: skillId }));
+    // Practise the thing where the thing exists. Asking level two for a
+    // triplet, or level one for a leap, used to produce a study that quietly
+    // ignored the request — or, for ledger lines, no study at all — so a
+    // reader could tap a dark star and get nothing to do about it.
+    const level = levelForSkill(skillId, profile.level) ?? profile.level;
+    setParams(paramsForLevel(level, profile, { seed: randomSeed(), targetSkill: skillId }));
+    if (level !== profile.level) {
+      const label = (SKILLS.find((skill) => skill.id === skillId)?.label || skillId).toLowerCase();
+      setToast({ kind: 'info', text: `${label} first appear at level ${level}, ${levelById(level).name}. Reading one there.` });
+    }
     setTab((current) => current === 'adventure' ? 'adventure' : 'practice');
   }, [profile]);
 

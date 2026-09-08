@@ -14,6 +14,7 @@ import {
 import { warmUp } from '../core/verovio.js';
 import { toMusicXml } from '../core/musicxml.js';
 import { CURTAIN_MODES, curtainMode } from '../core/curtain.js';
+import { STEADY_SPREAD, UNBROKEN_HESITATION } from '../core/fluency.js';
 import { LEVELS } from '../core/levels.js';
 
 const LOOK_AHEAD_MODES = CURTAIN_MODES.filter((mode) => !mode.legacy);
@@ -1140,6 +1141,7 @@ export function ResultPanel({
   }
   const pct = (x) => `${Math.round(x * 100)}%`;
   const timing = result.meanSignedTiming;
+  const fluency = result.fluency;
   const rec = result.recovery;
   const coach = coachingFor(result);
   const hands = handNote(result);
@@ -1236,9 +1238,22 @@ export function ResultPanel({
         />
         <Metric label="Kept going" value={pct(result.continuity)} detail={`${result.attacksKept ?? result.correct} of ${result.attackCount ?? result.total} attacks`} />
         <Metric
-          label="Timing bias"
-          value={timing == null ? '—' : `${timing > 0 ? '+' : ''}${Math.round(timing * 1000)} ms`}
-          detail={timing == null ? '' : timing > 0.02 ? 'later than the reference beat' : timing < -0.02 ? 'earlier than the reference beat' : 'close to the reference beat'}
+          label="Steady pulse"
+          value={fluency?.spread == null ? '—' : `±${Math.round(fluency.spread * 100)}% of a beat`}
+          detail={fluency?.spread == null
+            ? 'not enough notes landed to say'
+            : timing == null
+              ? 'how evenly the attacks were spaced'
+              : `${fluency.spread <= STEADY_SPREAD ? 'even' : 'uneven'} · sitting ${timing > 0.02 ? `${Math.round(timing * 1000)} ms behind` : timing < -0.02 ? `${Math.round(-timing * 1000)} ms ahead of` : 'right on'} the beat`}
+        />
+        <Metric
+          label="Longest pause"
+          value={fluency?.hesitation == null ? '—' : `${fluency.hesitation.toFixed(1)}×`}
+          detail={fluency?.hesitation == null
+            ? 'not enough notes landed to say'
+            : fluency.hesitation <= UNBROKEN_HESITATION
+              ? 'no gap longer than your own pace'
+              : 'one gap ran well past your own pace'}
         />
         <Metric label="Recovery" value={recoveryValue(rec)} detail={recoveryDetail(rec)} />
       </div>
@@ -1367,6 +1382,9 @@ function handNote(result) {
 }
 
 function observedStrength(result) {
+  if (result.fluency?.steady && result.fluency?.unbroken) {
+    return 'You held one pulse the whole way through.';
+  }
   if (result.continuity >= 0.95) return 'You kept going through the music.';
   if (result.rhythmAccuracy >= 0.85) return 'Most of your notes landed with the beat.';
   if (result.pitchAccuracy >= 0.85) return 'You found most of the written notes.';
@@ -1385,6 +1403,20 @@ function coachingFor(result) {
   }
   if (result.rhythmAccuracy + 0.08 < result.pitchAccuracy) {
     return { title: 'Keep the notes; simplify the pulse.', detail: 'Tap the trickiest rhythm before playing it. Let the metronome help you keep a steady beat.' };
+  }
+  // A stop is worth naming before a bias is: a reader who paused mid-phrase
+  // has a different problem from one who sits reliably behind the click.
+  if (result.fluency?.hesitation != null && result.fluency.hesitation > 2.4) {
+    return {
+      title: 'The reading stopped somewhere.',
+      detail: 'One gap ran much longer than the rest. Pick a tempo you can hold through the hardest bar, and read past a mistake instead of returning to it.',
+    };
+  }
+  if (result.fluency?.spread != null && result.fluency.spread > 0.22) {
+    return {
+      title: 'Let one pulse carry the whole page.',
+      detail: 'The beat moved around rather than sitting early or late. Count a full bar in before you start, and keep counting through the silences.',
+    };
   }
   if (result.meanSignedTiming != null && result.meanSignedTiming > 0.055) {
     return { title: 'Read one beat farther ahead.', detail: 'You consistently landed late. Look at the next beat while your hands finish the current one.' };

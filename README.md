@@ -12,6 +12,10 @@ Prima Vista is deliberately narrower: it protects the integrity of a fresh
 read, diagnoses the specific skill that broke down, and generates the next
 piano study around that evidence.
 
+[`docs/reading-pedagogy.md`](./docs/reading-pedagogy.md) sets out what the
+levels teach, how the app chooses what to put in front of a reader next, and
+which of those decisions rest on published evidence rather than on judgement.
+
 ## Running it
 
 ```bash
@@ -49,6 +53,9 @@ src/
     musicxml.js    score -> MusicXML (also the user-facing export)
     verovio.js     lazy-loaded Verovio toolkit; MusicXML -> engraved SVG
     grader.js      note matching, scoring, per-skill attribution
+    fluency.js     pulse steadiness and hesitation, as fractions of a beat
+    syllabus.js    which reading strands each level can actually present
+    pacing.js      reading tempo calibrated inside each level's own band
     adaptive.js    skill ratings, promotion, weakness-targeted parameters
     curtain.js     look-ahead curtain modes and their tick offsets
     levels.js      the 10-level graded path and exam-board crosswalk

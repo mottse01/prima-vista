@@ -8,6 +8,8 @@ import { levelById, LEVELS } from './levels.js';
 import { makeRng, randomSeed } from './rng.js';
 import { comparableReads, eligibleFirstRead } from './reads.js';
 import { missionState, openThrough, raiseFrontier } from './missions.js';
+import { calibrate, readingTempo } from './pacing.js';
+import { ledgerHeadroom, presents } from './syllabus.js';
 
 const ALPHA_MIN = 0.18;
 const ALPHA_MAX = 0.45;
@@ -21,6 +23,13 @@ const MIN_FOCUS_OBSERVATIONS = 3;
 // How many recently-seen exercise fingerprints to remember, so a reload or a
 // shared link cannot launder a repeat into a fresh first read.
 const SEEN_SEEDS_KEPT = 300;
+
+// After this many readings without meeting a strand again, it is treated as
+// fully due for revisiting. Spacing the return of something already learned is
+// what keeps it learned; a rating that was measured forty readings ago is a
+// record of what was true then, not a claim about now. Counted in readings
+// rather than days so that the same profile always produces the same study.
+const STALE_AFTER_READS = 40;
 
 /** A short placement check moves at most one rung from the conservative start. */
 export function placementRecommendation(startLevel, scores) {
@@ -51,6 +60,7 @@ export function applyPracticeEvidence(profile, tallies) {
     practiceSkills[id] = {
       rating: previous.rating * (1 - alpha) + observed * alpha,
       attempts: previous.attempts + tally.total,
+      seenAtTake: (profile.totals?.takes || 0) + 1,
     };
   }
   return { ...profile, practiceSkills };
@@ -74,6 +84,9 @@ export function emptyProfile() {
     totals: { takes: 0, notes: 0, minutes: 0 },
     // Look-ahead curtain progress, keyed by curtain mode.
     lookAhead: {},     // { [mode]: { takes, best, last } }
+    // The tempo this reader currently reads at, per level, inside that
+    // level's own band. Empty means everybody starts at the published default.
+    pacing: {},        // { [level]: bpm }
     seenExercises: [],
   };
 }
@@ -130,6 +143,7 @@ export function applyResult(profile, {
 
   // A curtain take is a reading-fluency drill. Scoring it against the skill map
   // would read the curtain's difficulty as "you forgot where F sharp is".
+  const takeNumber = (profile.totals?.takes || 0) + 1;
   if (!curtained) {
     const bank = repeat || assisted ? next.practiceSkills : next.skills;
     for (const [id, tally] of Object.entries(summary.skills)) {
@@ -142,6 +156,9 @@ export function applyResult(profile, {
       bank[id] = {
         rating: prev.rating * (1 - alpha) + observed * alpha,
         attempts: prev.attempts + tally.total,
+        // When this strand was last actually met, so that a skill nothing has
+        // asked about in a long time can be brought back around.
+        seenAtTake: takeNumber,
       };
     }
   } else {
@@ -168,6 +185,10 @@ export function applyResult(profile, {
     // Kept per take because a mission asks about one reading, not an average:
     // "hold the beat within 45 ms" is a thing you did once, not a trend.
     timing: summary.meanSignedTiming ?? null,
+    // Steadiness and hesitation, both as fractions of a beat, so a mission can
+    // ask whether one reading held its pulse without knowing its tempo.
+    spread: summary.fluency?.spread ?? null,
+    hesitation: summary.fluency?.hesitation ?? null,
     hands: summary.hands
       ? {
         rh: { pitchAccuracy: summary.hands.rh?.pitchAccuracy ?? null },
@@ -182,6 +203,11 @@ export function applyResult(profile, {
   next.totals.takes += 1;
   next.totals.notes += summary.total;
   next.totals.minutes += (elapsedSec || 0) / 60;
+
+  // Only a clean first read says anything about the tempo this reader can hold
+  // at this level. A replay knows the music and an assisted take had help, so
+  // neither is allowed to talk the tempo up.
+  if (level && !repeat && !assisted && !curtained) next.pacing = calibrate(next, level);
 
   const today = new Date().toDateString();
   if (next.streak.lastDay !== today) {
@@ -237,13 +263,34 @@ function evaluateLevel(profile, level) {
   return { promoted, demoted };
 }
 
-/** Skills sorted weakest first, with enough evidence to be worth trusting. */
-export function weakestSkills(profile, limit = 3) {
+/**
+ * Skills sorted weakest first, with enough evidence to be worth trusting.
+ *
+ * Pass a level to get only the strands that level can actually put on the
+ * page. Without one this is the whole reading picture, which is what a
+ * progress panel wants to show.
+ */
+export function weakestSkills(profile, limit = 3, { level = null } = {}) {
   return Object.entries(profile.skills)
-    .filter(([, v]) => v.attempts >= 8 && v.rating < 0.78)
+    .filter(([id, v]) => v.attempts >= 8 && v.rating < 0.78
+      && (level == null || presents(level, id)))
     .sort((a, b) => a[1].rating - b[1].rating)
     .slice(0, limit)
     .map(([id, v]) => ({ id, ...v, label: SKILLS.find((s) => s.id === id)?.label || id }));
+}
+
+/**
+ * How overdue a strand is, as a multiplier on how much it wants practising.
+ *
+ * A rating is a record of a moment. Something read well forty readings ago and
+ * never met since is not evidence that it is still read well, and the only way
+ * to find out is to put it in front of the reader again. This doubles the
+ * weight of the most neglected strand without ever overriding weakness, so the
+ * thing that is failing now still comes first.
+ */
+export function staleness(skill, takes) {
+  const since = takes - (skill?.seenAtTake ?? 0);
+  return 1 + Math.min(1, Math.max(0, since) / STALE_AFTER_READS);
 }
 
 const SKILL_TO_TAG = {
@@ -268,14 +315,24 @@ export function paramsForLevel(level, profile, {
   const def = levelById(level);
   const rng = makeRng(seed);
   const p = { ...def.params };
-  const weak = targeting && profile ? weakestSkills(profile, 4) : [];
-  const weakPool = weak.filter((w) => w.rating < 0.78);
+  // Only strands this level can actually write. Asking a five-finger study in
+  // C for a leap or a sharp used to produce a study that ignored the request
+  // and dropped the level's own focus to make room for it; asking level three
+  // for triplets produced no study at all.
+  const weakPool = targeting && profile ? weakestSkills(profile, 4, { level }) : [];
+  const takes = profile?.totals?.takes || 0;
   // Isolate one diagnostic variable per generated study. Mixing every weak
   // skill into one excerpt makes the music harder, but makes the practice less
   // specific. Weighted selection keeps the weakest item most likely while
-  // still interleaving other needs across a session.
-  const selectedWeakness = targetSkill || (weakPool.length
-    ? rng.weighted(weakPool, weakPool.map((w) => Math.pow(1 - w.rating, 2))).id
+  // still interleaving other needs across a session, and a strand nothing has
+  // asked about in a long time is weighted back up so that it comes round
+  // again rather than being quietly assumed.
+  const requested = targetSkill && presents(level, targetSkill) ? targetSkill : null;
+  const selectedWeakness = requested || (weakPool.length
+    ? rng.weighted(
+      weakPool,
+      weakPool.map((w) => Math.pow(1 - w.rating, 2) * staleness(w, takes)),
+    ).id
     : null);
   const weakIds = new Set(selectedWeakness ? [selectedWeakness] : []);
   const targeted = new Set();
@@ -294,6 +351,11 @@ export function paramsForLevel(level, profile, {
   const focusIntervals = selectedWeakness || !levelIntervals.length
     ? []
     : [levelIntervals[Math.abs(seed) % levelIntervals.length]];
+
+  // Tempo is the difficulty dial this app already owned and never turned. The
+  // level's published number is where everybody starts; from there it walks
+  // inside the level's own band according to how the reading is going.
+  p.tempo = readingTempo(profile, level);
 
   // Meter and key are drawn from the level's allowed sets.
   p.timeSignature = rng.pick(p.meters);
@@ -320,14 +382,23 @@ export function paramsForLevel(level, profile, {
   p.rhythmTags = [...tags];
   p.focusRhythmTags = focusRhythmTags;
 
-  if (weakIds.has('notes.ledger')) {
-    // Push the tessitura outward so ledger lines are unavoidable.
-    p.rhHigh = Math.min(p.rhHigh + 4, 44);
-    p.lhLow = Math.max(p.lhLow - 4, 12);
+  const ledgerRoom = ledgerHeadroom(level);
+  if (weakIds.has('notes.ledger') && ledgerRoom > 0) {
+    // Push the tessitura outward so ledger lines are unavoidable — but only as
+    // far as this level's ledger budget allows. A fixed four-step push asked
+    // the early levels for music that then failed their own validation every
+    // single time, so the drill returned nothing at all.
+    p.rhHigh = Math.min(p.rhHigh + ledgerRoom, 44);
+    p.lhLow = Math.max(p.lhLow - ledgerRoom, 12);
     targeted.add('notes.ledger');
   }
   if (weakIds.has('intervals.leap')) {
-    p.maxLeap = Math.min(7, p.maxLeap + 2);
+    // How wide a leap may be belongs to the level; how often one turns up is
+    // ours to change, and lowering the stepwise bias is the lever for it.
+    // This used to widen the reach to a flat seven as well, which did nothing
+    // at the levels already narrower than that and, at the top of the ladder,
+    // pulled the reach *down* from nine or eleven — the drill for leaps made
+    // the music easier than the level's ordinary fare.
     p.stepwiseBias = Math.max(0.45, p.stepwiseBias - 0.15);
     targeted.add('intervals.leap');
     if (!focusIntervals.includes('leap')) focusIntervals.push('leap');
@@ -343,18 +414,30 @@ export function paramsForLevel(level, profile, {
     targeted.add('intervals.skip');
     if (!focusIntervals.includes('skip')) focusIntervals.push('skip');
   }
+  if (weakIds.has('rhythm.silence')) {
+    // Reading a silence means both hands stopping. The rest tag alone only
+    // guarantees the melody rests, which is a different and easier thing.
+    p.generalRest = true;
+    // A second independent line has its own reasons to keep playing, so the
+    // levels written contrapuntally take an accompaniment figure for this one
+    // study — the figure is what can be asked to stop with the melody.
+    if (p.lhStyle === 'contrapuntal') p.lhStyle = 'block_chord';
+    targeted.add('rhythm.silence');
+  }
   if (weakIds.has('coordination.together') && p.hands === 'both') {
     if (p.lhStyle === 'root_fifth') p.lhStyle = 'block_chord';
     targeted.add('coordination.together');
   }
 
-  // An explicit dashboard drill can isolate a staff. Routine adaptive practice
-  // keeps the level's intended hand texture intact.
-  if (targetSkill === 'notes.treble') {
+  // An explicit drill can isolate a staff. Routine adaptive practice keeps the
+  // level's intended hand texture intact, and a level written for one hand is
+  // not made to grow another — a reader who wants the bass staff is sent to
+  // the destination where it appears.
+  if (requested === 'notes.treble') {
     p.hands = 'rh';
     targeted.add('notes.treble');
   }
-  if (targetSkill === 'notes.bass') {
+  if (requested === 'notes.bass') {
     p.hands = 'lh';
     targeted.add('notes.bass');
   }
@@ -365,14 +448,22 @@ export function paramsForLevel(level, profile, {
   return { ...p, ...overrides, seed: overrides.seed ?? seed, level, targeted: [...targeted] };
 }
 
-/** Rolling score over clean first reads, so rehearsal does not inflate it. */
+/**
+ * Rolling score over clean first reads, so rehearsal does not inflate it.
+ *
+ * Tempo is deliberately not part of what makes two reads comparable. It used
+ * to be, back when a level had one tempo and a different one meant a different
+ * kind of study; now the tempo moves with the reader precisely to hold the
+ * difficulty steady, so excluding readings at a neighbouring tempo would throw
+ * away most of the evidence and reset this number every time it moved.
+ */
 export function recentAverage(profile, n = 10) {
   const reads = comparableReads(profile);
   const latest = reads.at(-1);
   const recent = reads.filter((take) => {
     const recipe = take.meta?.recipe?.params;
     const anchor = latest?.meta?.recipe?.params;
-    return recipe?.tempo === anchor?.tempo && recipe?.timeSignature === anchor?.timeSignature
+    return recipe?.timeSignature === anchor?.timeSignature
       && recipe?.hands === anchor?.hands && recipe?.measures === anchor?.measures;
   }).slice(-n);
   if (!recent.length) return null;

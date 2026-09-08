@@ -1496,7 +1496,13 @@ export function composeCandidate(userParams = {}, attempt = 0) {
   }
 
   if (wantsLh) {
-    if (params.lhStyle === 'contrapuntal') {
+    // A left hand playing alone is the melody, whatever texture the level
+    // normally pairs it with. The contrapuntal writer deliberately ignores the
+    // cadence plan, because a second voice is governed by the harmony rather
+    // than forced onto the soprano's arrival — so reaching it with no soprano
+    // to accompany left the study with cadences nothing ever realised, and
+    // most bass-staff readings at the top two levels could not be written.
+    if (params.lhStyle === 'contrapuntal' && params.hands !== 'lh') {
       staves.lh = buildLeftHandMelody(rng, {
         key, ts, chords, chordsPerMeasure, measures,
         cellIds: params.lhCells || cells,
@@ -1561,6 +1567,10 @@ export function composeCandidate(userParams = {}, attempt = 0) {
         allowChromatic: constraints.chromatic_notes > 0,
         allowedTextures,
         breathChance: (params.rhythmTags || []).includes('rest') ? 0.55 : 0,
+        // A general rest is guaranteed when silence is the thing being
+        // practised, and turns up now and then otherwise.
+        generalRestChance: params.generalRest ? 1
+          : (params.rhythmTags || []).includes('rest') ? 0.35 : 0,
         anticipationChance: (params.rhythmTags || []).includes('syncopation') ? 0.45 : 0,
       });
     }
