@@ -39,8 +39,10 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
   const metreOptions = useMemo(() => {
     const supported = metresFor(params.compositionStyle) || Object.keys(TIME_SIGNATURES);
     // A preset saved by an older build can carry a pairing this style no
-    // longer allows. Keep it listed so the control still shows what is set.
-    return supported.includes(params.timeSignature) ? supported : [...supported, params.timeSignature];
+    // longer allows. Keep it listed so the control still shows what is set —
+    // but only if it is a metre at all, so a missing value cannot become one.
+    if (supported.includes(params.timeSignature) || !TIME_SIGNATURES[params.timeSignature]) return supported;
+    return [...supported, params.timeSignature];
   }, [params.compositionStyle, params.timeSignature]);
   const selectedRepertoire = REPERTOIRE_OPTIONS.find((item) => item.id === params.repertoireId) || REPERTOIRE_OPTIONS[0];
 
