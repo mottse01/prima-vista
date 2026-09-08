@@ -1,5 +1,10 @@
 // Eclipse — the vanishing-note reading drill.
 //
+// In the story this app is heading toward (docs/the-reply.md) the writing does
+// not survive being read: one pass, and the marks are gone behind you. That is
+// the fiction and this is the mechanism, and they ask for exactly the same
+// behaviour — which is the only reason the fiction is worth having.
+//
 // Notes are eclipsed a fixed distance ahead of the playhead, so the only way
 // to keep playing is to have already read ahead. This measures eye-hand span,
 // which is the actual mechanism of sight-reading.

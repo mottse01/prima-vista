@@ -1,5 +1,9 @@
 // The reading map, drawn as a sky.
 //
+// Four constellations, and in docs/the-reply.md they are the four competences
+// of this literacy: the characters, the distances, the time, and holding two
+// lines at once.
+//
 // Every diagnostic strand the grader measures is a star. Stars that have been
 // observed often enough and read well enough are lit; the rest are still dark
 // sky. A constellation completes when all of its stars are lit, which is the

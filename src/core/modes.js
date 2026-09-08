@@ -1,5 +1,8 @@
 // Two ways to use the same instrument.
 //
+// Expedition is the fiction (docs/the-reply.md); practice is the instrument.
+// The split exists so the story can never stand between a reader and a piano.
+//
 // The expedition and the practice room read the same generated music with the
 // same grader against the same profile. What differs is what the app is *for*
 // while you are in it: a journey with somewhere to get to, or a room with a

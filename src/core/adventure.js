@@ -1,5 +1,10 @@
 // The station you are standing in.
 //
+// The place this is going: docs/the-reply.md. The ten locations are ten
+// waypoints on the line the Voyagers took, and what is found at each is an
+// inscription somebody wrote back in our own notation. LOCATIONS and
+// READING_LESSONS below are the raw material for those ten beats.
+//
 // There is one position, and it is the reading level. Location N is level N,
 // so travelling in the story *is* changing level and nothing has to keep two
 // counters agreeing. What this module owns is the ritual of a visit —

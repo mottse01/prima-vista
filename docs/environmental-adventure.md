@@ -1,5 +1,8 @@
 # Prima Vista: sight-reading inside a world of exploration
 
+> This describes what is built today. The story it is heading toward, and the
+> reasons behind each mechanic, are in [`the-reply.md`](./the-reply.md).
+
 ## Current design
 
 Every required interaction now supports reading music. The earlier circuit-matching and three-tone combination puzzles have been removed. The space station is an inviting setting for learning, and the airlock is a visible consequence of completing a reading sequence.

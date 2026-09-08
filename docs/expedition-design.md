@@ -1,5 +1,8 @@
 # Prima Vista: the sight-reading expedition
 
+> This is the September 2026 design review. The narrative direction that came
+> out of it is in [`the-reply.md`](./the-reply.md).
+
 Research and design review · 6 September 2026
 
 ## Recommendation

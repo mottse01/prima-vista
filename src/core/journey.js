@@ -1,5 +1,9 @@
 // The journey outward.
 //
+// Ten waypoints, and in docs/the-reply.md they are ten stages in somebody
+// else's learning: the order in which they worked out how to write our music,
+// which is the same order a person learns to read it.
+//
 // Ten reading levels are ten places, ordered by how far they are from the Sun,
 // so the ladder has a direction you can point at. Everything here is real: the
 // distances are in astronomical units, the radii in kilometres, and the orbital

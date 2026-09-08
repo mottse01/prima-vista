@@ -1,3 +1,7 @@
+// The expedition's surface. What it is meant to become — the fiction, the ten
+// beats, and the three rules that bind changes here — is docs/the-reply.md.
+// The rule most easily broken from this file is the first of them: the story
+// never gates the instrument. Practice mode must stay reachable and plain.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { completePuzzle, loadAdventure, LOCATIONS, locationFor, roomState, saveAdventure, pianoRelaySolved, readingLesson } from '../core/adventure.js';
 import RhythmLesson from './RhythmLesson.jsx';

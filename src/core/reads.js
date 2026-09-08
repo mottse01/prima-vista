@@ -1,5 +1,9 @@
 // What counts as evidence about sight-reading.
 //
+// The strictest rule in the application, and the one docs/the-reply.md exists
+// to explain: a passage sounds for the first time exactly once. Weakening this
+// is not a product decision, it is the thing the whole design is built on.
+//
 // One rule, shared by placement, promotion, the mission objectives and the
 // progress charts: a first read is the only take that measures reading at
 // sight. A replay knows the music, an assisted take had help, and an Eclipse

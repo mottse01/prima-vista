@@ -12,9 +12,17 @@ Prima Vista is deliberately narrower: it protects the integrity of a fresh
 read, diagnoses the specific skill that broke down, and generates the next
 piano study around that evidence.
 
-[`docs/reading-pedagogy.md`](./docs/reading-pedagogy.md) sets out what the
-levels teach, how the app chooses what to put in front of a reader next, and
-which of those decisions rest on published evidence rather than on judgement.
+Two documents carry the intent behind the code, and anything working on this
+repository should read both before changing behaviour:
+
+- [`docs/reading-pedagogy.md`](./docs/reading-pedagogy.md) — what the levels
+  teach, how the app chooses what to put in front of a reader next, and which
+  of those decisions rest on published evidence rather than on judgement.
+- [`docs/the-reply.md`](./docs/the-reply.md) — the story the expedition tells,
+  and the reason each mechanic is shaped the way it is. It is a design
+  document, not a description of current behaviour, and it says so. Its three
+  rules — the fiction never gates the instrument, never fakes the measurement,
+  and never rewards with a number — bind changes to the expedition.
 
 ## Running it
 

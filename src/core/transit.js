@@ -1,5 +1,8 @@
 // Tonight's Transit — one shared piece a day.
 //
+// In docs/the-reply.md: one passage arrives each day, and every reader on
+// Earth gets the same one.
+//
 // A transit happens at a fixed time and does not happen again. So does a first
 // read: once you have seen the music, you can never sight-read it. The two
 // facts fit, so the daily challenge is built out of the thing this generator
