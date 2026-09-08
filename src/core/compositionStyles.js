@@ -58,6 +58,22 @@ export function resolveCompositionStyle(rng, requested, context = {}) {
   return compositionStyle(weightedPick(rng, weighted).pack.id);
 }
 
+/**
+ * The metres a style can actually be written in, heaviest weight first.
+ *
+ * A style pack is a grammar, not a coat of paint: ragtime is in duple time and
+ * a waltz is not, so the generator refuses the combinations a pack has no
+ * forms for. The builder asks this so it can offer only the metres that will
+ * produce music, rather than letting a reader pick one and get an error.
+ * Auto is unconstrained, because it chooses a pack to fit the metre.
+ */
+export function metresFor(id) {
+  if (!id || id === 'auto') return null;
+  return [...stylePack(id).meters]
+    .sort((a, b) => b.weight - a.weight)
+    .map((meter) => meter.value);
+}
+
 /** Apply only generic, pack-declared defaults. Level constraints are enforced later. */
 export function styleSetupPatch(id, params = {}) {
   if (id === 'auto') return { compositionStyle: 'auto' };

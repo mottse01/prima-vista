@@ -125,7 +125,26 @@ function cadenceChoice(rng, pack, requested, final) {
   return pickObject(rng, available);
 }
 
-function melodicArrival(rng, cadenceId, degrees) {
+/**
+ * The scale degree the melody lands on at a cadence.
+ *
+ * `reachable`, when given, is the set of degrees the melodic range can
+ * actually sound in this key. A five-note tessitura covers five of the seven
+ * degrees, and *which* five depends on the key, so the textbook arrival is not
+ * always available — a beginner's hand position in C sharp major reaches a
+ * different set than the same position in F. Where it is unavailable, land on
+ * a chord tone of the cadence's own final chord instead: still consonant,
+ * still audibly an ending, and within reach of the hand that has to play it.
+ */
+function melodicArrival(rng, cadenceId, degrees, reachable = null) {
+  const preferred = idiomaticArrival(rng, cadenceId, degrees);
+  if (!reachable?.length || reachable.includes(preferred)) return preferred;
+  const root = degrees.at(-1);
+  return [root, (root + 2) % 7, (root + 4) % 7].find((d) => reachable.includes(d)) ?? preferred;
+}
+
+/** The arrival the cadence is named for, before range is taken into account. */
+function idiomaticArrival(rng, cadenceId, degrees) {
   if (cadenceId === 'half' || cadenceId === 'blues_turnaround' && degrees.at(-1) === 4) return 4;
   if (cadenceId === 'deceptive') return 5;
   if (cadenceId === 'subdominant_turn') return 3;
@@ -143,6 +162,7 @@ function melodicArrival(rng, cadenceId, degrees) {
 export function planProgression(rng, {
   measures, chordsPerMeasure = 1, allowSevenths = false, allowInversions = false,
   mode = 'major', form = null, compositionStyle = 'classical_early',
+  melodyDegrees = null,
 }) {
   const pack = stylePack(compositionStyle);
   const slots = measures * chordsPerMeasure;
@@ -201,11 +221,23 @@ export function planProgression(rng, {
       if (exits.length) romans[endSlot + 1] = rng.pick(exits);
     }
     const degrees = applied.map((roman) => degreeFor(pack, roman));
-    const [name, short] = CADENCE_LABELS[id] || [id.replaceAll('_', ' '), id.toUpperCase()];
+    const melodyDegree = melodicArrival(rng, id, degrees, melodyDegrees);
+    // What makes an authentic cadence perfect is the tonic in the soprano. If
+    // the range could not reach it, the cadence is an imperfect one — so call
+    // it that, rather than printing a label the music does not earn.
+    const cadenceId = id === 'authentic' && melodyDegree !== 0 ? 'imperfect' : id;
+    if (cadenceId !== id) {
+      applied.forEach((_, index) => {
+        const slot = startSlot + index;
+        cadenceSlot.set(slot, { ...cadenceSlot.get(slot), id: cadenceId });
+      });
+    }
+    const [name, short] = CADENCE_LABELS[cadenceId]
+      || [cadenceId.replaceAll('_', ' '), cadenceId.toUpperCase()];
     cadences.push({
-      id, name, short, measure, final,
+      id: cadenceId, name, short, measure, final,
       slots: applied.map((_, index) => startSlot + index), degrees,
-      melodyDegree: melodicArrival(rng, id, degrees),
+      melodyDegree,
       strength: planBar?.cadenceStrength || (final ? 'strong' : 'weak'),
       phraseFunction: planBar?.phraseFunction || null,
       roman: applied.join('–'),

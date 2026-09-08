@@ -10,12 +10,12 @@ import { analyseEvents, createGrader } from '../src/core/grader.js';
 import { COMMON_CADENCES } from '../src/core/harmony.js';
 import { LEVELS, levelById } from '../src/core/levels.js';
 import { reviewMusicality } from '../src/core/musicality.js';
-import { STYLE_OPTIONS, styleSetupPatch } from '../src/core/compositionStyles.js';
+import { STYLE_OPTIONS, metresFor, styleSetupPatch } from '../src/core/compositionStyles.js';
 import { STYLE_PACK_LIST, stylePack } from '../src/core/stylePacks.js';
-import { ledgerLines, validateExercise } from '../src/core/validator.js';
+import { ledgerLines, scaleDegree, validateExercise } from '../src/core/validator.js';
 import { toMusicXml, xmlSlurId } from '../src/core/musicxml.js';
 import { codeToSeed, randomSeed, seedToCode } from '../src/core/rng.js';
-import { timeSig } from '../src/core/rhythm.js';
+import { TIME_SIGNATURES, timeSig } from '../src/core/rhythm.js';
 import { scoreLayoutOptions } from '../src/core/verovio.js';
 import { detectPitch, frequencyToMidi } from '../src/core/microphone.js';
 import { eventShouldVanish } from '../src/core/curtain.js';
@@ -931,4 +931,89 @@ test('an abandoned or disconnected take changes no learner data', () => {
 
   assert.equal(result.invalid, true);
   assert.deepEqual(result.profile, profile);
+});
+
+test('a cadence lands where the hand can actually reach, in every key', () => {
+  // A beginner's right hand covers five notes. Five consecutive positions on
+  // the staff are five of the seven scale degrees, and *which* five depends on
+  // the key — so a cadence whose textbook arrival is chosen without consulting
+  // the range is unwritable in some keys and not others. That asymmetry used
+  // to surface as a blank study when a reader changed key in the builder.
+  const base = paramsForLevel(1, emptyProfile(), { seed: 4242, targeting: false });
+  let cadences = 0;
+  for (let fifths = -7; fifths <= 7; fifths += 1) {
+    for (const keyMode of ['major', 'minor']) {
+      const score = generateExercise({
+        ...base, level: null, keyFifths: fifths, keyMode, seed: 900 + fifths,
+      });
+      const reachable = new Set(Array.from(
+        { length: base.rhHigh - base.rhLow + 1 },
+        (_, i) => scaleDegree(score.key, base.rhLow + i),
+      ));
+      for (const cadence of score.harmony.cadences) {
+        cadences += 1;
+        assert.ok(
+          reachable.has(cadence.melodyDegree),
+          `${cadence.id} in ${fifths} ${keyMode} wants degree ${cadence.melodyDegree}, out of range`,
+        );
+      }
+    }
+  }
+  assert.ok(cadences > 30);
+});
+
+test('a cadence is only called authentic when the melody reaches the tonic', () => {
+  // The label is a claim about the music. Where the range cannot supply a
+  // tonic arrival, the honest name for the cadence is the imperfect one.
+  const base = paramsForLevel(1, emptyProfile(), { seed: 4242, targeting: false });
+  for (let fifths = -7; fifths <= 7; fifths += 1) {
+    const score = generateExercise({ ...base, level: null, keyFifths: fifths, seed: 5150 + fifths });
+    for (const cadence of score.harmony.cadences) {
+      if (cadence.id === 'authentic') assert.equal(cadence.melodyDegree, 0);
+      assert.ok(COMMON_CADENCES[cadence.id], `${cadence.id} needs a label`);
+    }
+  }
+});
+
+test('the builder only offers metres the chosen style can be written in', () => {
+  assert.equal(metresFor('auto'), null, 'Auto picks a pack to fit the metre');
+  assert.equal(metresFor(null), null);
+  for (const style of STYLE_OPTIONS.filter((item) => item.id !== 'auto')) {
+    const metres = metresFor(style.id);
+    assert.ok(metres.length, `${style.id} must be writable in something`);
+    // The default the style picker applies must itself be on the offered list.
+    assert.ok(metres.includes(styleSetupPatch(style.id, {}).timeSignature));
+    for (const value of metres) {
+      assert.ok(stylePack(style.id).meters.some((meter) => meter.value === value));
+    }
+  }
+});
+
+test('every style, key and offered metre writes readable music at every level', () => {
+  // The builder's controls are a promise: any combination it presents must
+  // produce a study. Seeds vary, so a handful of retries is allowed — that is
+  // what the app itself does — but no combination may be unwritable.
+  const unwritable = [];
+  for (const level of [1, 5, 10]) {
+    const base = paramsForLevel(level, emptyProfile(), { seed: 4242, targeting: false });
+    for (const style of STYLE_OPTIONS) {
+      const metres = metresFor(style.id) || Object.keys(TIME_SIGNATURES);
+      for (const timeSignature of metres) {
+        for (const fifths of [-7, -3, 0, 4, 7]) {
+          let written = false;
+          for (let attempt = 0; attempt < 7 && !written; attempt += 1) {
+            try {
+              generateExercise({
+                ...base, level: null, compositionStyle: style.id, timeSignature,
+                keyFifths: fifths, seed: 900 + attempt * 7919,
+              });
+              written = true;
+            } catch { /* the app retries too */ }
+          }
+          if (!written) unwritable.push(`level ${level} ${style.id} ${timeSignature} ${fifths}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(unwritable, []);
 });

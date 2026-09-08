@@ -1391,7 +1391,9 @@ export function composeCandidate(userParams = {}, attempt = 0) {
     ),
   };
   const level = params.level || 10;
-  const constraints = params.level ? levelById(params.level).constraints : { simultaneous_notes: 5 };
+  const constraints = params.level
+    ? levelById(params.level).constraints
+    : customConstraints(params, params.timeSignature);
   const form = planMusicalForm(measures, style.id, rng, level);
   const fragment = params.sourceMode === 'recombined'
     ? chooseFragment(rng, {
@@ -1661,23 +1663,40 @@ export function composeCandidate(userParams = {}, attempt = 0) {
 
 const COMPOSITION_CANDIDATES = 20;
 
-function constraintsFor(score) {
-  if (score.params.level) return levelById(score.params.level).constraints;
-  const shortest = [...score.staves.rh, ...score.staves.lh]
-    .reduce((value, note) => Math.min(value, note.duration), Infinity);
+/**
+ * The envelope a custom study is written and judged against.
+ *
+ * A level brings its own; a custom study's comes from the parameters the
+ * reader chose. Composition and validation have to be handed the *same* one.
+ * When they were not, the melodic-interval cap went missing at composition
+ * time — `Math.min(maxLeap, undefined - 1)` is NaN, and every leap comparison
+ * against NaN is false, so nothing capped the leaps — and then validation,
+ * which did know the cap, threw out more than half of all style and key
+ * combinations.
+ */
+function customConstraints(params, timeSignature, smallestTicks = 1) {
   return {
     key_signature_accidentals: 7,
     hand_shifts: 99,
-    max_melodic_interval: score.params.maxLeap + 1,
-    smallest_ticks: Number.isFinite(shortest) ? shortest : 1,
+    max_melodic_interval: params.maxLeap + 1,
+    smallest_ticks: smallestTicks,
     ledger_lines: 8,
     lh_textures: [],
     simultaneous_notes: 5,
     chromatic_notes: 999,
     tempo: [30, 200],
-    meters: [score.ts.name],
+    meters: [timeSignature],
     hand_span: 12,
   };
+}
+
+function constraintsFor(score) {
+  if (score.params.level) return levelById(score.params.level).constraints;
+  const shortest = [...score.staves.rh, ...score.staves.lh]
+    .reduce((value, note) => Math.min(value, note.duration), Infinity);
+  return customConstraints(
+    score.params, score.ts.name, Number.isFinite(shortest) ? shortest : 1,
+  );
 }
 
 /**

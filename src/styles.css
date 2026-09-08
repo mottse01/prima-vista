@@ -2275,6 +2275,15 @@ html.sr-practice-running .pv-practice-heading { display: none; }
 .pv-mode-choose:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 .pv-modes-note { margin: 28px 0 0; max-width: 62ch; font-size: 13px; color: var(--ink-faint); }
 
+/* Said when the settings a reader chose could not be written as music. It is
+   an explanation, not an alarm: the page still has a study on it. */
+.sr-generation-notice {
+  margin: 0 0 14px; padding: 11px 14px;
+  border-left: 2px solid var(--warn); border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  font-size: 13.5px; color: var(--ink-soft); max-width: 74ch;
+}
+
 /* ---------- crossing between rooms ---------- */
 
 /* Crossing between rooms must always be one visible control, so it sits with

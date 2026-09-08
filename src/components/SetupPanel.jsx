@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { KEY_NAMES, LETTERS } from '../core/theory.js';
 import { TIME_SIGNATURES } from '../core/rhythm.js';
 import { codeToSeed, randomSeed, seedToCode } from '../core/rng.js';
-import { STYLE_OPTIONS, styleSetupPatch } from '../core/compositionStyles.js';
+import { STYLE_OPTIONS, metresFor, styleSetupPatch } from '../core/compositionStyles.js';
 import { REPERTOIRE_OPTIONS } from '../core/repertoire.js';
 import { TEXTURES } from '../core/accompaniment.js';
 
@@ -33,6 +33,15 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
     [params.keyMode],
   );
   const sourceMode = params.sourceMode || 'generated';
+  // Only offer metres the chosen style can be written in. Picking a style
+  // already moves the metre to one that fits; this stops the next click from
+  // moving it back to one that does not.
+  const metreOptions = useMemo(() => {
+    const supported = metresFor(params.compositionStyle) || Object.keys(TIME_SIGNATURES);
+    // A preset saved by an older build can carry a pairing this style no
+    // longer allows. Keep it listed so the control still shows what is set.
+    return supported.includes(params.timeSignature) ? supported : [...supported, params.timeSignature];
+  }, [params.compositionStyle, params.timeSignature]);
   const selectedRepertoire = REPERTOIRE_OPTIONS.find((item) => item.id === params.repertoireId) || REPERTOIRE_OPTIONS[0];
 
   return (
@@ -105,7 +114,7 @@ export default function SetupPanel({ params, onChange, onGenerate, presets, onSa
             <label className="sr-field">
               <span>Metre</span>
               <select value={params.timeSignature} onChange={(event) => set({ timeSignature: event.target.value })}>
-                {Object.keys(TIME_SIGNATURES).map((name) => <option key={name} value={name}>{name}</option>)}
+                {metreOptions.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
             </label>
             <label className="sr-field">

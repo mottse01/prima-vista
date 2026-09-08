@@ -12,7 +12,7 @@ import MissionPanel from './components/MissionPanel.jsx';
 import ModeChoice from './components/ModeChoice.jsx';
 import { homeTabFor, modeOf, otherMode, tabsFor } from './core/modes.js';
 import OnboardingModal from './components/OnboardingModal.jsx';
-import { generateExercise } from './core/generator.js';
+import { DEFAULT_PARAMS, generateExercise } from './core/generator.js';
 import { applyPracticeEvidence, applyResult, comparableReads, eligibleFirstRead, markExerciseSeen, paramsForLevel, placementRecommendation } from './core/adaptive.js';
 import { levelById } from './core/levels.js';
 import { waypointFor } from './core/constellation.js';
@@ -90,7 +90,35 @@ export default function App() {
     return paramsForLevel(p.level, p, { seed: shared.seed ?? randomSeed() });
   });
 
-  const score = useMemo(() => generateExercise(params), [params]);
+  /**
+   * Compose the study, and always come back with music.
+   *
+   * The generator writes twenty candidates and gives up if none of them
+   * survives its own critic. That is the right answer for a library, but the
+   * app renders during a dropdown change, so a throw here used to blank the
+   * whole page — a reader picking a key would simply lose the app.
+   *
+   * A refusal is almost always the seed rather than the request: every
+   * combination that fails at one seed succeeds at another. So try a few more,
+   * and only if the request itself is impossible fall back to something known
+   * to work and say so.
+   */
+  const { score, generationNotice } = useMemo(() => {
+    const seeds = [params.seed, ...Array.from({ length: 6 }, (_, i) => (params.seed + (i + 1) * 7919) >>> 0)];
+    for (const seed of seeds) {
+      try { return { score: generateExercise({ ...params, seed }), generationNotice: null }; } catch { /* try another */ }
+    }
+    for (const fallback of [paramsForLevel(profile.level, profile, { seed: params.seed, targeting: false }), DEFAULT_PARAMS]) {
+      try {
+        return {
+          score: generateExercise(fallback),
+          generationNotice: 'That combination could not be written as readable music. This study uses your level’s settings instead.',
+        };
+      } catch { /* keep trying */ }
+    }
+    throw new Error('The composer could not write any music for these settings.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
   const practiceScore = useMemo(() => {
     if (!repairHand) return score;
     return {
@@ -609,6 +637,12 @@ export default function App() {
       </header>
 
       <main className="sr-main" id="practice-main">
+        {/* The request could not be written as readable music, so say what
+            happened rather than leaving the reader wondering why the settings
+            they chose are not the ones on the page. */}
+        {generationNotice && (
+          <p className="sr-generation-notice" role="status">{generationNotice}</p>
+        )}
         {tab === 'adventure' && <AdventureView practice={practiceElement} level={profile.level} midi={midi}
           registerResult={registerAdventureResult} onTools={setTab}
           routeOpen={isOpen(profile, profile.level + 1)}
