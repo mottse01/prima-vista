@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { lyraOnHolding, lyraOnOpening, lyraOnReading, lyraSpeaks } from '../src/core/lyra.js';
-import { BEATS, beatFor, LOCATIONS, READING_LESSONS } from '../src/core/adventure.js';
+import { BEATS, SHARED_VIEW, backdropFor, beatFor, LOCATIONS, READING_LESSONS } from '../src/core/adventure.js';
 import { LEVELS } from '../src/core/levels.js';
 import { createGrader } from '../src/core/grader.js';
 import { generateExercise } from '../src/core/generator.js';
@@ -30,6 +30,18 @@ test('every destination has something waiting and something to find out', () => 
   assert.equal(beatFor(0), BEATS[0]);
   assert.equal(beatFor(99), BEATS.at(-1));
   assert.equal(READING_LESSONS.length, LEVELS.length);
+});
+
+test('every place has its own window, and a shared one to fall back on', () => {
+  // Ten destinations sharing one picture is most of the reason they read as
+  // one place with ten colour schemes. The set can be replaced one at a time,
+  // so a half-finished one must still leave every station with a view.
+  const views = LOCATIONS.map((location) => backdropFor(location));
+  assert.equal(new Set(views).size, LOCATIONS.length, 'no two places look out on the same thing');
+  for (const view of views) assert.match(view, /^\/views\/[a-z]+\.webp$/);
+  assert.equal(backdropFor({}), SHARED_VIEW);
+  assert.equal(backdropFor(null), SHARED_VIEW);
+  assert.equal(backdropFor(undefined), SHARED_VIEW);
 });
 
 test('she names the stop before anything else', () => {

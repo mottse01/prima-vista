@@ -1,16 +1,54 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { createStage, prefersReducedMotion } from '../core/stage.js';
+import { backdropFor, SHARED_VIEW } from '../core/adventure.js';
 
-// A real navigable room. Every highlighted object has a world-space hit target.
-// No continuous physics, model downloads, post-processing, or pointer lock.
+// The station as a diorama: a small room you look into and turn, rather than
+// one you stand inside and walk around.
+//
+// It used to be first person — a crosshair, W A S D, and `E` to interact. That
+// is shooter grammar, and none of the games this design takes its manners from
+// use it: Moss and Monument Valley both put you outside a small world you can
+// turn in your hands. It is also friction between a reader and the music, and
+// walking to a console teaches nobody to read. So: drag to turn, tap the thing
+// you want. Less code than the controller it replaces, far better on a phone,
+// and legible to somebody who has never played a game.
+//
+// Nothing here needs a model download, post-processing or pointer lock.
+
+/**
+ * Where the camera sits for each station: a point to look at, how far back to
+ * stand, and from what angle. Moving between them is a slow arc rather than a
+ * cut, because seeing the room turn is what tells you the two views are the
+ * same place.
+ */
+const FRAMES = {
+  // Three-quarters and slightly above, so the room reads as a made object
+  // rather than as a corridor pointed down. Straight on, the airlock at the
+  // near end fills the middle of the picture and everything worth looking at
+  // hides behind it.
+  room: { focus: [0, 1.7, 0.4], distance: 33, azimuth: 0.52, elevation: 0.42 },
+  power: { focus: [-4.3, 1.85, -2.6], distance: 13, azimuth: -0.5, elevation: 0.2 },
+  signal: { focus: [4.3, 1.9, -2.6], distance: 13, azimuth: 0.5, elevation: 0.2 },
+  piano: { focus: [0, 1.45, -3.8], distance: 12.5, azimuth: 0.1, elevation: 0.24 },
+  exit: { focus: [0, 2.1, 5.4], distance: 20, azimuth: 0.85, elevation: 0.3 },
+};
+const ELEVATION_RANGE = [0.06, 0.9];
+const DISTANCE_RANGE = [8, 46];
+/** Above this the overhead ribs start getting in the way, so they fade out. */
+const ROOF_CLEARS_AT = 0.24;
+/** How much of the way to the target framing each frame closes. */
+const EASE = 0.075;
+
+const shortestTurn = (from, to) => from + Math.atan2(Math.sin(to - from), Math.cos(to - from));
+
 export default function AdventureScene({ location, room, onInteract, onTarget, view, paused, onUnavailable }) {
   const mount = useRef(null);
   const live = useRef({ room, onInteract, onTarget, view, paused, onUnavailable });
   useEffect(() => { live.current = { room, onInteract, onTarget, view, paused, onUnavailable }; });
   useEffect(() => {
     const host = mount.current;
-    const camera = new THREE.PerspectiveCamera(66, 1, .08, 90);
+    const camera = new THREE.PerspectiveCamera(44, 1, .1, 160);
     const stage = createStage(host, {
       camera, alpha: false, maxPixelRatio: 1.5, powerPreference: 'low-power',
     });
@@ -23,8 +61,7 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
     renderer.toneMappingExposure = 1.62;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(location.sky);
-    scene.fog = new THREE.FogExp2(location.sky, .019);
-    camera.position.set(0, 1.65, 6.2);
+    scene.fog = new THREE.FogExp2(location.sky, .0085);
     const geometry = [], materials = [], textures = [], targets = [], labels = [];
     const color = new THREE.Color(location.color);
     const material = (c, opts = {}) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: .66, metalness: .25, ...opts }); materials.push(m); return m; };
@@ -50,25 +87,77 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
       const g = new THREE.PlaneGeometry(width, height); geometry.push(g);
       const mesh = new THREE.Mesh(g, mat); mesh.position.set(x, y, z); scene.add(mesh); return mesh;
     }
-    function target(mesh, id, label) { mesh.userData = { id, label }; targets.push(mesh); return mesh; }
+    // Interactive things get a material of their own so that lighting one on
+    // hover does not light every plinth in the room that shares its colour.
+    const BLACK = new THREE.Color('#000000');
+    const groups = new Map();
+    function target(mesh, id, label) {
+      mesh.userData = { id, label };
+      if (mesh.material && !mesh.userData.owned) {
+        mesh.material = mesh.material.clone();
+        mesh.userData.owned = true;
+        materials.push(mesh.material);
+      }
+      targets.push(mesh);
+      const group = groups.get(id) || { materials: new Set() };
+      group.materials.add(mesh.material);
+      groups.set(id, group);
+      return mesh;
+    }
+    /** Light the thing under the pointer, and nothing else. */
+    function highlight(id) {
+      for (const [key, group] of groups) {
+        const lit = key === id;
+        for (const mat of group.materials) {
+          if (mat.emissive) {
+            mat.emissive.copy(lit ? color : BLACK);
+            mat.emissiveIntensity = lit ? 0.55 : 1;
+          } else if (mat.map) {
+            // A textured panel has no emissive channel, so it brightens instead.
+            mat.color.setScalar(lit ? 1.45 : 1);
+          }
+        }
+      }
+    }
     scene.add(new THREE.HemisphereLight('#b5d1e4', '#243039', 3.1));
+    // A diorama is lit as an object on a table as well as a place you look
+    // into, so there is a soft key on it from the viewer's own side.
+    const keyLight = new THREE.DirectionalLight('#dceaf5', 1.15); keyLight.position.set(6, 11, 16); scene.add(keyLight);
     const light = new THREE.PointLight(color, 90, 18, 2); light.position.set(0, 4.2, 0); scene.add(light);
     const windowLight = new THREE.DirectionalLight('#b7d6ed', 2.1); windowLight.position.set(0, 5, -8); windowLight.castShadow = true; windowLight.shadow.mapSize.set(1024,1024); Object.assign(windowLight.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: .1, far: 35 }); windowLight.shadow.bias = -.001; scene.add(windowLight);
-    // Walkable deck, structural ribs, overhead practical lighting.
+    // Deck, structural ribs, overhead practical lighting. There is no ceiling
+    // slab: a diorama is a room with the lid off, and that is what makes it
+    // possible to look into one at all.
     box(15, .25, 17, 0, -.15, 0, dark);
-    box(15, .2, 17, 0, 5.8, 0, steel);
-    box(.3, 6, 17, -7.5, 2.8, 0, steel); box(.3, 6, 17, 7.5, 2.8, 0, steel);
+    // The shell pieces are the walls that would otherwise stand between the
+    // camera and everything worth seeing. Each one steps out of the way when
+    // the room is turned so that it is in front.
+    const shell = [];
+    const facing = (mesh, axis, at, side) => { shell.push({ mesh, axis, at, side }); return mesh; };
+    facing(box(.3, 6, 17, -7.5, 2.8, 0, steel), 'x', -7.5, -1);
+    facing(box(.3, 6, 17, 7.5, 2.8, 0, steel), 'x', 7.5, 1);
+    // The ribs overhead fade rather than vanish, because a hard cut on a slow
+    // camera move reads as a glitch.
+    const roofMat = dark.clone(); roofMat.transparent = true; materials.push(roofMat);
+    const roof = [];
     for (let z = -7; z <= 8; z += 2) {
       box(14.8, .025, .025, 0, .01, z, trim);
-      box(.14, 5.7, .2, -7.2, 2.85, z, trim); box(.14, 5.7, .2, 7.2, 2.85, z, trim);
-      box(13.8, .1, .15, 0, 5.5, z, dark);
-      box(2.6, .04, .13, -3.7, 5.38, z, glow); box(2.6, .04, .13, 3.7, 5.38, z, glow);
+      facing(box(.14, 5.7, .2, -7.2, 2.85, z, trim), 'x', -7.2, -1);
+      facing(box(.14, 5.7, .2, 7.2, 2.85, z, trim), 'x', 7.2, 1);
+      roof.push(box(13.8, .1, .15, 0, 5.5, z, roofMat));
+      roof.push(box(2.6, .04, .13, -3.7, 5.38, z, glow), box(2.6, .04, .13, 3.7, 5.38, z, glow));
     }
     for (let x = -6; x <= 6; x += 3) box(.024, .025, 17, x, .012, 0, trim);
     // Observation window and a softly lit world beyond it.
     box(15, 1.1, .35, 0, .5, -8, steel); box(15, .5, .4, 0, 5.55, -8, steel);
     for (let x = -7; x <= 7; x += 3.5) box(.16, 4.8, .4, x, 3, -8, trim);
-    const exteriorTexture = new THREE.TextureLoader().load('/expedition.webp'); exteriorTexture.colorSpace = THREE.SRGBColorSpace; textures.push(exteriorTexture);
+    // Each place's own view, falling back to the shared one so a half-finished
+    // set of pictures still leaves every station with something outside it.
+    const exteriorTexture = new THREE.TextureLoader().load(
+      backdropFor(location), undefined, undefined,
+      () => { exteriorTexture.image = null; new THREE.TextureLoader().load(SHARED_VIEW, (fallback) => { extMat.map = fallback; extMat.needsUpdate = true; textures.push(fallback); stage.invalidate(); }); },
+    );
+    exteriorTexture.colorSpace = THREE.SRGBColorSpace; textures.push(exteriorTexture);
     const extMat = new THREE.MeshBasicMaterial({ map: exteriorTexture, color: location.type === 'garden' ? '#e7b79d' : '#cbd9ed' }); materials.push(extMat);
     const eg = new THREE.PlaneGeometry(48, 26); geometry.push(eg);
     const outside = new THREE.Mesh(eg, extMat); outside.position.set(0, 6, -26); scene.add(outside);
@@ -91,8 +180,8 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
     const screen = textPanel(['FRESH SIGHT-READING', 'PIANO STUDIO'], 2.55, .7, 0, 1.85, -4.04); target(screen, 'piano', 'Use the piano console');
     for (let i = 0; i < 21; i++) { target(box(.12, .07, .7, -1.3 + i * .13, 1.29, -3.55, pale), 'piano', 'Use the piano console'); if (![2,6].includes(i % 7)) box(.065, .11, .4, -1.24 + i * .13, 1.37, -3.75, dark); }
     // Rear airlock: actual sliding panels respond to all three repaired systems.
-    box(15, 6, .3, 0, 2.8, 8.5, steel);
-    box(4.1, 4.6, .55, 0, 2.3, 8.1, dark);
+    facing(box(15, 6, .3, 0, 2.8, 8.5, steel), 'z', 8.5, 1);
+    facing(box(4.1, 4.6, .55, 0, 2.3, 8.1, dark), 'z', 8.1, 1);
     const doorLeft = target(box(1.75, 4, .18, -.88, 2, 7.76, trim), 'exit', 'Inspect the airlock');
     const doorRight = target(box(1.75, 4, .18, .88, 2, 7.76, trim), 'exit', 'Inspect the airlock');
     const exitScreen = textPanel(['AIRLOCK', 'NEXT STATION'], 2.6, .85, 0, 4.55, 7.73); exitScreen.rotation.y = Math.PI; target(exitScreen, 'exit', 'Travel to the next station');
@@ -161,32 +250,133 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
     }
     const receiver = cylinder(.26, 1.25, 4.3, 2.3, -3.6, glow);
     const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
-    let yaw = 0, pitch = -.035, dragging = null, moved = false, targetId = null, lastView = null;
-    const keys = new Set();
-    const shots = { room: [0, 1.65, 6.2, 0, -.035], power: [-4.3, 1.7, -.1, 0, -.05], signal: [4.3, 1.7, -.1, 0, -.05], piano: [0, 1.65, -.8, 0, -.05], exit: [0, 1.65, 4.8, Math.PI, 0] };
-    const moveTo = (id) => { const shot = shots[id] || shots.room; camera.position.set(...shot.slice(0,3)); yaw = shot[3]; pitch = shot[4]; };
-    const updateCamera = () => { camera.rotation.order = 'YXZ'; camera.rotation.set(pitch, yaw, 0); camera.updateMatrixWorld(); };
-    function pick(clientX, clientY) { const rect = renderer.domElement.getBoundingClientRect(); pointer.set((clientX - rect.left) / rect.width * 2 - 1, -(clientY - rect.top) / rect.height * 2 + 1); raycaster.setFromCamera(pointer, camera); return raycaster.intersectObjects(targets, false)[0]?.object; }
-    function down(e) { if (live.current.paused) return; dragging = { x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY }; moved = false; renderer.domElement.setPointerCapture(e.pointerId); }
-    function move(e) { if (!dragging || live.current.paused) return; if (Math.hypot(e.clientX - dragging.startX, e.clientY - dragging.startY) > 6) moved = true; if (moved) { yaw -= (e.clientX - dragging.x) * .004; pitch = THREE.MathUtils.clamp(pitch - (e.clientY - dragging.y) * .003, -.7, .7); } dragging.x = e.clientX; dragging.y = e.clientY; }
-    function up(e) { if (dragging && !moved && !live.current.paused) { updateCamera(); const hit = pick(e.clientX,e.clientY); if (hit) live.current.onInteract(hit.userData.id); } dragging = null; }
-    function keydown(e) { if (live.current.paused || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; const key = e.key.toLowerCase(); if (['w','a','s','d','arrowleft','arrowright','arrowup','arrowdown','e'].includes(key)) { e.preventDefault(); keys.add(key); if (key === 'e' && targetId && !e.repeat) live.current.onInteract(targetId); } }
-    const keyup = (e) => keys.delete(e.key.toLowerCase());
-    const blur = () => { keys.clear(); dragging = null; };
-    renderer.domElement.addEventListener('pointerdown', down); renderer.domElement.addEventListener('pointermove', move); renderer.domElement.addEventListener('pointerup', up); renderer.domElement.addEventListener('pointercancel', blur);
-    window.addEventListener('keydown', keydown); window.addEventListener('keyup', keyup); window.addEventListener('blur', blur);
+    // Where the camera is, and where it is going. Dragging writes into the
+    // second; every frame the first closes some of the gap, so a drag during a
+    // move blends with it rather than fighting it.
+    const at = { ...FRAMES.room, focus: new THREE.Vector3(...FRAMES.room.focus) };
+    const to = { ...at, focus: at.focus.clone() };
+    let dragging = null, moved = false, targetId = null, lastView = null;
+    const order = ['power', 'signal', 'piano', 'exit'];
+
+    const frame = (id) => {
+      const shot = FRAMES[id] || FRAMES.room;
+      to.focus.set(...shot.focus);
+      to.distance = shot.distance;
+      to.elevation = shot.elevation;
+      to.azimuth = shortestTurn(to.azimuth, shot.azimuth);
+    };
+    const place = () => {
+      const flat = Math.cos(at.elevation) * at.distance;
+      camera.position.set(
+        at.focus.x + Math.sin(at.azimuth) * flat,
+        at.focus.y + Math.sin(at.elevation) * at.distance,
+        at.focus.z + Math.cos(at.azimuth) * flat,
+      );
+      camera.lookAt(at.focus);
+      camera.updateMatrixWorld();
+    };
+    place();
+
+    function pick(clientX, clientY) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.set((clientX - rect.left) / rect.width * 2 - 1, -(clientY - rect.top) / rect.height * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      return raycaster.intersectObjects(targets, false)[0]?.object;
+    }
+    const look = (hit) => {
+      const id = hit?.userData.id || null;
+      if (id === targetId) return;
+      targetId = id;
+      highlight(id);
+      live.current.onTarget(hit ? { id, label: hit.userData.label } : null);
+    };
+    function down(e) {
+      if (live.current.paused) return;
+      dragging = { x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY };
+      moved = false;
+      renderer.domElement.setPointerCapture(e.pointerId);
+    }
+    function move(e) {
+      if (live.current.paused) return;
+      if (!dragging) { look(pick(e.clientX, e.clientY)); return; }
+      if (Math.hypot(e.clientX - dragging.startX, e.clientY - dragging.startY) > 6) moved = true;
+      if (moved) {
+        to.azimuth -= (e.clientX - dragging.x) * .006;
+        to.elevation = THREE.MathUtils.clamp(to.elevation + (e.clientY - dragging.y) * .004, ...ELEVATION_RANGE);
+      }
+      dragging.x = e.clientX; dragging.y = e.clientY;
+    }
+    function up(e) {
+      // A tap is a tap on the thing you tapped. No crosshair to line up, and
+      // nothing to walk to first.
+      if (dragging && !moved && !live.current.paused) {
+        const hit = pick(e.clientX, e.clientY);
+        if (hit) live.current.onInteract(hit.userData.id);
+      }
+      dragging = null;
+    }
+    function wheel(e) {
+      if (live.current.paused) return;
+      e.preventDefault();
+      to.distance = THREE.MathUtils.clamp(to.distance + e.deltaY * .02, ...DISTANCE_RANGE);
+    }
+    // Arrows step between the stations rather than walking. For somebody
+    // reading this with a keyboard that is a better deal than the free look it
+    // replaces: every station is reachable in at most four presses, and the
+    // one you are on is the one that lights up.
+    function keydown(e) {
+      if (live.current.paused || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      const key = e.key.toLowerCase();
+      if (key === 'arrowleft' || key === 'arrowright') {
+        e.preventDefault();
+        const step = key === 'arrowright' ? 1 : -1;
+        const index = order.indexOf(targetId);
+        const next = order[(index + step + order.length * 2) % order.length];
+        const hit = targets.find((mesh) => mesh.userData.id === next);
+        look(hit);
+        frame(next);
+      } else if (key === 'enter' || key === ' ') {
+        if (!targetId) return;
+        e.preventDefault();
+        live.current.onInteract(targetId);
+      } else if (key === '+' || key === '=' || key === '-') {
+        e.preventDefault();
+        to.distance = THREE.MathUtils.clamp(to.distance + (key === '-' ? 3 : -3), ...DISTANCE_RANGE);
+      }
+    }
+    const blur = () => { dragging = null; };
+    renderer.domElement.addEventListener('pointerdown', down);
+    renderer.domElement.addEventListener('pointermove', move);
+    renderer.domElement.addEventListener('pointerup', up);
+    renderer.domElement.addEventListener('pointercancel', blur);
+    renderer.domElement.addEventListener('pointerleave', () => look(null));
+    renderer.domElement.addEventListener('wheel', wheel, { passive: false });
+    window.addEventListener('keydown', keydown); window.addEventListener('blur', blur);
     const reduced = prefersReducedMotion();
     const draw = (dt, now) => {
       const state = live.current;
-      if (state.view !== lastView) { moveTo(state.view?.id); lastView = state.view; }
-      if (!state.paused) {
-        if (keys.has('arrowleft')) yaw += dt; if (keys.has('arrowright')) yaw -= dt;
-        const forward = Number(keys.has('w') || keys.has('arrowup')) - Number(keys.has('s') || keys.has('arrowdown'));
-        const side = Number(keys.has('d')) - Number(keys.has('a'));
-        camera.position.x = THREE.MathUtils.clamp(camera.position.x + (-Math.sin(yaw)*forward + Math.cos(yaw)*side)*dt*3, -5.7, 5.7);
-        camera.position.z = THREE.MathUtils.clamp(camera.position.z + (-Math.cos(yaw)*forward - Math.sin(yaw)*side)*dt*3, -.5, 6.5);
-      } else keys.clear();
-      updateCamera();
+      // The room moved out from under the pointer, so whatever it was over is
+      // no longer what it is over. Saying so beats leaving a stale caption
+      // sitting on top of something else.
+      if (state.view !== lastView) { frame(state.view?.id); lastView = state.view; look(null); }
+      // Ease toward the framing rather than cutting to it: watching the room
+      // turn is what tells somebody the close-up and the wide shot are the
+      // same place.
+      const ease = reduced ? 1 : Math.min(1, EASE * dt * 60);
+      at.azimuth += (to.azimuth - at.azimuth) * ease;
+      at.elevation += (to.elevation - at.elevation) * ease;
+      at.distance += (to.distance - at.distance) * ease;
+      at.focus.lerp(to.focus, ease);
+      place();
+
+      // Anything now standing between the camera and the room steps aside.
+      for (const piece of shell) {
+        const beyond = (piece.axis === 'x' ? camera.position.x : camera.position.z) * piece.side;
+        piece.mesh.visible = beyond < piece.at * piece.side;
+      }
+      roofMat.opacity = THREE.MathUtils.clamp(1 - (at.elevation - ROOF_CLEARS_AT) * 3.2, 0, 1);
+      for (const rib of roof) rib.visible = roofMat.opacity > 0.02;
+
       light.intensity = state.room.power ? 160 : 65;
       receiver.rotation.z = state.room.signal ? .35 : 0;
       console.material.emissive.set(state.room.music ? location.color : '#000000');
@@ -195,14 +385,13 @@ export default function AdventureScene({ location, room, onInteract, onTarget, v
       doorLeft.position.x = THREE.MathUtils.lerp(doorLeft.position.x, -desired, reduced ? 1 : .06); doorRight.position.x = THREE.MathUtils.lerp(doorRight.position.x, desired, reduced ? 1 : .06);
       exitButton.material = complete ? glow : warm;
       if (state.room.power && !reduced && !state.paused) for (const object of animated) object.rotation.y = Math.sin(now * .0002) * .08;
-      if (!state.paused) { raycaster.setFromCamera(new THREE.Vector2(0,0),camera); const hit = raycaster.intersectObjects(targets,false)[0]?.object; if ((hit?.userData.id || null) !== targetId) { targetId = hit?.userData.id || null; state.onTarget(hit ? { id: targetId, label: hit.userData.label } : null); } }
       // A page the browser has stopped drawing, or a paused room, still needs
       // one frame that matches the current size and state.
       if (!document.hidden && !state.paused) renderer.render(scene, camera);
       else if (stage.stale) { renderer.render(scene, camera); stage.settle(); }
     };
     stage.run(draw);
-    return () => { window.removeEventListener('keydown',keydown); window.removeEventListener('keyup',keyup); window.removeEventListener('blur',blur); stage.track(...geometry, ...materials, ...textures); stage.dispose(); labels.length = 0; };
+    return () => { window.removeEventListener('keydown', keydown); window.removeEventListener('blur', blur); stage.track(...geometry, ...materials, ...textures); stage.dispose(); labels.length = 0; };
   }, [location]);
-  return <div className="pv-world-canvas" ref={mount} aria-label="Explorable space station. Drag to look. Use W A S D to walk, arrows to turn and walk, or the station controls." role="img" />;
+  return <div className="pv-world-canvas" ref={mount} aria-label="The station, seen from outside. Drag to turn it and tap something to use it, or press the left and right arrows to move between the stations and Enter to use one." role="img" />;
 }

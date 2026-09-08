@@ -18,18 +18,27 @@ import { TPQ, fromDia } from './theory.js';
 import { timeSig } from './rhythm.js';
 
 export const ADVENTURE_KEY = 'prima-vista.adventure.v1';
+/**
+ * `backdrop` is what is outside the window, as a wide image in `public/`.
+ * Ten places currently share one picture, which is most of the reason they
+ * feel like one place with ten colour schemes. Dropping a file in and naming
+ * it here is all it takes to separate them; anything missing falls back to the
+ * shared view, so the set can be replaced one at a time.
+ */
+export const SHARED_VIEW = '/expedition.webp';
 export const LOCATIONS = [
-  { name: 'The listening room', place: 'Luna', subtitle: 'Selene Observatory', color: '#70dcca', sky: '#091c2b', type: 'observatory' },
-  { name: 'A garden in the dust', place: 'Mars', subtitle: 'Ares Botanical Station', color: '#edb67b', sky: '#402015', type: 'garden' },
-  { name: 'The silent archive', place: 'Ceres', subtitle: 'Deep Field Repository', color: '#9baff2', sky: '#14162c', type: 'archive' },
-  { name: 'Inside the storm', place: 'Jupiter', subtitle: 'Cloudbreak Research Platform', color: '#e8c28d', sky: '#392a22', type: 'workshop' },
-  { name: 'The ring keeper', place: 'Saturn', subtitle: 'Cassini Listening Post', color: '#edcf96', sky: '#242539', type: 'archive' },
-  { name: 'The winter greenhouse', place: 'Uranus', subtitle: 'Miranda Habitat', color: '#91dfed', sky: '#143c42', type: 'greenhouse' },
-  { name: 'Below the blue', place: 'Neptune', subtitle: 'Triton Signal Lab', color: '#7fa7f1', sky: '#0d204d', type: 'observatory' },
-  { name: 'The last lantern', place: 'Pluto', subtitle: 'New Horizons Shelter', color: '#c3a7e9', sky: '#20192c', type: 'shelter' },
-  { name: 'Messages in the ice', place: 'Kuiper Belt', subtitle: 'Drift Archive', color: '#b3c6e6', sky: '#101827', type: 'archive' },
-  { name: 'Where the song goes', place: 'Heliopause', subtitle: 'Voyager Relay', color: '#a4f2da', sky: '#082b2b', type: 'relay' },
+  { name: 'The listening room', place: 'Luna', subtitle: 'Selene Observatory', color: '#70dcca', sky: '#091c2b', type: 'observatory', backdrop: '/views/luna.webp' },
+  { name: 'A garden in the dust', place: 'Mars', subtitle: 'Ares Botanical Station', color: '#edb67b', sky: '#402015', type: 'garden', backdrop: '/views/mars.webp' },
+  { name: 'The silent archive', place: 'Ceres', subtitle: 'Deep Field Repository', color: '#9baff2', sky: '#14162c', type: 'archive', backdrop: '/views/ceres.webp' },
+  { name: 'Inside the storm', place: 'Jupiter', subtitle: 'Cloudbreak Research Platform', color: '#e8c28d', sky: '#392a22', type: 'workshop', backdrop: '/views/jupiter.webp' },
+  { name: 'The ring keeper', place: 'Saturn', subtitle: 'Cassini Listening Post', color: '#edcf96', sky: '#242539', type: 'archive', backdrop: '/views/saturn.webp' },
+  { name: 'The winter greenhouse', place: 'Uranus', subtitle: 'Miranda Habitat', color: '#91dfed', sky: '#143c42', type: 'greenhouse', backdrop: '/views/uranus.webp' },
+  { name: 'Below the blue', place: 'Neptune', subtitle: 'Triton Signal Lab', color: '#7fa7f1', sky: '#0d204d', type: 'observatory', backdrop: '/views/neptune.webp' },
+  { name: 'The last lantern', place: 'Pluto', subtitle: 'New Horizons Shelter', color: '#c3a7e9', sky: '#20192c', type: 'shelter', backdrop: '/views/pluto.webp' },
+  { name: 'Messages in the ice', place: 'Kuiper Belt', subtitle: 'Drift Archive', color: '#b3c6e6', sky: '#101827', type: 'archive', backdrop: '/views/kuiper.webp' },
+  { name: 'Where the song goes', place: 'Heliopause', subtitle: 'Voyager Relay', color: '#a4f2da', sky: '#082b2b', type: 'relay', backdrop: '/views/heliopause.webp' },
 ];
+export const backdropFor = (location) => location?.backdrop || SHARED_VIEW;
 export const locationFor = (level) => LOCATIONS[Math.max(0, Math.min(LOCATIONS.length - 1, (Number(level) || 1) - 1))];
 
 /**
@@ -138,14 +147,14 @@ export function pianoRelaySolved(summary) {
 
 export const READING_LESSONS = [
   { title: 'Find the pulse before the first note', skill: 'Pulse & preparation', advice: 'Before you play, find the time signature and count one quiet bar. Choose a tempo that lets you read the trickiest part comfortably. Your aim is a flowing phrase.', task: 'In the rhythm study, tap once at the start of each note. Keep counting through a half note instead of tapping it twice.', ready: 'I’ll establish the pulse before I start.' },
-  { title: 'Find landmarks in both staves', skill: 'Grand-staff orientation', advice: 'Find the opening note in each hand before playing. Use a familiar landmark, then read the next note by its distance from that landmark rather than starting over each time.', task: 'Find the starting hand positions before your fresh reading. First, isolate the rhythm so your attention can stay on the pulse.', ready: 'I’ll find both starting notes first.' },
+  { title: 'Find landmarks in both staves', skill: 'Both hands, both staves', advice: 'Find the opening note in each hand before playing. Use a familiar landmark, then read the next note by its distance from that landmark rather than starting over each time.', task: 'Find the starting hand positions before your fresh reading. First, isolate the rhythm so your attention can stay on the pulse.', ready: 'I’ll find both starting notes first.' },
   { title: 'Silence still has a pulse', skill: 'Rests & continuity', advice: 'A rest is counted time. Keep your inner beat moving through the silence, and look at the note that follows so your return is prepared.', task: 'Read the rhythm on one key. Wait through each rest without adding a note.', ready: 'I’ll count through rests and prepare the return.' },
   { title: 'Read a shape, not isolated notes', skill: 'Intervals & patterns', advice: 'After finding your first pitch, notice whether the melody repeats, steps or skips. Group small patterns into a single musical gesture. Check the key signature first.', task: 'Scan the fresh piece for a repeated shape. In the rhythm study, notice which rhythmic groups come back.', ready: 'I’ll look for repeats, steps and skips.' },
-  { title: 'Feel the beat inside the rhythm', skill: 'Subdivision', advice: 'When a rhythm looks busy, keep an even subdivision underneath it. A dotted note lasts longer; the following short note fits into that same steady pulse.', task: 'Read each note start against a steady beat. A tap does not measure how long you hold a piano key; keep counting the written duration.', ready: 'I’ll subdivide the longer and shorter notes.' },
+  { title: 'Feel the beat inside the rhythm', skill: 'Beats inside beats', advice: 'When a rhythm looks busy, keep an even subdivision underneath it. A dotted note lasts longer; the following short note fits into that same steady pulse.', task: 'Read each note start against a steady beat. A tap does not measure how long you hold a piano key; keep counting the written duration.', ready: 'I’ll subdivide the longer and shorter notes.' },
   { title: 'Choose a tempo for the whole phrase', skill: 'Tempo & fluency', advice: 'Inspect the busiest bar before choosing your tempo. A tempo that is easy at the start but impossible later interrupts the reading. Begin with enough room to think ahead.', task: 'Keep a single tempo through the rhythm study. You can lower its tempo before starting.', ready: 'I’ll choose my tempo from the busiest bar.' },
   { title: 'Keep the beat through an offbeat', skill: 'Syncopation & ties', advice: 'Locate the beats first, then place the offbeat attacks between them. A tie continues the same sound: do not strike that pitch again at the barline.', task: 'Before the fresh piece, trace any ties and locate their next new attack. The rhythm study keeps your internal pulse active.', ready: 'I’ll trace ties before I play.' },
   { title: 'Look toward the next group', skill: 'Reading ahead', advice: 'Let your eyes move toward the next small group while your hands finish the current one. Start with a small look-ahead distance; more is not always better.', task: 'Read the next rhythmic group before your tapping reaches it. Keep the page visible while you practice this.', ready: 'I’ll prepare the next small group.' },
-  { title: 'Listen for two independent lines', skill: 'Independent voices', advice: 'Scan the rhythm of each hand separately, then notice where their attacks coincide. Keep track of the phrase in each voice instead of treating every vertical slice as a chord.', task: 'In your fresh piece, identify one point where the hands move together and one where they differ.', ready: 'I’ll notice how the two lines fit together.' },
+  { title: 'Listen for two independent lines', skill: 'Two lines at once', advice: 'Scan the rhythm of each hand separately, then notice where their attacks coincide. Keep track of the phrase in each voice instead of treating every vertical slice as a chord.', task: 'In your fresh piece, identify one point where the hands move together and one where they differ.', ready: 'I’ll notice how the two lines fit together.' },
   { title: 'Recover without starting over', skill: 'Recovery & musical direction', advice: 'If a note goes wrong, continue toward the next beat or clear landmark. Finishing a phrase with its pulse intact is a useful reading skill. Review the difficulty after the take.', task: 'Keep going through the fresh reading. Afterwards, choose one pattern to practice before trying new music.', ready: 'I’ll recover at the next beat or landmark.' },
 ];
 export const readingLesson = (level) => READING_LESSONS[Math.max(0, Math.min(9, (Number(level) || 1) - 1))];
